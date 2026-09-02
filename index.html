@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>اولویت‌بندی شیفت</title>
+
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#2F5D62" />
+    <link rel="icon" href="/icon-192.png" />
+
+    <!-- iOS "Add to Home Screen" support -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Shift Priority" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+    <script>
+      // Only register the service worker outside of local development —
+      // it was caching stale data during "npm run dev" (e.g. old Excel
+      // sheet tabs sticking around after a new file was uploaded).
+      const isLocalDev = ["localhost", "127.0.0.1"].includes(location.hostname);
+      if ("serviceWorker" in navigator && !isLocalDev) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/sw.js").catch(() => {});
+        });
+      } else if ("serviceWorker" in navigator) {
+        // Clean up any service worker left over from a previous run.
+        navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
+      }
+    </script>
+  </body>
+</html>
