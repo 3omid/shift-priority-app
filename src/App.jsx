@@ -4,7 +4,7 @@ import pkg from "../package.json";
 import {
   Upload, RotateCcw, ListChecks, AlertCircle, Check, Printer,
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, Plus,
-  Menu, Sun, Moon, History as HistoryIcon, HelpCircle, Trash2, Users, Info,
+  Menu, Sun, Moon, History as HistoryIcon, HelpCircle, Trash2, Users, Info, Mail,
 } from "lucide-react";
 
 const APP_VERSION = pkg.version;
@@ -20,6 +20,7 @@ function normalize(v) {
 }
 
 function findLayout(aoa) {
+  let bestMissing = null;
   for (let r = 0; r < Math.min(aoa.length, 8); r++) {
     const row = (aoa[r] || []).map((c) => String(c ?? "").trim().toLowerCase());
     const crewIdx = row.findIndex((c) => c === "crew #" || c === "crew#" || c.startsWith("crew"));
@@ -27,11 +28,16 @@ function findLayout(aoa) {
     const typeIdx = row.findIndex((c) => c === "type");
     const totalIdx = row.findIndex((c) => c.includes("total"));
     const dayIdx = DAY_NAMES.map((dn) => row.findIndex((c) => c === dn));
-    if (typeIdx !== -1 && totalIdx !== -1 && dayIdx.every((i) => i !== -1)) {
-      return { headerRow: r, crewIdx, typeIdx, shiftIdx: typeIdx + 1, dayIdx, totalIdx };
+    const missing = [];
+    if (typeIdx === -1) missing.push("Type");
+    if (totalIdx === -1) missing.push("TOTAL HRS");
+    DAY_NAMES.forEach((dn, i) => { if (dayIdx[i] === -1) missing.push(dn.toUpperCase()); });
+    if (missing.length === 0) {
+      return { ok: true, layout: { headerRow: r, crewIdx, typeIdx, shiftIdx: typeIdx + 1, dayIdx, totalIdx } };
     }
+    if (!bestMissing || missing.length < bestMissing.length) bestMissing = missing;
   }
-  return null;
+  return { ok: false, missing: bestMissing || ["Crew #"] };
 }
 
 function extractTextTag(code) {
@@ -107,9 +113,9 @@ function visibleSheetNames(wb) {
 
 function parseSchedule(sheet) {
   const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-  const layout = findLayout(aoa);
-  if (!layout) return { ok: false };
-  const { headerRow, crewIdx, typeIdx, shiftIdx, dayIdx, totalIdx } = layout;
+  const layoutResult = findLayout(aoa);
+  if (!layoutResult.ok) return { ok: false, reason: "no_layout", missing: layoutResult.missing };
+  const { headerRow, crewIdx, typeIdx, shiftIdx, dayIdx, totalIdx } = layoutResult.layout;
 
   const crews = [];
   let coloredCells = 0;
@@ -150,7 +156,7 @@ function parseSchedule(sheet) {
     crews.push({ crew: crewVal, type, shiftRaw, totalHours, workedCount, days });
   }
 
-  if (crews.length === 0) return { ok: false };
+  if (crews.length === 0) return { ok: false, reason: "no_data" };
   const colorsDetected = totalWorkedCells > 0 && coloredCells / totalWorkedCells > 0.4;
   return { ok: true, crews, colorsDetected };
 }
@@ -285,6 +291,8 @@ const STRINGS = {
   excelBtn: { fa: "خروجی اکسل", en: "Export Excel", hi: "एक्सेल में निर्यात करें" },
   resetBtn: { fa: "شروع دوباره با فایل جدید", en: "Start over with a new file", hi: "नई फ़ाइल से फिर शुरू करें" },
   errNoLayout: { fa: "ساختار جدول شیفت در این شیت پیدا نشد.", en: "Could not detect the schedule structure in this sheet.", hi: "इस शीट में शेड्यूल संरचना नहीं मिली।" },
+  errMissingColumns: { fa: "ستون‌های زیر پیدا نشد:", en: "Missing column(s):", hi: "ये कॉलम नहीं मिले:" },
+  errNoData: { fa: "ستون‌ها پیدا شدند ولی هیچ ردیف داده‌ای زیرشون نبود.", en: "Columns were found but no data rows were detected underneath them.", hi: "कॉलम मिले लेकिन उनके नीचे कोई डेटा पंक्ति नहीं मिली।" },
   fileError: { fa: "خواندن فایل با خطا مواجه شد.", en: "Failed to read the file.", hi: "फ़ाइल पढ़ने में त्रुटि हुई।" },
   region: { fa: "مناطق", en: "Regions", hi: "क्षेत्र" },
   reportDate: { fa: "تاریخ گزارش", en: "Report date", hi: "रिपोर्ट तिथि" },
@@ -306,6 +314,7 @@ const STRINGS = {
   clearHistory: { fa: "پاک کردن تاریخچه", en: "Clear history", hi: "इतिहास साफ़ करें" },
   helpTitle: { fa: "راهنمای استفاده", en: "How to use", hi: "उपयोग मार्गदर्शिका" },
   aboutTitle: { fa: "درباره برنامه", en: "About", hi: "ऐप के बारे में" },
+  reportProblem: { fa: "گزارش مشکل / پیشنهاد", en: "Report a problem / feedback", hi: "समस्या रिपोर्ट करें" },
   compare2Title: { fa: "مقایسه گروه‌ها در کل هفته", en: "Compare crews for the whole week", hi: "क्रू की पूरी हफ़्ते तुलना" },
   crewA: { fa: "شماره گروه اول", en: "First crew number", hi: "पहला क्रू नंबर" },
   crewB: { fa: "شماره گروه دوم", en: "Second crew number", hi: "दूसरा क्रू नंबर" },
@@ -318,6 +327,20 @@ const STRINGS = {
 function t(key, lang) { return STRINGS[key] ? (STRINGS[key][lang] || STRINGS[key].en) : key; }
 function regionLabel(key, lang) { return REGION_LABELS[key] ? (REGION_LABELS[key][lang] || REGION_LABELS[key].en) : key; }
 function fpColor(score) { return score >= 80 ? "var(--accent)" : score >= 40 ? "#C9A227" : "#D8D3C7"; }
+
+function openFeedbackEmail(lang) {
+  const subject = `Shift Priority Feedback v${APP_VERSION}`;
+  const bodyLines = [
+    "",
+    "",
+    "---",
+    `App version: ${APP_VERSION}`,
+    `Language: ${lang}`,
+    `Browser: ${typeof navigator !== "undefined" ? navigator.userAgent : ""}`,
+  ];
+  const mailto = `mailto:33omid@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines.join("\n"))}`;
+  window.location.href = mailto;
+}
 
 const WEEKDAY_LABELS = {
   fa: ["یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنج‌شنبه", "جمعه", "شنبه"],
@@ -1166,7 +1189,13 @@ export default function ShiftPriorityRanker() {
     const result = parseSchedule(sheet);
     if (!result.ok) {
       setParsed(null);
-      setError(t("errNoLayout", lang));
+      if (result.reason === "no_layout" && result.missing) {
+        setError(`${t("errMissingColumns", lang)} ${result.missing.join(", ")}`);
+      } else if (result.reason === "no_data") {
+        setError(t("errNoData", lang));
+      } else {
+        setError(t("errNoLayout", lang));
+      }
       return;
     }
     setParsed(result);
@@ -1306,6 +1335,9 @@ export default function ShiftPriorityRanker() {
               </button>
               <button style={styles.menuItem} onClick={() => { setActivePanel("about"); setMenuOpen(false); }}>
                 <Info size={15} /> {t("aboutTitle", lang)}
+              </button>
+              <button style={styles.menuItem} onClick={() => { openFeedbackEmail(lang); setMenuOpen(false); }}>
+                <Mail size={15} /> {t("reportProblem", lang)}
               </button>
             </div>
           )}
