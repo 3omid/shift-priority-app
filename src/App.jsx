@@ -4,7 +4,7 @@ import pkg from "../package.json";
 import {
   Upload, RotateCcw, ListChecks, AlertCircle, Check, Printer,
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, Plus,
-  Menu, Sun, Moon, History as HistoryIcon, HelpCircle, Trash2, Users, Info, Mail,
+  Menu, Sun, Moon, History as HistoryIcon, HelpCircle, Trash2, Users, Info, Mail, LogOut,
 } from "lucide-react";
 
 const APP_VERSION = pkg.version;
@@ -315,6 +315,8 @@ const STRINGS = {
   helpTitle: { fa: "راهنمای استفاده", en: "How to use", hi: "उपयोग मार्गदर्शिका" },
   aboutTitle: { fa: "درباره برنامه", en: "About", hi: "ऐप के बारे में" },
   reportProblem: { fa: "گزارش مشکل / پیشنهاد", en: "Report a problem / feedback", hi: "समस्या रिपोर्ट करें" },
+  exitApp: { fa: "خروج از برنامه", en: "Exit App", hi: "ऐप से बाहर निकलें" },
+  exitWebNote: { fa: "چون این نسخه‌ی وب/PWA است، مرورگرها اجازه نمی‌دهند صفحه خودش را کاملاً ببندد. برای خروج، برگه یا برنامه را طبق روال معمول دستگاهت ببند.", en: "This is the web/PWA version, so browsers don't allow a page to close itself. To exit, close the tab or app the normal way for your device.", hi: "यह वेब/PWA संस्करण है, इसलिए ब्राउज़र पेज को खुद बंद करने की अनुमति नहीं देते। बाहर निकलने के लिए टैब या ऐप को सामान्य तरीके से बंद करें।" },
   compare2Title: { fa: "مقایسه گروه‌ها در کل هفته", en: "Compare crews for the whole week", hi: "क्रू की पूरी हफ़्ते तुलना" },
   crewA: { fa: "شماره گروه اول", en: "First crew number", hi: "पहला क्रू नंबर" },
   crewB: { fa: "شماره گروه دوم", en: "Second crew number", hi: "दूसरा क्रू नंबर" },
@@ -340,6 +342,21 @@ function openFeedbackEmail(lang) {
   ];
   const mailto = `mailto:33omid@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines.join("\n"))}`;
   window.location.href = mailto;
+}
+
+function exitApp(lang) {
+  if (typeof window !== "undefined" && window.electronAPI && window.electronAPI.isElectron) {
+    window.electronAPI.quit();
+    return;
+  }
+  // Web/PWA: browsers only allow closing tabs that were opened by script.
+  // Try it, and if it silently does nothing, at least explain why.
+  try {
+    window.close();
+  } catch { /* ignore */ }
+  setTimeout(() => {
+    if (!document.hidden) alert(t("exitWebNote", lang));
+  }, 150);
 }
 
 const WEEKDAY_LABELS = {
@@ -1338,6 +1355,9 @@ export default function ShiftPriorityRanker() {
               </button>
               <button style={styles.menuItem} onClick={() => { openFeedbackEmail(lang); setMenuOpen(false); }}>
                 <Mail size={15} /> {t("reportProblem", lang)}
+              </button>
+              <button style={{ ...styles.menuItem, color: "#B3432A" }} onClick={() => { setMenuOpen(false); exitApp(lang); }}>
+                <LogOut size={15} /> {t("exitApp", lang)}
               </button>
             </div>
           )}
