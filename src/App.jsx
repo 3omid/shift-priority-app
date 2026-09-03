@@ -1,11 +1,13 @@
 import { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
+import pkg from "../package.json";
 import {
   Upload, RotateCcw, ListChecks, AlertCircle, Check, Printer,
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, Plus,
   Menu, Sun, Moon, History as HistoryIcon, HelpCircle, Trash2, Users, Info,
 } from "lucide-react";
 
+const APP_VERSION = pkg.version;
 const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const CATCHALL = "OTHER";
 const OFFICE_THEME = ["000000", "FFFFFF", "44546A", "E7E6E6", "4472C4", "ED7D31", "A5A5A5", "FFC000", "5B9BD5", "70AD47"];
@@ -610,7 +612,7 @@ function AboutPanel({ lang, onClose }) {
     <Modal title={t("aboutTitle", lang)} onClose={onClose}>
       <div style={{ textAlign: "center", marginBottom: 16 }}>
         <div style={styles.aboutAppName}>Shift Priority</div>
-        <div style={styles.aboutVersion}>v5.38 · September 2026</div>
+        <div style={styles.aboutVersion}>v{APP_VERSION} · {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}</div>
       </div>
       <p style={styles.helpStepBody}>{content.desc}</p>
       <div style={styles.aboutAuthorBox}>
@@ -851,7 +853,7 @@ function compareToExcel(matched, lang) {
 
   const aoa = [];
   aoa.push([t("compare2Title", lang), ...Array(totalCols - 1).fill("")]);
-  aoa.push([`Shift Priority v5.38 · Omid Farhadnia · ${new Date().toLocaleDateString(lang === "fa" ? "fa-IR" : "en-CA")}`, ...Array(totalCols - 1).fill("")]);
+  aoa.push([`Shift Priority v${APP_VERSION} · Omid Farhadnia · ${new Date().toLocaleDateString(lang === "fa" ? "fa-IR" : "en-CA")}`, ...Array(totalCols - 1).fill("")]);
   const row1 = [dayColLabel];
   matched.forEach((m) => row1.push(`${t("crewWord", lang)} ${m.crew}`, "", ""));
   aoa.push(row1);
@@ -1225,7 +1227,7 @@ export default function ShiftPriorityRanker() {
     const totalCols = headers.length;
     const aoa = [
       [t("resultsTitle", lang), ...Array(totalCols - 1).fill("")],
-      [`Shift Priority v5.38 · Omid Farhadnia · ${new Date().toLocaleDateString(lang === "fa" ? "fa-IR" : "en-CA")}`, ...Array(totalCols - 1).fill("")],
+      [`Shift Priority v${APP_VERSION} · Omid Farhadnia · ${new Date().toLocaleDateString(lang === "fa" ? "fa-IR" : "en-CA")}`, ...Array(totalCols - 1).fill("")],
       headers,
       ...dataRows,
     ];
@@ -1546,7 +1548,7 @@ export default function ShiftPriorityRanker() {
         )}
 
         <footer className="no-print" style={styles.footer}>
-          Shift Priority v5.38 · September 2026 · © Omid Farhadnia · MIT License (Open Source)
+          Shift Priority v{APP_VERSION} · © Omid Farhadnia · MIT License (Open Source)
         </footer>
       </div>
     </div>
