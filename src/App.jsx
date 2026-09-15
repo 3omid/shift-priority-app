@@ -18,6 +18,12 @@ const HISTORY_KEY = "shiftPriorityHistory";
 // so one person's saved profile can never show up for anyone else who opens
 // this same app/build.
 const PROFILE_KEY = "shiftPriorityProfile";
+// The last successfully-parsed schedule (already-parsed crew data, not the
+// raw Excel file) so re-opening the app — closing and reopening the tab,
+// relaunching the installed PWA, restarting the Electron app — shows the
+// same schedule again instead of forcing a re-upload every single time.
+// Also localStorage-only: same one-device-only rule as everything above.
+const LAST_FILE_KEY = "shiftPriorityLastFile";
 
 // ---------- Excel parsing ----------
 
@@ -658,6 +664,17 @@ function saveProfile(profile) {
 }
 function clearProfileStorage() {
   try { localStorage.removeItem(PROFILE_KEY); } catch { /* ignore */ }
+}
+
+// ---------- Last parsed schedule (avoids re-uploading every visit) ----------
+function loadLastFile() {
+  try { return JSON.parse(localStorage.getItem(LAST_FILE_KEY) || "null"); } catch { return null; }
+}
+function saveLastFile(entry) {
+  try { localStorage.setItem(LAST_FILE_KEY, JSON.stringify(entry)); } catch { /* ignore storage errors, e.g. quota */ }
+}
+function clearLastFileStorage() {
+  try { localStorage.removeItem(LAST_FILE_KEY); } catch { /* ignore */ }
 }
 
 function ProfilePanel({ lang, profile, onSave, onClear, onClose }) {
@@ -1345,11 +1362,18 @@ export default function ShiftPriorityRanker() {
   const [profile, setProfile] = useState(() => loadProfile());
   const [showMySchedule, setShowMySchedule] = useState(false);
 
+  // Restore the last successfully-parsed schedule (if any) so the app opens
+  // straight to it instead of forcing a re-upload every time — see
+  // LAST_FILE_KEY above. `workbook`/`sheetNames` are NOT restorable (the raw
+  // parsed XLSX workbook isn't stored, only the already-extracted crew
+  // data), so switching sheets on a restored file isn't available until a
+  // fresh upload — a fine trade-off since almost nobody needs that.
   const [workbook, setWorkbook] = useState(null);
   const [sheetNames, setSheetNames] = useState([]);
-  const [selectedSheet, setSelectedSheet] = useState("");
-  const [fileName, setFileName] = useState("");
-  const [parsed, setParsed] = useState(null);
+  const [lastFile] = useState(() => loadLastFile());
+  const [selectedSheet, setSelectedSheet] = useState(() => lastFile?.sheetName || "");
+  const [fileName, setFileName] = useState(() => lastFile?.fileName || "");
+  const [parsed, setParsed] = useState(() => lastFile?.parsed || null);
   const [error, setError] = useState("");
 
   const [priorityList, setPriorityList] = useState([]);
@@ -1369,6 +1393,17 @@ export default function ShiftPriorityRanker() {
   useEffect(() => {
     const timer = setTimeout(() => setBooting(false), 700);
     return () => clearTimeout(timer);
+  }, []);
+
+  // Ask the browser not to evict this site's localStorage (profile, saved
+  // schedule, history) under storage pressure or an inactivity policy —
+  // mainly relevant to Safari/iOS, where a PWA's local data can otherwise be
+  // cleared after a period of disuse. Best-effort only: not every browser
+  // implements this, and even where it does, it's a request, not a
+  // guarantee, so this can never fully replace re-uploading if data really
+  // is gone — it just makes that less likely.
+  useEffect(() => {
+    try { navigator.storage?.persist?.(); } catch { /* not supported here, ignore */ }
   }, []);
 
   // The results panel only ever reflects a snapshot from the last time
@@ -1404,7 +1439,7 @@ export default function ShiftPriorityRanker() {
         setSheetNames(names);
         const last = names[names.length - 1];
         setSelectedSheet(last);
-        runParse(wb, last);
+        runParse(wb, last, file.name);
       } catch (err) {
         setError(t("fileError", lang));
       }
@@ -1412,7 +1447,7 @@ export default function ShiftPriorityRanker() {
     reader.readAsArrayBuffer(file);
   };
 
-  const runParse = (wb, sheetName) => {
+  const runParse = (wb, sheetName, fileNameOverride) => {
     setError("");
     setShowResults(false);
     setCompareSet([]);
@@ -1420,6 +1455,7 @@ export default function ShiftPriorityRanker() {
     const result = parseSchedule(sheet);
     if (!result.ok) {
       setParsed(null);
+      clearLastFileStorage();
       if (result.reason === "no_layout" && result.missing) {
         setError(`${t("errMissingColumns", lang)} ${result.missing.join(", ")}`);
       } else if (result.reason === "no_data") {
@@ -1430,6 +1466,10 @@ export default function ShiftPriorityRanker() {
       return;
     }
     setParsed(result);
+    // fileNameOverride covers the exact moment a brand-new file is uploaded,
+    // where the `fileName` state variable in this closure may not have
+    // caught up to the setFileName() call yet — see handleFile().
+    saveLastFile({ fileName: fileNameOverride ?? fileName, sheetName, parsed: result });
   };
 
   const changeSheet = (name) => {
@@ -1917,7 +1957,7 @@ export default function ShiftPriorityRanker() {
         {parsed && (
           <button
             className="no-print"
-            onClick={() => { setWorkbook(null); setSheetNames([]); setParsed(null); setShowResults(false); setFileName(""); setError(""); setCompareSet([]); setPriorityList([]); setResults([]); }}
+            onClick={() => { setWorkbook(null); setSheetNames([]); setParsed(null); setShowResults(false); setFileName(""); setError(""); setCompareSet([]); setPriorityList([]); setResults([]); clearLastFileStorage(); }}
             style={styles.resetBtn}
           >
             <RotateCcw size={14} /> {t("resetBtn", lang)}

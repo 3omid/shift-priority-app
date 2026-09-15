@@ -1,7 +1,7 @@
 {
   "name": "shift-priority-app",
   "private": false,
-  "version": "5.41.0",
+  "version": "5.42.0",
   "description": "Shift priority ranking tool for TOK Transit crew schedules.",
   "author": "Omid Farhadnia",
   "license": "MIT",
