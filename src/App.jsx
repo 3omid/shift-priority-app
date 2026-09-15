@@ -197,48 +197,51 @@ const CRITERIA_CATALOG = [
   { id: "region_STF", group: "region", label: { fa: "استوفیل", en: "Stouffville", hi: "स्टफविल" }, score: (c) => regionPct(c, "STF") },
   { id: "region_MRG", group: "region", label: { fa: "مپل", en: "Maple", hi: "मेपल" }, score: (c) => regionPct(c, "MRG") },
   { id: "has_rpt", group: "special", label: { fa: "دارای شیفت آماده‌باش (RPT)", en: "Has standby (RPT) day", hi: "स्टैंडबाय (RPT) दिन है" }, score: (c) => regionPct(c, "RPT") },
-  // Dynamic criteria: unlike the fixed ones above, these don't score anything
-  // on their own — the person picks WHICH weekday each slot means (via the
-  // day-picker shown once the slot is added to their priority list), and
-  // that choice is resolved at compute-time in computeResults(). Three slots
-  // covers the "pick up to 3 days you don't want to work" use case while
-  // still fitting the same one-item-per-priority chain-sort model as
-  // everything else in the catalog.
-  { id: "day_off_1", group: "days", dynamic: true, label: { fa: "روز تعطیل دلخواه ۱", en: "Custom day off #1", hi: "पसंदीदा छुट्टी १" } },
-  { id: "day_off_2", group: "days", dynamic: true, label: { fa: "روز تعطیل دلخواه ۲", en: "Custom day off #2", hi: "पसंदीदा छुट्टी २" } },
-  { id: "day_off_3", group: "days", dynamic: true, label: { fa: "روز تعطیل دلخواه ۳", en: "Custom day off #3", hi: "पसंदीदा छुट्टी ३" } },
+  // Dynamic criterion: unlike the fixed ones above, this one doesn't score
+  // anything on its own — the person picks WHICH weekdays it means (via the
+  // day-picker shown once it's added to their priority list, up to 3 days),
+  // and that choice is resolved at compute-time in computeResults(). It's a
+  // single catalog entry (one slot in the priority chain) whose day list can
+  // hold up to 3 weekdays, rather than three separate slots.
+  { id: "day_off", group: "days", dynamic: true, multi: true, label: { fa: "روزهای تعطیل دلخواه", en: "Custom days off", hi: "पसंदीदा छुट्टियाँ" } },
 ];
 const CRITERIA_MAX = 10;
+const DAY_OFF_MAX_DAYS = 3;
 
 function criterionColor(id) {
   if (id.startsWith("region_")) return REGION_COLORS[id.replace("region_", "")];
   if (id === "has_rpt") return REGION_COLORS.RPT;
-  if (id.startsWith("day_off_")) return "#B3432A";
+  if (id === "day_off") return "#B3432A";
   return "var(--accent)";
 }
 
-// A dynamic day-off criterion's label grows a weekday name once one is
-// chosen (e.g. "Custom day off #1" -> "Custom day off #1 — Friday"). Every
-// other criterion's label passes through unchanged. Centralizing this here
-// means every place that ever displayed `crit.label[lang]` (chips, the
+const DAY_LIST_SEP = { fa: "، ", en: ", ", hi: ", " };
+
+// The day-off criterion's label grows the chosen weekday names once any are
+// picked (e.g. "Custom days off" -> "Custom days off — Friday, Saturday").
+// Every other criterion's label passes through unchanged. Centralizing this
+// here means every place that ever displayed `crit.label[lang]` (chips, the
 // priority list, history, Excel/print export, the compare table) shows the
 // same resolved text instead of six separate copies of this logic.
 function resolveCriterionLabel(id, dayOffChoices) {
   const base = CRITERIA_CATALOG.find((c) => c.id === id);
   if (!base) return { fa: id, en: id, hi: id };
   if (!base.dynamic) return base.label;
-  const dayIdx = dayOffChoices ? dayOffChoices[id] : null;
-  if (dayIdx == null || dayIdx === "") return base.label;
+  const dayIdxs = dayOffChoices ? dayOffChoices[id] : null;
+  if (!Array.isArray(dayIdxs) || dayIdxs.length === 0) return base.label;
   return {
-    fa: `${base.label.fa} — ${WEEKDAY_LABELS.fa[dayIdx]}`,
-    en: `${base.label.en} — ${WEEKDAY_LABELS.en[dayIdx]}`,
-    hi: `${base.label.hi} — ${WEEKDAY_LABELS.hi[dayIdx]}`,
+    fa: `${base.label.fa} — ${dayIdxs.map((i) => WEEKDAY_LABELS.fa[i]).join(DAY_LIST_SEP.fa)}`,
+    en: `${base.label.en} — ${dayIdxs.map((i) => WEEKDAY_LABELS.en[i]).join(DAY_LIST_SEP.en)}`,
+    hi: `${base.label.hi} — ${dayIdxs.map((i) => WEEKDAY_LABELS.hi[i]).join(DAY_LIST_SEP.hi)}`,
   };
 }
 
-function dayOffScore(c, dayIdx) {
-  if (dayIdx == null || dayIdx === "") return 0;
-  return c.days.some((d) => d.dayIdx === dayIdx) ? 0 : 100;
+// Score = what fraction of the chosen days this crew actually has off, as a
+// 0-100 percentage (e.g. 2 of 3 chosen days off -> 67). No days chosen -> 0.
+function dayOffScore(c, dayIdxs) {
+  if (!Array.isArray(dayIdxs) || dayIdxs.length === 0) return 0;
+  const offCount = dayIdxs.filter((dayIdx) => !c.days.some((d) => d.dayIdx === dayIdx)).length;
+  return Math.round((offCount / dayIdxs.length) * 100);
 }
 
 function computeResults(crews, priorityList, dayOffChoices) {
@@ -247,8 +250,8 @@ function computeResults(crews, priorityList, dayOffChoices) {
     if (!base) return null;
     const label = resolveCriterionLabel(id, dayOffChoices);
     if (base.dynamic) {
-      const dayIdx = dayOffChoices ? dayOffChoices[id] : null;
-      return { id: base.id, label, score: (c) => dayOffScore(c, dayIdx) };
+      const dayIdxs = dayOffChoices ? dayOffChoices[id] : null;
+      return { id: base.id, label, score: (c) => dayOffScore(c, dayIdxs) };
     }
     return { id: base.id, label, score: base.score };
   }).filter(Boolean);
@@ -376,8 +379,12 @@ const STRINGS = {
   close: { fa: "بستن", en: "Close", hi: "बंद करें" },
 
   // ---- day-off criteria ----
-  pickDayHint: { fa: "کدوم روز؟", en: "Which day?", hi: "कौन सा दिन?" },
-  errDayOffUnset: { fa: "برای «روز تعطیل دلخواه» که به لیست اضافه کردی، یه روز مشخص کن.", en: "Pick a weekday for the custom day-off criterion you added.", hi: "आपने जो \"पसंदीदा छुट्टी\" जोड़ी है उसके लिए एक दिन चुनें।" },
+  pickDayHint: { fa: "کدوم روزها؟ (حداکثر ۳ تا)", en: "Which days? (up to 3)", hi: "कौन से दिन? (अधिकतम ३)" },
+  errDayOffUnset: { fa: "برای «روزهای تعطیل دلخواه» که به لیست اضافه کردی، حداقل یه روز مشخص کن.", en: "Pick at least one weekday for the custom days-off criterion you added.", hi: "आपने जो \"पसंदीदा छुट्टियाँ\" जोड़ी है उसके लिए कम से कम एक दिन चुनें।" },
+
+  // ---- loading splash ----
+  loadingBoot: { fa: "در حال آماده‌سازی…", en: "Getting ready…", hi: "तैयार हो रहा है…" },
+  loadingCompute: { fa: "در حال محاسبه و رتبه‌بندی…", en: "Calculating & ranking…", hi: "गणना और रैंकिंग हो रही है…" },
 
   // ---- profile ----
   profileTitle: { fa: "پروفایل من", en: "My Profile", hi: "मेरी प्रोफ़ाइल" },
@@ -1346,13 +1353,35 @@ export default function ShiftPriorityRanker() {
   const [error, setError] = useState("");
 
   const [priorityList, setPriorityList] = useState([]);
-  // Which weekday each "day_off_N" dynamic criterion currently means, e.g.
-  // { day_off_1: 5 } for Friday. Kept separate from priorityList because it
-  // is per-criterion configuration, not membership/order.
+  // Which weekdays the "day_off" dynamic criterion currently means, e.g.
+  // { day_off: [5, 6] } for Friday + Saturday (up to DAY_OFF_MAX_DAYS).
+  // Kept separate from priorityList because it is per-criterion
+  // configuration, not membership/order.
   const [dayOffChoices, setDayOffChoices] = useState({});
   const [showResults, setShowResults] = useState(false);
   const [compareSet, setCompareSet] = useState([]);
   const [results, setResults] = useState([]);
+
+  // Brief branded loading screen: once right after the app mounts, and
+  // again (briefly) each time "Calculate & Rank" runs — see runCompute().
+  const [booting, setBooting] = useState(true);
+  const [computing, setComputing] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setBooting(false), 700);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // The results panel only ever reflects a snapshot from the last time
+  // "Calculate & Rank" was pressed. If the person then adds/removes/reorders
+  // a priority, or changes which weekdays a day-off criterion means, that
+  // old snapshot must not keep showing as if it were still current — most
+  // visibly when every priority is removed: the button becomes disabled
+  // (nothing to compute), so without this the stale top results would stay
+  // on screen forever with no way to refresh them. Hiding results here means
+  // "Calculate & Rank" must be pressed again after any such change.
+  useEffect(() => {
+    setShowResults(false);
+  }, [priorityList, dayOffChoices]);
 
   const dir = lang === "fa" ? "rtl" : "ltr";
   const palette = getPalette(themeStyle, themeMode);
@@ -1426,20 +1455,29 @@ export default function ShiftPriorityRanker() {
     if (!parsed || priorityList.length === 0) return;
     const hasUnsetDayOff = priorityList.some((id) => {
       const base = CRITERIA_CATALOG.find((c) => c.id === id);
-      return base?.dynamic && (dayOffChoices[id] == null || dayOffChoices[id] === "");
+      return base?.dynamic && (!Array.isArray(dayOffChoices[id]) || dayOffChoices[id].length === 0);
     });
     if (hasUnsetDayOff) { setError(t("errDayOffUnset", lang)); return; }
     setError("");
-    const computed = computeResults(parsed.crews, priorityList, dayOffChoices);
-    setResults(computed);
-    setShowResults(true);
-    const priorityLabels = priorityList.map((id) => resolveCriterionLabel(id, dayOffChoices)[lang]);
-    saveHistoryEntry({
-      fileName,
-      sheetName: selectedSheet,
-      priorityLabels,
-      top: computed.slice(0, 5).map((r) => ({ crew: r.crew, score: displayScore(r.fingerprint) })),
-    });
+    // The ranking itself is near-instant even for a big crew sheet, but a
+    // result swap with zero visual feedback reads as if the button did
+    // nothing. Showing the loading animation for a small fixed minimum
+    // (rather than exactly as long as the math takes) gives a consistent,
+    // deliberate feel instead of an inconsistent flash.
+    setComputing(true);
+    setTimeout(() => {
+      const computed = computeResults(parsed.crews, priorityList, dayOffChoices);
+      setResults(computed);
+      setShowResults(true);
+      const priorityLabels = priorityList.map((id) => resolveCriterionLabel(id, dayOffChoices)[lang]);
+      saveHistoryEntry({
+        fileName,
+        sheetName: selectedSheet,
+        priorityLabels,
+        top: computed.slice(0, 5).map((r) => ({ crew: r.crew, score: displayScore(r.fingerprint) })),
+      });
+      setComputing(false);
+    }, 500);
   };
 
   const toggleCompare = (crew) => {
@@ -1515,7 +1553,28 @@ export default function ShiftPriorityRanker() {
           .no-print { display: none !important; }
           .print-report { display: block !important; }
         }
+        .spp-ring {
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          border: 3px solid var(--border);
+          border-top-color: var(--accent);
+          animation: spp-spin 0.85s linear infinite;
+        }
+        @keyframes spp-spin { to { transform: rotate(360deg); } }
       `}</style>
+
+      {(booting || computing) && (
+        <div className="no-print" style={styles.splashOverlay}>
+          <div style={styles.splashInner}>
+            <div style={styles.splashRing}>
+              <div className="spp-ring" />
+              <img src="/logo.png" alt="" style={styles.splashLogo} />
+            </div>
+            <p style={styles.splashText}>{t(booting ? "loadingBoot" : "loadingCompute", lang)}</p>
+          </div>
+        </div>
+      )}
 
       <div className="no-print" style={{ ...styles.topBar, flexDirection: dir === "rtl" ? "row" : "row-reverse" }}>
         <div style={styles.langBtn}>
@@ -1583,6 +1642,7 @@ export default function ShiftPriorityRanker() {
 
       <div>
         <header className="no-print" style={styles.header}>
+          <img src="/logo.png" alt="" style={styles.headerLogo} />
           <div style={styles.routeDots}>
             <span style={styles.dot} /><span style={styles.routeLine} /><span style={styles.dot} /><span style={styles.routeLine} /><span style={{ ...styles.dot, background: "var(--accent2)" }} />
           </div>
@@ -1695,7 +1755,7 @@ export default function ShiftPriorityRanker() {
               {priorityList.map((id, idx) => {
                 const crit = CRITERIA_CATALOG.find((c) => c.id === id);
                 const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
-                const chosenDay = dayOffChoices[id];
+                const chosenDays = Array.isArray(dayOffChoices[id]) ? dayOffChoices[id] : [];
                 return (
                   <div key={id}>
                     <div style={styles.priorityRow}>
@@ -1710,15 +1770,30 @@ export default function ShiftPriorityRanker() {
                     {crit?.dynamic && (
                       <div style={styles.dayPickRow}>
                         <span style={styles.dayPickHint}>{t("pickDayHint", lang)}</span>
-                        {weekdayNames.map((wd, di) => (
-                          <button
-                            key={di}
-                            onClick={() => setDayOffChoices((prev) => ({ ...prev, [id]: di }))}
-                            style={{ ...styles.dayPickBtn, ...(chosenDay === di ? styles.dayPickBtnActive : {}) }}
-                          >
-                            {wd}
-                          </button>
-                        ))}
+                        {weekdayNames.map((wd, di) => {
+                          const isChosen = chosenDays.includes(di);
+                          const atMax = chosenDays.length >= DAY_OFF_MAX_DAYS;
+                          return (
+                            <button
+                              key={di}
+                              disabled={!isChosen && atMax}
+                              onClick={() => setDayOffChoices((prev) => {
+                                const cur = Array.isArray(prev[id]) ? prev[id] : [];
+                                const next = isChosen
+                                  ? cur.filter((d) => d !== di)
+                                  : (cur.length >= DAY_OFF_MAX_DAYS ? cur : [...cur, di]);
+                                return { ...prev, [id]: next };
+                              })}
+                              style={{
+                                ...styles.dayPickBtn,
+                                ...(isChosen ? styles.dayPickBtnActive : {}),
+                                ...(!isChosen && atMax ? { opacity: 0.45, cursor: "not-allowed" } : {}),
+                              }}
+                            >
+                              {wd}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -1726,7 +1801,7 @@ export default function ShiftPriorityRanker() {
               })}
             </div>
 
-            <button onClick={runCompute} disabled={priorityList.length === 0} style={{ ...styles.computeBtn, opacity: priorityList.length === 0 ? 0.5 : 1 }}>
+            <button onClick={runCompute} disabled={priorityList.length === 0 || computing} style={{ ...styles.computeBtn, opacity: priorityList.length === 0 || computing ? 0.5 : 1 }}>
               <ListChecks size={17} />
               {t("computeBtn", lang)}
             </button>
@@ -1867,7 +1942,13 @@ const styles = {
   menuDropdown: { position: "absolute", top: 36, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 6px 20px rgba(0,0,0,0.12)", padding: 6, display: "flex", flexDirection: "column", gap: 2, width: "max-content", minWidth: 220, maxWidth: "min(280px, calc(100vw - 24px))", zIndex: 200 },
   menuItem: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "8px 10px", borderRadius: 7, border: "none", background: "transparent", color: "var(--text)", cursor: "pointer", textAlign: "start", whiteSpace: "nowrap" },
   header: { textAlign: "center", marginBottom: 18, paddingTop: 10 },
+  headerLogo: { width: 56, height: 56, borderRadius: 14, objectFit: "contain", marginBottom: 6 },
   routeDots: { display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 },
+  splashOverlay: { position: "fixed", inset: 0, zIndex: 999, background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" },
+  splashInner: { display: "flex", flexDirection: "column", alignItems: "center", gap: 14 },
+  splashRing: { position: "relative", width: 88, height: 88, display: "flex", alignItems: "center", justifyContent: "center" },
+  splashLogo: { width: 64, height: 64, borderRadius: 16, objectFit: "contain", position: "relative", zIndex: 1 },
+  splashText: { fontSize: 13, fontWeight: 600, color: "var(--muted)", margin: 0 },
   dot: { width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", display: "inline-block" },
   routeLine: { width: 28, height: 2, background: "var(--border)", display: "inline-block" },
   title: { fontSize: 22, fontWeight: 700, margin: "0 0 4px" },
