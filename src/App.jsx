@@ -5,6 +5,7 @@ import {
   Upload, RotateCcw, ListChecks, AlertCircle, Check, Printer,
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, Plus,
   Menu, Sun, Moon, History as HistoryIcon, HelpCircle, Trash2, Users, Info, Mail, LogOut,
+  User, Star, CalendarOff,
 } from "lucide-react";
 
 const APP_VERSION = pkg.version;
@@ -12,6 +13,11 @@ const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "frid
 const CATCHALL = "OTHER";
 const OFFICE_THEME = ["000000", "FFFFFF", "44546A", "E7E6E6", "4472C4", "ED7D31", "A5A5A5", "FFC000", "5B9BD5", "70AD47"];
 const HISTORY_KEY = "shiftPriorityHistory";
+// Personal profile (name + "my crew number") — like history, this lives only
+// in this browser/device's localStorage. Nothing here is ever sent anywhere,
+// so one person's saved profile can never show up for anyone else who opens
+// this same app/build.
+const PROFILE_KEY = "shiftPriorityProfile";
 
 // ---------- Excel parsing ----------
 
@@ -191,17 +197,61 @@ const CRITERIA_CATALOG = [
   { id: "region_STF", group: "region", label: { fa: "استوفیل", en: "Stouffville", hi: "स्टफविल" }, score: (c) => regionPct(c, "STF") },
   { id: "region_MRG", group: "region", label: { fa: "مپل", en: "Maple", hi: "मेपल" }, score: (c) => regionPct(c, "MRG") },
   { id: "has_rpt", group: "special", label: { fa: "دارای شیفت آماده‌باش (RPT)", en: "Has standby (RPT) day", hi: "स्टैंडबाय (RPT) दिन है" }, score: (c) => regionPct(c, "RPT") },
+  // Dynamic criteria: unlike the fixed ones above, these don't score anything
+  // on their own — the person picks WHICH weekday each slot means (via the
+  // day-picker shown once the slot is added to their priority list), and
+  // that choice is resolved at compute-time in computeResults(). Three slots
+  // covers the "pick up to 3 days you don't want to work" use case while
+  // still fitting the same one-item-per-priority chain-sort model as
+  // everything else in the catalog.
+  { id: "day_off_1", group: "days", dynamic: true, label: { fa: "روز تعطیل دلخواه ۱", en: "Custom day off #1", hi: "पसंदीदा छुट्टी १" } },
+  { id: "day_off_2", group: "days", dynamic: true, label: { fa: "روز تعطیل دلخواه ۲", en: "Custom day off #2", hi: "पसंदीदा छुट्टी २" } },
+  { id: "day_off_3", group: "days", dynamic: true, label: { fa: "روز تعطیل دلخواه ۳", en: "Custom day off #3", hi: "पसंदीदा छुट्टी ३" } },
 ];
 const CRITERIA_MAX = 10;
 
 function criterionColor(id) {
   if (id.startsWith("region_")) return REGION_COLORS[id.replace("region_", "")];
   if (id === "has_rpt") return REGION_COLORS.RPT;
+  if (id.startsWith("day_off_")) return "#B3432A";
   return "var(--accent)";
 }
 
-function computeResults(crews, priorityList) {
-  const criteriaObjs = priorityList.map((id) => CRITERIA_CATALOG.find((c) => c.id === id)).filter(Boolean);
+// A dynamic day-off criterion's label grows a weekday name once one is
+// chosen (e.g. "Custom day off #1" -> "Custom day off #1 — Friday"). Every
+// other criterion's label passes through unchanged. Centralizing this here
+// means every place that ever displayed `crit.label[lang]` (chips, the
+// priority list, history, Excel/print export, the compare table) shows the
+// same resolved text instead of six separate copies of this logic.
+function resolveCriterionLabel(id, dayOffChoices) {
+  const base = CRITERIA_CATALOG.find((c) => c.id === id);
+  if (!base) return { fa: id, en: id, hi: id };
+  if (!base.dynamic) return base.label;
+  const dayIdx = dayOffChoices ? dayOffChoices[id] : null;
+  if (dayIdx == null || dayIdx === "") return base.label;
+  return {
+    fa: `${base.label.fa} — ${WEEKDAY_LABELS.fa[dayIdx]}`,
+    en: `${base.label.en} — ${WEEKDAY_LABELS.en[dayIdx]}`,
+    hi: `${base.label.hi} — ${WEEKDAY_LABELS.hi[dayIdx]}`,
+  };
+}
+
+function dayOffScore(c, dayIdx) {
+  if (dayIdx == null || dayIdx === "") return 0;
+  return c.days.some((d) => d.dayIdx === dayIdx) ? 0 : 100;
+}
+
+function computeResults(crews, priorityList, dayOffChoices) {
+  const criteriaObjs = priorityList.map((id) => {
+    const base = CRITERIA_CATALOG.find((c) => c.id === id);
+    if (!base) return null;
+    const label = resolveCriterionLabel(id, dayOffChoices);
+    if (base.dynamic) {
+      const dayIdx = dayOffChoices ? dayOffChoices[id] : null;
+      return { id: base.id, label, score: (c) => dayOffScore(c, dayIdx) };
+    }
+    return { id: base.id, label, score: base.score };
+  }).filter(Boolean);
   const withFp = crews.map((c) => {
     const fingerprint = criteriaObjs.map((crit) => ({ id: crit.id, label: crit.label, score: crit.score(c) }));
     const regionSummary = {};
@@ -324,6 +374,28 @@ const STRINGS = {
   crewNotFound: { fa: "این شماره گروه در فایل پیدا نشد.", en: "That crew number was not found in the file.", hi: "यह क्रू नंबर फ़ाइल में नहीं मिला।" },
   off: { fa: "تعطیل", en: "OFF", hi: "बंद" },
   close: { fa: "بستن", en: "Close", hi: "बंद करें" },
+
+  // ---- day-off criteria ----
+  pickDayHint: { fa: "کدوم روز؟", en: "Which day?", hi: "कौन सा दिन?" },
+  errDayOffUnset: { fa: "برای «روز تعطیل دلخواه» که به لیست اضافه کردی، یه روز مشخص کن.", en: "Pick a weekday for the custom day-off criterion you added.", hi: "आपने जो \"पसंदीदा छुट्टी\" जोड़ी है उसके लिए एक दिन चुनें।" },
+
+  // ---- profile ----
+  profileTitle: { fa: "پروفایل من", en: "My Profile", hi: "मेरी प्रोफ़ाइल" },
+  firstNameLabel: { fa: "نام کوچیک", en: "First name", hi: "पहला नाम" },
+  myCrewLabel: { fa: "شمارهٔ گروه/شیفت من", en: "My crew number", hi: "मेरा क्रू नंबर" },
+  saveProfileBtn: { fa: "ذخیره", en: "Save", hi: "सहेजें" },
+  clearProfileBtn: { fa: "پاک کردن پروفایل", en: "Clear profile", hi: "प्रोफ़ाइल साफ़ करें" },
+  profilePrivacyHint: {
+    fa: "این اطلاعات فقط روی همین دستگاه/مرورگر ذخیره می‌شه — هیچ‌جا فرستاده نمی‌شه، و برای بقیه کسایی که همین برنامه رو دارن دیده نمی‌شه.",
+    en: "This is saved only on this device/browser — it's never sent anywhere, and no one else using this app will see it.",
+    hi: "यह केवल इस डिवाइस/ब्राउज़र पर सहेजा जाता है — कहीं नहीं भेजा जाता, और इस ऐप के अन्य उपयोगकर्ता इसे नहीं देख सकते।",
+  },
+  welcomeBack: { fa: "خوش‌آمدید،", en: "Welcome back,", hi: "वापसी पर स्वागत है," },
+  myShiftCard: { fa: "شیفت من", en: "My shift", hi: "मेरी शिफ्ट" },
+  viewMySchedule: { fa: "مشاهدهٔ برنامهٔ من", en: "View my schedule", hi: "मेरा शेड्यूल देखें" },
+  crewNumberNotInFile: { fa: "این شمارهٔ گروه توی این فایل پیدا نشد.", en: "That crew number wasn't found in this file.", hi: "यह क्रू नंबर इस फ़ाइल में नहीं मिला।" },
+  myShiftBadge: { fa: "شیفت من", en: "Mine", hi: "मेरा" },
+  myScheduleTitle: { fa: "برنامهٔ هفتگی من", en: "My weekly schedule", hi: "मेरा साप्ताहिक कार्यक्रम" },
 };
 
 function t(key, lang) { return STRINGS[key] ? (STRINGS[key][lang] || STRINGS[key].en) : key; }
@@ -567,6 +639,102 @@ function clearHistoryStorage() {
   try { localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
 }
 
+// ---------- Profile (name + "my crew number") ----------
+// Same storage mechanism as history above — plain localStorage, private to
+// this browser/device. Kept as its own key so clearing history never
+// touches the saved profile and vice versa.
+function loadProfile() {
+  try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || "null"); } catch { return null; }
+}
+function saveProfile(profile) {
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch { /* ignore storage errors */ }
+}
+function clearProfileStorage() {
+  try { localStorage.removeItem(PROFILE_KEY); } catch { /* ignore */ }
+}
+
+function ProfilePanel({ lang, profile, onSave, onClear, onClose }) {
+  const [firstName, setFirstName] = useState(profile?.firstName || "");
+  const [crewNumber, setCrewNumber] = useState(profile?.crewNumber || "");
+
+  const handleSave = () => {
+    const name = firstName.trim();
+    const crew = String(crewNumber).trim();
+    if (!name && !crew) { onClear(); onClose(); return; }
+    onSave({ firstName: name, crewNumber: crew });
+    onClose();
+  };
+
+  return (
+    <Modal title={t("profileTitle", lang)} onClose={onClose}>
+      <div style={styles.smallLabel}>{t("firstNameLabel", lang)}</div>
+      <input
+        type="text"
+        value={firstName}
+        onChange={(e) => setFirstName(e.target.value)}
+        style={styles.numInputWide}
+      />
+      <div style={{ ...styles.smallLabel, marginTop: 10 }}>{t("myCrewLabel", lang)}</div>
+      <input
+        type="number"
+        value={crewNumber}
+        onChange={(e) => setCrewNumber(e.target.value)}
+        style={styles.numInputWide}
+      />
+      <p style={styles.hint}>{t("profilePrivacyHint", lang)}</p>
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button onClick={handleSave} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}>
+          <Check size={14} /> {t("saveProfileBtn", lang)}
+        </button>
+        {(profile?.firstName || profile?.crewNumber) && (
+          <button onClick={() => { onClear(); onClose(); }} style={{ ...styles.smallActionBtn, color: "#B3432A" }}>
+            <Trash2 size={14} /> {t("clearProfileBtn", lang)}
+          </button>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+// A read-only, single-crew weekly view for "my shift" — deliberately its
+// own small component instead of reusing CompareTwoPanel's table (which is
+// built around 2-5 typed-in crew numbers), so this stays a pure addition
+// that can't regress the existing compare feature.
+function MyScheduleModal({ crew, lang, onClose }) {
+  const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
+  const dayCell = (i) => crew.days.find((d) => d.dayIdx === i);
+  return (
+    <Modal title={`${t("myScheduleTitle", lang)} — ${t("crewWord", lang)} ${String(crew.crew)}`} onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {weekdayNames.map((wd, i) => {
+          const d = dayCell(i);
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ width: 88, flexShrink: 0, fontWeight: 700, fontSize: 12.5 }}>{wd}</span>
+              {d ? (
+                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px" }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: REGION_COLORS[d.regionKey] || "#9AA0A6", flexShrink: 0 }} />
+                  <span style={{ fontSize: 12 }}>{regionLabel(d.regionKey, lang)} · {d.code || "-"}</span>
+                  <span style={{ marginInlineStart: "auto", fontWeight: 700, fontSize: 12.5 }}>{formatExcelTime(d.start)}–{formatExcelTime(d.end)}</span>
+                  <span style={{ fontSize: 11, color: "var(--muted)" }}>{formatDuration(d.hours, lang)}</span>
+                </div>
+              ) : (
+                <div style={{ flex: 1, border: "1.5px dashed #e0a0a0", background: "#fbeceb", color: "#b3432a", borderRadius: 8, padding: "7px 10px", fontWeight: 700, fontSize: 12 }}>
+                  {t("off", lang)} ✕
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 13, fontWeight: 700, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+          <span>{crew.type} · {crew.shiftRaw}</span>
+          <span>{crew.totalHours} {t("hours", lang)}</span>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function HistoryPanel({ lang, onClose }) {
   const [items, setItems] = useState(() => loadHistory());
   return (
@@ -802,7 +970,7 @@ function buildCompareHtml(matched, lang, timestamp) {
 
 function buildResultsHtml(results, priorityList, lang, timestamp) {
   const dir = lang === "fa" ? "rtl" : "ltr";
-  const critLabels = priorityList.map((id, i) => `${i + 1}. ${CRITERIA_CATALOG.find((c) => c.id === id)?.label[lang]}`);
+  const critLabels = priorityList.map((id, i) => `${i + 1}. ${results[0]?.fingerprint?.[i]?.label?.[lang] || CRITERIA_CATALOG.find((c) => c.id === id)?.label[lang]}`);
   const headers = [t("rank", lang), t("crewWord", lang), t("type", lang), t("shift", lang), t("daysColumn", lang), t("hours", lang), t("region", lang), ...critLabels];
   const headCells = headers.map((h) => `<th style="border:1px solid #ddd;padding:8px;background:#EAF1EF;">${h}</th>`).join("");
   const medalBg = { 0: "#FBF1DA", 1: "#F2F2F2", 2: "#F6E9DC" };
@@ -1101,19 +1269,23 @@ const MEDAL_STYLE = {
   3: { icon: Award, color: "#A9713F", border: "#C08A55" },
 };
 
-function TopCard({ r, rank, lang, compareSet, toggleCompare }) {
+function TopCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
   const inCompare = compareSet.includes(r.crew);
   const medal = MEDAL_STYLE[rank];
   const Icon = medal ? medal.icon : null;
   const ds = displayScore(r.fingerprint);
+  const isMine = profile?.crewNumber && String(r.crew) === String(profile.crewNumber);
   return (
-    <div style={{ ...styles.topCard, borderColor: medal ? medal.border : "var(--border)" }}>
+    <div style={{ ...styles.topCard, borderColor: isMine ? "var(--accent)" : medal ? medal.border : "var(--border)", ...(isMine ? { borderWidth: 2 } : {}) }}>
       <div style={{ ...styles.topBadge, background: medal ? medal.color : "var(--accent)" }}>
         {Icon ? <Icon size={13} /> : rank}
         {Icon && <span>#{rank}</span>}
       </div>
       <div style={styles.heroTop}>
-        <div style={styles.heroCrew}>{t("crewWord", lang)} {String(r.crew)}</div>
+        <div style={styles.heroCrew}>
+          {t("crewWord", lang)} {String(r.crew)}
+          {isMine && <span style={styles.mineBadge}><Star size={10} /> {t("myShiftBadge", lang)}</span>}
+        </div>
         <div style={{ ...styles.scoreBadge, color: fpColor(ds) }}>{ds.toFixed(4)}%</div>
       </div>
       <div style={styles.heroMeta}>{r.type} · {r.shiftRaw} · {r.workedCount} {t("days", lang)} · {r.totalHours} {t("hours", lang)}</div>
@@ -1126,15 +1298,17 @@ function TopCard({ r, rank, lang, compareSet, toggleCompare }) {
   );
 }
 
-function ResultCard({ r, rank, lang, compareSet, toggleCompare }) {
+function ResultCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
   const inCompare = compareSet.includes(r.crew);
   const ds = displayScore(r.fingerprint);
+  const isMine = profile?.crewNumber && String(r.crew) === String(profile.crewNumber);
   return (
-    <div style={styles.resultCard}>
+    <div style={{ ...styles.resultCard, ...(isMine ? { borderColor: "var(--accent)", borderWidth: 2 } : {}) }}>
       <div style={styles.resultCardTop}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={styles.rankBadge}>{rank}</span>
           <span style={styles.resultCrew}>{t("crewWord", lang)} {String(r.crew)}</span>
+          {isMine && <span style={styles.mineBadge}><Star size={10} /> {t("myShiftBadge", lang)}</span>}
         </div>
         <span style={{ ...styles.scoreBadgeSm, color: fpColor(ds) }}>{ds.toFixed(4)}%</span>
       </div>
@@ -1155,7 +1329,14 @@ export default function ShiftPriorityRanker() {
   const [themeStyle, setThemeStyle] = useState("universal");
   const [themeMode, setThemeMode] = useState("light");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activePanel, setActivePanel] = useState(null); // 'settings' | 'history' | 'help' | 'compare2'
+  const [activePanel, setActivePanel] = useState(null); // 'settings' | 'history' | 'help' | 'compare2' | 'profile'
+
+  // Personal profile (name + "my crew number") — loaded once from this
+  // browser's own localStorage. Nothing here ever leaves the device: two
+  // different people opening the same build each only ever see what THEY
+  // saved, never each other's.
+  const [profile, setProfile] = useState(() => loadProfile());
+  const [showMySchedule, setShowMySchedule] = useState(false);
 
   const [workbook, setWorkbook] = useState(null);
   const [sheetNames, setSheetNames] = useState([]);
@@ -1165,6 +1346,10 @@ export default function ShiftPriorityRanker() {
   const [error, setError] = useState("");
 
   const [priorityList, setPriorityList] = useState([]);
+  // Which weekday each "day_off_N" dynamic criterion currently means, e.g.
+  // { day_off_1: 5 } for Friday. Kept separate from priorityList because it
+  // is per-criterion configuration, not membership/order.
+  const [dayOffChoices, setDayOffChoices] = useState({});
   const [showResults, setShowResults] = useState(false);
   const [compareSet, setCompareSet] = useState([]);
   const [results, setResults] = useState([]);
@@ -1239,10 +1424,16 @@ export default function ShiftPriorityRanker() {
 
   const runCompute = () => {
     if (!parsed || priorityList.length === 0) return;
-    const computed = computeResults(parsed.crews, priorityList);
+    const hasUnsetDayOff = priorityList.some((id) => {
+      const base = CRITERIA_CATALOG.find((c) => c.id === id);
+      return base?.dynamic && (dayOffChoices[id] == null || dayOffChoices[id] === "");
+    });
+    if (hasUnsetDayOff) { setError(t("errDayOffUnset", lang)); return; }
+    setError("");
+    const computed = computeResults(parsed.crews, priorityList, dayOffChoices);
     setResults(computed);
     setShowResults(true);
-    const priorityLabels = priorityList.map((id) => CRITERIA_CATALOG.find((c) => c.id === id)?.label[lang]);
+    const priorityLabels = priorityList.map((id) => resolveCriterionLabel(id, dayOffChoices)[lang]);
     saveHistoryEntry({
       fileName,
       sheetName: selectedSheet,
@@ -1257,7 +1448,7 @@ export default function ShiftPriorityRanker() {
   const compareResults = useMemo(() => results.filter((r) => compareSet.includes(r.crew)), [results, compareSet]);
 
   const exportExcel = () => {
-    const critLabels = priorityList.map((id, i) => `${i + 1}. ${CRITERIA_CATALOG.find((c) => c.id === id)?.label[lang]}`);
+    const critLabels = priorityList.map((id, i) => `${i + 1}. ${results[0]?.fingerprint?.[i]?.label?.[lang] || CRITERIA_CATALOG.find((c) => c.id === id)?.label[lang]}`);
     const headers = [t("rank", lang), t("crewWord", lang), t("type", lang), t("shift", lang), t("days", lang), t("hours", lang), t("region", lang), ...critLabels];
     const dataRows = results.map((r, idx) => [
       idx + 1,
@@ -1338,6 +1529,9 @@ export default function ShiftPriorityRanker() {
           <button onClick={() => setMenuOpen((v) => !v)} style={styles.menuBtn}><Menu size={16} /></button>
           {menuOpen && (
             <div style={{ ...styles.menuDropdown, left: 0 }}>
+              <button style={styles.menuItem} onClick={() => { setActivePanel("profile"); setMenuOpen(false); }}>
+                <User size={15} /> {t("profileTitle", lang)}
+              </button>
               <button style={styles.menuItem} onClick={() => { setActivePanel("settings"); setMenuOpen(false); }}>
                 <Sun size={15} /> {t("settingsTitle", lang)}
               </button>
@@ -1364,6 +1558,15 @@ export default function ShiftPriorityRanker() {
         </div>
       </div>
 
+      {activePanel === "profile" && (
+        <ProfilePanel
+          lang={lang}
+          profile={profile}
+          onSave={(p) => { setProfile(p); saveProfile(p); }}
+          onClear={() => { setProfile(null); clearProfileStorage(); }}
+          onClose={() => setActivePanel(null)}
+        />
+      )}
       {activePanel === "settings" && (
         <SettingsPanel lang={lang} themeStyle={themeStyle} setThemeStyle={setThemeStyle} themeMode={themeMode} setThemeMode={setThemeMode} onClose={() => setActivePanel(null)} />
       )}
@@ -1373,6 +1576,10 @@ export default function ShiftPriorityRanker() {
       {activePanel === "compare2" && parsed && (
         <CompareTwoPanel lang={lang} crews={parsed.crews} onClose={() => setActivePanel(null)} />
       )}
+      {showMySchedule && parsed && profile?.crewNumber && (() => {
+        const myCrew = parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber));
+        return myCrew ? <MyScheduleModal crew={myCrew} lang={lang} onClose={() => setShowMySchedule(false)} /> : null;
+      })()}
 
       <div>
         <header className="no-print" style={styles.header}>
@@ -1381,8 +1588,32 @@ export default function ShiftPriorityRanker() {
           </div>
           <h1 style={styles.title}>{t("title", lang)}</h1>
           <p style={styles.subtitle}>{t("subtitle", lang)}</p>
+          {profile?.firstName && (
+            <p style={styles.welcomeLine}>{t("welcomeBack", lang)} <b>{profile.firstName}</b></p>
+          )}
           <DateTimeWidget lang={lang} />
         </header>
+
+        {profile?.crewNumber && parsed && (() => {
+          const myCrew = parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber));
+          return (
+            <div className="no-print" style={styles.myShiftCard}>
+              <div>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>{t("myShiftCard", lang)}</div>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>
+                  {t("crewWord", lang)} {profile.crewNumber}
+                  {myCrew && <span style={{ fontWeight: 600, fontSize: 12.5, color: "var(--muted)" }}> · {myCrew.type} · {myCrew.shiftRaw}</span>}
+                </div>
+                {!myCrew && <div style={{ fontSize: 11.5, color: "#B3432A", marginTop: 2 }}>{t("crewNumberNotInFile", lang)}</div>}
+              </div>
+              {myCrew && (
+                <button onClick={() => setShowMySchedule(true)} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}>
+                  <Star size={13} /> {t("viewMySchedule", lang)}
+                </button>
+              )}
+            </div>
+          );
+        })()}
 
         <section className="no-print" style={styles.card}>
           <div style={styles.stepLabel}>{t("uploadStep", lang)}</div>
@@ -1442,7 +1673,8 @@ export default function ShiftPriorityRanker() {
                       >
                         {selected ? <span style={styles.chipRankBadge}>{rankIdx + 1}</span> : <Plus size={12} />}
                         {item.group === "region" && <span style={{ ...styles.regionDot, background: criterionColor(item.id) }} />}
-                        {item.label[lang]}
+                        {item.dynamic && <CalendarOff size={12} />}
+                        {resolveCriterionLabel(item.id, dayOffChoices)[lang]}
                       </button>
                     );
                   })}
@@ -1462,15 +1694,33 @@ export default function ShiftPriorityRanker() {
               {priorityList.length === 0 && <p style={styles.hint}>{t("emptyPriorities", lang)}</p>}
               {priorityList.map((id, idx) => {
                 const crit = CRITERIA_CATALOG.find((c) => c.id === id);
+                const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
+                const chosenDay = dayOffChoices[id];
                 return (
-                  <div key={id} style={styles.priorityRow}>
-                    <span style={{ ...styles.priorityRank, background: criterionColor(id) }}>{idx + 1}</span>
-                    <span style={styles.priorityLabel}>{crit.label[lang]}</span>
-                    <div style={styles.regionArrows}>
-                      <button onClick={() => moveCriterion(idx, -1)} style={styles.arrowBtn} disabled={idx === 0}><ArrowUp size={14} /></button>
-                      <button onClick={() => moveCriterion(idx, 1)} style={styles.arrowBtn} disabled={idx === priorityList.length - 1}><ArrowDown size={14} /></button>
-                      <button onClick={() => removeCriterion(id)} style={{ ...styles.arrowBtn, color: "#B3432A" }}><X size={14} /></button>
+                  <div key={id}>
+                    <div style={styles.priorityRow}>
+                      <span style={{ ...styles.priorityRank, background: criterionColor(id) }}>{idx + 1}</span>
+                      <span style={styles.priorityLabel}>{resolveCriterionLabel(id, dayOffChoices)[lang]}</span>
+                      <div style={styles.regionArrows}>
+                        <button onClick={() => moveCriterion(idx, -1)} style={styles.arrowBtn} disabled={idx === 0}><ArrowUp size={14} /></button>
+                        <button onClick={() => moveCriterion(idx, 1)} style={styles.arrowBtn} disabled={idx === priorityList.length - 1}><ArrowDown size={14} /></button>
+                        <button onClick={() => removeCriterion(id)} style={{ ...styles.arrowBtn, color: "#B3432A" }}><X size={14} /></button>
+                      </div>
                     </div>
+                    {crit?.dynamic && (
+                      <div style={styles.dayPickRow}>
+                        <span style={styles.dayPickHint}>{t("pickDayHint", lang)}</span>
+                        {weekdayNames.map((wd, di) => (
+                          <button
+                            key={di}
+                            onClick={() => setDayOffChoices((prev) => ({ ...prev, [id]: di }))}
+                            style={{ ...styles.dayPickBtn, ...(chosenDay === di ? styles.dayPickBtnActive : {}) }}
+                          >
+                            {wd}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1496,7 +1746,7 @@ export default function ShiftPriorityRanker() {
             <div style={styles.topLabel}>{t("best", lang)}</div>
             <div style={styles.topGrid}>
               {results.slice(0, 5).map((r, idx) => (
-                <TopCard key={r.crew + "-top-" + idx} r={r} rank={idx + 1} lang={lang} compareSet={compareSet} toggleCompare={toggleCompare} />
+                <TopCard key={r.crew + "-top-" + idx} r={r} rank={idx + 1} lang={lang} compareSet={compareSet} toggleCompare={toggleCompare} profile={profile} />
               ))}
             </div>
 
@@ -1505,7 +1755,7 @@ export default function ShiftPriorityRanker() {
                 <div style={{ ...styles.topLabel, marginTop: 18 }}>{t("rest", lang)}</div>
                 <div style={styles.grid}>
                   {results.slice(5).map((r, idx) => (
-                    <ResultCard key={r.crew + "-" + idx} r={r} rank={idx + 6} lang={lang} compareSet={compareSet} toggleCompare={toggleCompare} />
+                    <ResultCard key={r.crew + "-" + idx} r={r} rank={idx + 6} lang={lang} compareSet={compareSet} toggleCompare={toggleCompare} profile={profile} />
                   ))}
                 </div>
               </>
@@ -1544,10 +1794,10 @@ export default function ShiftPriorityRanker() {
                     {compareResults.map((r) => <td key={r.crew} style={styles.compareCell}><RegionChips regionSummary={r.regionSummary} lang={lang} /></td>)}
                   </tr>
                   {priorityList.map((id, i) => {
-                    const crit = CRITERIA_CATALOG.find((c) => c.id === id);
+                    const critLabel = compareResults[0]?.fingerprint?.[i]?.label?.[lang] ?? resolveCriterionLabel(id, dayOffChoices)[lang];
                     return (
                       <tr key={id}>
-                        <td style={styles.compareLabelCell}>{i + 1}. {crit.label[lang]}</td>
+                        <td style={styles.compareLabelCell}>{i + 1}. {critLabel}</td>
                         {compareResults.map((r) => (
                           <td key={r.crew} style={{ ...styles.compareCell, fontWeight: 700 }}>{r.fingerprint[i]?.score ?? 0}%</td>
                         ))}
@@ -1648,6 +1898,12 @@ const styles = {
   priorityRank: { width: 20, height: 20, borderRadius: "50%", color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   priorityLabel: { flex: 1, fontSize: 13 },
   regionArrows: { display: "flex", gap: 3 },
+  dayPickRow: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 5, padding: "0 0 10px 28px" },
+  dayPickHint: { fontSize: 11, color: "var(--muted)", marginInlineEnd: 4 },
+  dayPickBtn: { fontSize: 11, fontWeight: 600, padding: "4px 9px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", cursor: "pointer" },
+  dayPickBtnActive: { background: "#B3432A", color: "#fff", borderColor: "#B3432A" },
+  welcomeLine: { fontSize: 13.5, fontWeight: 600, color: "var(--text)", marginTop: 4 },
+  myShiftCard: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", background: "var(--bg)", border: "1.5px solid var(--accent)", borderRadius: "var(--radius)", padding: "12px 16px", marginBottom: 14 },
   arrowBtn: { border: "1px solid var(--border)", background: "var(--card)", borderRadius: 5, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--text)" },
   computeBtn: { width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "var(--accent)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "12px 0", fontSize: 14.5, fontWeight: 700, cursor: "pointer", marginTop: 4 },
   smallActionBtn: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, padding: "7px 11px", borderRadius: 7, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", cursor: "pointer" },
@@ -1657,7 +1913,8 @@ const styles = {
   topCard: { position: "relative", background: "var(--card)", border: "1.5px solid var(--border)", borderRadius: "var(--radius)", padding: 16 },
   topBadge: { position: "absolute", top: -10, insetInlineStart: 14, color: "#fff", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12, display: "flex", alignItems: "center", gap: 4 },
   heroTop: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
-  heroCrew: { fontSize: 18, fontWeight: 800 },
+  heroCrew: { fontSize: 18, fontWeight: 800, display: "flex", alignItems: "center", gap: 6 },
+  mineBadge: { display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 800, color: "#fff", background: "var(--accent)", borderRadius: 999, padding: "2px 8px" },
   scoreBadge: { fontSize: 17, fontWeight: 800, whiteSpace: "nowrap" },
   scoreBadgeSm: { fontSize: 12, fontWeight: 800, whiteSpace: "nowrap" },
   heroMeta: { fontSize: 12.5, color: "var(--muted)", marginBottom: 8 },
