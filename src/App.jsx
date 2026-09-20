@@ -5,7 +5,7 @@ import {
   Upload, RotateCcw, ListChecks, AlertCircle, Check, Printer,
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, ArrowLeft, Plus,
   Menu, Sun, Moon, HelpCircle, Trash2, Users, Info, Mail, LogOut,
-  User, Star, CalendarOff, Shield, Lock, Search,
+  User, Star, CalendarOff, Shield, Lock, Search, Repeat,
 } from "lucide-react";
 
 const APP_VERSION = pkg.version;
@@ -514,6 +514,31 @@ const STRINGS = {
   adminLogoutBtn: { fa: "خروج از حالت ادمین", en: "Log out of Admin", hi: "एडमिन से लॉग आउट" },
   crewNumberLabel: { fa: "شماره گروه", en: "Crew number", hi: "क्रू नंबर" },
   driverNameLabel: { fa: "نام راننده", en: "Driver name", hi: "ड्राइवर का नाम" },
+
+  // ---- shift swap finder ----
+  swapFinderMenuLabel: { fa: "یافتن جایگزین", en: "Find a Replacement", hi: "प्रतिस्थापन ढूंढें" },
+  swapFinderTitle: { fa: "یافتن جایگزین برای شیفت", en: "Find a Shift Replacement", hi: "शिफ्ट प्रतिस्थापन खोजें" },
+  swapFinderHint: {
+    fa: "این فقط یه فهرست پیشنهادیه — به هیچ‌کس پیامی فرستاده نمی‌شه. خودت باید با فردی که مایله تماس بگیری.",
+    en: "This is just a suggestion list — it doesn't message anyone. You still need to reach out to whoever's willing yourself.",
+    hi: "यह सिर्फ एक सुझाव सूची है — किसी को कोई संदेश नहीं भेजा जाता। आपको खुद इच्छुक व्यक्ति से संपर्क करना होगा।",
+  },
+  swapFinderDateLabel: { fa: "تاریخ", en: "Date", hi: "तारीख़" },
+  swapFinderMyShiftIs: { fa: "شیفت من:", en: "My shift:", hi: "मेरी शिफ्ट:" },
+  swapFinderYouAreOff: { fa: "این روز خودت آف هستی", en: "You're off that day", hi: "आप उस दिन ऑफ़ हैं" },
+  swapFinderAvailableLabel: { fa: "این روز شیفت ندارن:", en: "No shift that day:", hi: "उस दिन कोई शिफ्ट नहीं:" },
+  swapFinderPickDate: { fa: "یه تاریخ انتخاب کن", en: "Pick a date", hi: "एक तारीख़ चुनें" },
+  swapFinderNoneOff: { fa: "هیچ‌کس این روز آف نیست", en: "No one is off that day", hi: "उस दिन कोई ऑफ़ नहीं है" },
+  swapFinderShiftMatch: { fa: "هم‌شیفت", en: "Same shift", hi: "समान शिफ्ट" },
+
+  // ---- admin: swap-finder access ----
+  adminSwapAccessTitle: { fa: "دسترسی به «یافتن جایگزین»", en: 'Access to "Find a Replacement"', hi: "\"प्रतिस्थापन ढूंढें\" तक पहुंच" },
+  adminSwapAccessHint: {
+    fa: "شماره‌گروه‌هایی که اینجا اضافه کنی، علاوه بر ادمین، می‌تونن از «یافتن جایگزین» استفاده کنن. این هم مثل رمز ادمین فقط سمت کلاینته، یه سیستم امنیتی واقعی نیست.",
+    en: "Crew numbers added here can use \"Find a Replacement\" in addition to Admin. Like the Admin password, this is client-side only, not real security.",
+    hi: "यहां जोड़े गए क्रू नंबर, एडमिन के अलावा, \"प्रतिस्थापन ढूंढें\" का उपयोग कर सकते हैं। एडमिन पासवर्ड की तरह, यह केवल क्लाइंट-साइड है, वास्तविक सुरक्षा नहीं।",
+  },
+  adminSwapAccessEmpty: { fa: "هنوز کسی اضافه نشده (فقط ادمین می‌بینه)", en: "No one added yet (only Admin sees it)", hi: "अभी तक कोई नहीं जोड़ा गया (केवल एडमिन देखता है)" },
 };
 
 function t(key, lang) { return STRINGS[key] ? (STRINGS[key][lang] || STRINGS[key].en) : key; }
@@ -764,6 +789,20 @@ function resolveCrewName(crewNumber, crews, manualNames) {
   return c?.driverName || CREW_NAME_DEFAULTS[key] || "";
 }
 
+// ---------- Swap-finder access list ----------
+// Crew numbers allowed to see/use "Find a Replacement" (Shift Swap
+// Finder), in addition to Admin (who can always see it) — Admin manages
+// this list from the Admin panel. Same trust model as everything else
+// here: client-side only, not real access control, it just keeps the
+// feature out of view for crews who weren't given access.
+const SWAP_ACCESS_KEY = "shiftPrioritySwapAccess";
+function loadSwapAccess() {
+  try { const v = JSON.parse(localStorage.getItem(SWAP_ACCESS_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+function saveSwapAccess(list) {
+  try { localStorage.setItem(SWAP_ACCESS_KEY, JSON.stringify(list)); } catch { /* ignore storage errors */ }
+}
+
 // ---------- Admin session ----------
 // sessionStorage only — see ADMIN_SESSION_KEY above for why.
 function loadAdminSession() {
@@ -1012,6 +1051,81 @@ function CrewLookupPanel({ lang, crews, crewNames, onPick, onClose }) {
   );
 }
 
+// ---------- Shift swap finder ----------
+// Given a date you want off, shows who has no shift that weekday — so you
+// know who to ask about covering it. This is purely a lookup over the
+// already-loaded schedule: it never sends or requests anything on its
+// own, and never messages anyone. Visibility is controlled from the
+// Admin panel (see swapAccess) — Admin can always see it regardless.
+function SwapFinderPanel({ lang, crews, crewNames, myCrew, onClose }) {
+  const [dateStr, setDateStr] = useState(() => new Date().toISOString().slice(0, 10));
+  const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
+
+  // Parsed with an explicit local-midnight time (no "Z") so the weekday
+  // matches the calendar date typed, regardless of the browser's timezone.
+  const dayIdx = useMemo(() => {
+    const d = new Date(dateStr + "T00:00:00");
+    return isNaN(d.getTime()) ? null : d.getDay();
+  }, [dateStr]);
+
+  const myDayCell = useMemo(() => {
+    if (!myCrew || dayIdx === null) return undefined;
+    return myCrew.days.find((d) => d.dayIdx === dayIdx);
+  }, [myCrew, dayIdx]);
+
+  const offCrews = useMemo(() => {
+    if (dayIdx === null) return [];
+    return (crews || [])
+      .filter((c) => !myCrew || String(c.crew) !== String(myCrew.crew))
+      .filter((c) => !c.days.some((d) => d.dayIdx === dayIdx))
+      .map((c) => ({ crew: c.crew, name: resolveCrewName(c.crew, crews, crewNames), shiftRaw: c.shiftRaw }))
+      .sort((a, b) => {
+        const aMatch = myCrew && a.shiftRaw === myCrew.shiftRaw ? 0 : 1;
+        const bMatch = myCrew && b.shiftRaw === myCrew.shiftRaw ? 0 : 1;
+        if (aMatch !== bMatch) return aMatch - bMatch;
+        return Number(a.crew) - Number(b.crew) || String(a.crew).localeCompare(String(b.crew));
+      });
+  }, [crews, crewNames, dayIdx, myCrew]);
+
+  return (
+    <Modal title={t("swapFinderTitle", lang)} onClose={onClose}>
+      <p style={styles.hint}>{t("swapFinderHint", lang)}</p>
+      <div style={styles.smallLabel}>{t("swapFinderDateLabel", lang)}</div>
+      <input
+        type="date"
+        value={dateStr}
+        onChange={(e) => setDateStr(e.target.value)}
+        style={styles.numInputWide}
+      />
+      {dayIdx !== null && (
+        <p style={{ fontSize: 12, color: "var(--muted)", margin: "8px 0 0" }}>
+          {weekdayNames[dayIdx]}
+          {myCrew && (
+            myDayCell
+              ? ` · ${t("swapFinderMyShiftIs", lang)} ${myDayCell.code || myCrew.shiftRaw} (${formatExcelTime(myDayCell.start)}–${formatExcelTime(myDayCell.end)})`
+              : ` · ${t("swapFinderYouAreOff", lang)}`
+          )}
+        </p>
+      )}
+
+      <div style={{ marginTop: 14, fontWeight: 700, fontSize: 12.5 }}>{t("swapFinderAvailableLabel", lang)}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 320, overflowY: "auto", marginTop: 6 }}>
+        {dayIdx === null && <p style={styles.hint}>{t("swapFinderPickDate", lang)}</p>}
+        {dayIdx !== null && offCrews.length === 0 && <p style={styles.hint}>{t("swapFinderNoneOff", lang)}</p>}
+        {offCrews.map((c) => (
+          <div key={c.crew} style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px" }}>
+            <span style={{ fontWeight: 700, fontSize: 12.5, minWidth: 60 }}>{t("crewWord", lang)} {c.crew}</span>
+            <span style={{ fontSize: 12.5, flex: 1 }}>{c.name || "—"}</span>
+            {myCrew && c.shiftRaw === myCrew.shiftRaw && (
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent)", whiteSpace: "nowrap" }}>{t("swapFinderShiftMatch", lang)}</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
 // ---------- Admin ----------
 // See the ADMIN_USERNAME/ADMIN_PASSWORD note near the top of this file: this
 // login only hides the panel below from casual users, it is not real
@@ -1060,12 +1174,29 @@ function AdminLoginModal({ lang, onSuccess, onClose }) {
   );
 }
 
-function AdminPanel({ lang, crews, crewNames, setCrewNames, onLogout, onClose }) {
+function AdminPanel({ lang, crews, crewNames, setCrewNames, swapAccess, setSwapAccess, onLogout, onClose }) {
   const [drafts, setDrafts] = useState({});
   const [newCrew, setNewCrew] = useState("");
   const [newName, setNewName] = useState("");
   const [dupWarning, setDupWarning] = useState({}); // { [crewNum]: theOtherCrewNumItClashesWith }
   const [newDup, setNewDup] = useState(null);
+  const [newSwapCrew, setNewSwapCrew] = useState("");
+
+  const addSwapAccess = () => {
+    const num = newSwapCrew.trim();
+    if (!num) return;
+    if (!swapAccess.includes(num)) {
+      const next = [...swapAccess, num];
+      setSwapAccess(next);
+      saveSwapAccess(next);
+    }
+    setNewSwapCrew("");
+  };
+  const removeSwapAccess = (num) => {
+    const next = swapAccess.filter((n) => n !== num);
+    setSwapAccess(next);
+    saveSwapAccess(next);
+  };
 
   // Union of every crew number in the currently loaded file, every crew
   // number in the built-in default list, plus every crew number that
@@ -1206,6 +1337,35 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, onLogout, onClose })
             </div>
           );
         })}
+      </div>
+
+      <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
+        <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 4 }}>{t("adminSwapAccessTitle", lang)}</div>
+        <p style={styles.hint}>{t("adminSwapAccessHint", lang)}</p>
+        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+          <input
+            type="number"
+            placeholder={t("crewNumberLabel", lang)}
+            value={newSwapCrew}
+            onChange={(e) => setNewSwapCrew(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") addSwapAccess(); }}
+            style={{ ...styles.numInputWide, minWidth: 90, width: 90, flex: "none" }}
+          />
+          <button onClick={addSwapAccess} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}>
+            <Plus size={14} />
+          </button>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {swapAccess.length === 0 && <p style={styles.hint}>{t("adminSwapAccessEmpty", lang)}</p>}
+          {swapAccess.map((num) => (
+            <span key={num} style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid var(--border)", borderRadius: 20, padding: "3px 4px 3px 10px", fontSize: 12 }}>
+              {t("crewWord", lang)} {num}
+              <button onClick={() => removeSwapAccess(num)} style={{ ...styles.smallActionBtn, padding: "3px 5px", border: "none" }}>
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
       </div>
 
       <button onClick={onLogout} style={{ ...styles.smallActionBtn, color: "#B3432A", marginTop: 12 }}>
@@ -1732,6 +1892,14 @@ export default function ShiftPriorityRanker() {
   // The crew picked from the "Browse crews" lookup panel, or null.
   const [lookupCrew, setLookupCrew] = useState(null);
 
+  // Crew numbers (besides Admin) that Admin has granted access to the
+  // Shift Swap Finder -- see loadSwapAccess/saveSwapAccess above.
+  const [swapAccess, setSwapAccess] = useState(() => loadSwapAccess());
+
+  // Admin can always see "Find a Replacement"; other crews only if Admin
+  // added their crew number to swapAccess above.
+  const swapFinderVisible = isAdmin || (profile && profile.crewNumber && swapAccess.includes(String(profile.crewNumber)));
+
   // Restore the last successfully-parsed schedule (if any) so the app opens
   // straight to it instead of forcing a re-upload every time — see
   // LAST_FILE_KEY above. `workbook`/`sheetNames` are NOT restorable (the raw
@@ -2003,6 +2171,11 @@ export default function ShiftPriorityRanker() {
               <button style={styles.menuItem} onClick={() => { setActivePanel("crewLookup"); setMenuOpen(false); }}>
                 <Search size={15} /> {t("crewLookupTitle", lang)}
               </button>
+              {swapFinderVisible && (
+                <button style={styles.menuItem} onClick={() => { setActivePanel("swapFinder"); setMenuOpen(false); }}>
+                  <Repeat size={15} /> {t("swapFinderMenuLabel", lang)}
+                </button>
+              )}
               <button style={styles.menuItem} onClick={() => { setActivePanel("helpMenu"); setMenuOpen(false); }}>
                 <HelpCircle size={15} /> {t("helpMenuLabel", lang)}
               </button>
@@ -2056,6 +2229,15 @@ export default function ShiftPriorityRanker() {
           onClose={() => setActivePanel(null)}
         />
       )}
+      {activePanel === "swapFinder" && parsed && swapFinderVisible && (
+        <SwapFinderPanel
+          lang={lang}
+          crews={parsed.crews}
+          crewNames={crewNames}
+          myCrew={profile && profile.crewNumber ? parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber)) : null}
+          onClose={() => setActivePanel(null)}
+        />
+      )}
       {lookupCrew && (
         <MyScheduleModal
           crew={lookupCrew}
@@ -2078,6 +2260,8 @@ export default function ShiftPriorityRanker() {
           crews={parsed?.crews}
           crewNames={crewNames}
           setCrewNames={setCrewNames}
+          swapAccess={swapAccess}
+          setSwapAccess={setSwapAccess}
           onLogout={() => { setIsAdmin(false); saveAdminSession(false); setActivePanel(null); }}
           onClose={() => setActivePanel(null)}
         />
