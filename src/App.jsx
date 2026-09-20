@@ -34,6 +34,61 @@ const ADMIN_SESSION_KEY = "shiftPriorityAdminSession";
 // wants in. Never reuse a real/sensitive password for this.
 const ADMIN_USERNAME = "omid";
 const ADMIN_PASSWORD = "ABC2020";
+
+// Built-in default crew-number -> driver-name directory, seeded from the
+// printed crew list posted at the workplace (since the uploaded Excel
+// itself doesn't have a Driver Name column). This is the lowest-priority
+// name source: an auto-read "Driver Name" column in an uploaded file wins
+// over it, and a manual Admin entry wins over both — see resolveCrewName().
+// A few crew numbers share one driver (e.g. 2/3/4), matching the sheet.
+// To update this list later (someone moves crews, a new hire, etc.), either
+// edit it here and redeploy, or just fix it per-crew from the Admin panel —
+// a manual edit there always overrides this list.
+const CREW_NAME_DEFAULTS = {
+  "1": "Sam Singh",
+  "2": "Pirapa Maheswaran",
+  "3": "Pirapa Maheswaran",
+  "4": "Pirapa Maheswaran",
+  "5": "Mojtaba Hosseini",
+  "6": "Bosco James",
+  "7": "Jun Wang",
+  "8": "Behnaz Kheirandish",
+  "9": "Jeremy Range",
+  "10": "Elahe Alamdar",
+  "11": "Hussein Jiwan",
+  "12": "Hussein Jiwan",
+  "13": "Greg Black",
+  "14": "Durley Torres",
+  "15": "Siavash Rafiee",
+  "16": "On Phan",
+  "17": "Ibrar Khan",
+  "18": "Aneesa Salmon",
+  "19": "Aneesa Salmon",
+  "20": "Aneesa Salmon",
+  "21": "Jasmine Majaski",
+  "22": "Protacio Mapanao",
+  "23": "Jibril Abdinasir",
+  "24": "Sameh Fanous",
+  "25": "Kevin Pang",
+  "26": "Manjit Rai",
+  "27": "Adel Nassim",
+  "28": "Sonny Ogley",
+  "29": "Garth Mantock",
+  "30": "Oliver Pelboos",
+  "31": "Danilo Fuentes",
+  "32": "Harwinder Singh",
+  "33": "Sahar DadgarAzad",
+  "34": "Joe Jiang",
+  "35": "Amani Asaad",
+  "36": "Geeta Lal",
+  "37": "Mozhgan Fatehi",
+  "38": "Moyosore Alabi",
+  "39": "Becka Dennie",
+  "40": "Julie Edwards",
+  "41": "Omid Farhadnia",
+  "42": "Candy Lin",
+  "43": "Morteza Hosseini",
+};
 // The last successfully-parsed schedule (already-parsed crew data, not the
 // raw Excel file) so re-opening the app — closing and reopening the tab,
 // relaunching the installed PWA, restarting the Electron app — shows the
@@ -450,7 +505,7 @@ const STRINGS = {
   },
   adminNoCrews: { fa: "هنوز هیچ شماره گروهی ثبت نشده.", en: "No crew numbers yet.", hi: "अभी तक कोई क्रू नंबर नहीं है।" },
   adminManualBadge: { fa: "دستی", en: "Manual", hi: "मैनुअल" },
-  adminAutoBadge: { fa: "از اکسل", en: "From Excel", hi: "एक्सेल से" },
+  adminAutoBadge: { fa: "از اکسل", en: "From Excel", hi: "एक्सेल से" }, adminDefaultBadge: { fa: "فهرست پیش‌فرض", en: "Default list", hi: "डिफ़ॉल्ट सूची" },
   adminLogoutBtn: { fa: "خروج از حالت ادمین", en: "Log out of Admin", hi: "एडमिन से लॉग आउट" },
   crewNumberLabel: { fa: "شماره گروه", en: "Crew number", hi: "क्रू नंबर" },
   driverNameLabel: { fa: "نام راننده", en: "Driver name", hi: "ड्राइवर का नाम" },
@@ -696,7 +751,7 @@ function resolveCrewName(crewNumber, crews, manualNames) {
   const key = String(crewNumber);
   if (manualNames && Object.prototype.hasOwnProperty.call(manualNames, key)) return manualNames[key];
   const c = crews?.find((cc) => String(cc.crew) === key);
-  return c?.driverName || "";
+  return c?.driverName || CREW_NAME_DEFAULTS[key] || "";
 }
 
 // ---------- Admin session ----------
@@ -1006,12 +1061,12 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, onLogout, onClose })
   // is loaded).
   const allNumbers = useMemo(() => {
     const set = new Set();
-    (crews || []).forEach((c) => set.add(String(c.crew)));
+    (crews || []).forEach((c) => set.add(String(c.crew))); Object.keys(CREW_NAME_DEFAULTS).forEach((k) => set.add(k));
     Object.keys(crewNames || {}).forEach((k) => set.add(k));
     return Array.from(set).sort((a, b) => (Number(a) - Number(b)) || a.localeCompare(b));
   }, [crews, crewNames]);
 
-  const autoNameFor = (num) => (crews || []).find((c) => String(c.crew) === num)?.driverName || "";
+  const autoNameFor = (num) => (crews || []).find((c) => String(c.crew) === num)?.driverName || ""; const defaultNameFor = (num) => CREW_NAME_DEFAULTS[num] || "";
 
   const commit = (num, value) => {
     const next = { ...crewNames, [String(num)]: value };
@@ -1062,7 +1117,7 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, onLogout, onClose })
         {allNumbers.map((num) => {
           const hasOverride = Object.prototype.hasOwnProperty.call(crewNames || {}, num);
           const auto = autoNameFor(num);
-          const value = drafts[num] !== undefined ? drafts[num] : (hasOverride ? crewNames[num] : auto);
+          const def = defaultNameFor(num); const value = drafts[num] !== undefined ? drafts[num] : (hasOverride ? crewNames[num] : (auto || def));
           return (
             <div key={num} style={{ display: "flex", alignItems: "center", gap: 6, border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px" }}>
               <span style={{ fontWeight: 700, fontSize: 12.5, minWidth: 60 }}>{t("crewWord", lang)} {num}</span>
@@ -1074,7 +1129,7 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, onLogout, onClose })
                 style={{ ...styles.numInputWide, padding: "5px 8px", fontSize: 12.5 }}
               />
               <span style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap" }}>
-                {hasOverride ? t("adminManualBadge", lang) : (auto ? t("adminAutoBadge", lang) : "")}
+                {hasOverride ? t("adminManualBadge", lang) : auto ? t("adminAutoBadge", lang) : def ? t("adminDefaultBadge", lang) : ""}
               </span>
               {hasOverride && (
                 <button onClick={() => removeOverride(num)} style={{ ...styles.smallActionBtn, padding: "5px 7px", color: "#B3432A" }}>
