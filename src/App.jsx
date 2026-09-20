@@ -1174,12 +1174,29 @@ function AdminLoginModal({ lang, onSuccess, onClose }) {
   );
 }
 
-function AdminPanel({ lang, crews, crewNames, setCrewNames, onLogout, onClose }) {
+function AdminPanel({ lang, crews, crewNames, setCrewNames, swapAccess, setSwapAccess, onLogout, onClose }) {
   const [drafts, setDrafts] = useState({});
   const [newCrew, setNewCrew] = useState("");
   const [newName, setNewName] = useState("");
   const [dupWarning, setDupWarning] = useState({}); // { [crewNum]: theOtherCrewNumItClashesWith }
   const [newDup, setNewDup] = useState(null);
+  const [newSwapCrew, setNewSwapCrew] = useState("");
+
+  const addSwapAccess = () => {
+    const num = newSwapCrew.trim();
+    if (!num) return;
+    if (!swapAccess.includes(num)) {
+      const next = [...swapAccess, num];
+      setSwapAccess(next);
+      saveSwapAccess(next);
+    }
+    setNewSwapCrew("");
+  };
+  const removeSwapAccess = (num) => {
+    const next = swapAccess.filter((n) => n !== num);
+    setSwapAccess(next);
+    saveSwapAccess(next);
+  };
 
   // Union of every crew number in the currently loaded file, every crew
   // number in the built-in default list, plus every crew number that
@@ -1320,6 +1337,35 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, onLogout, onClose })
             </div>
           );
         })}
+      </div>
+
+      <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
+        <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 4 }}>{t("adminSwapAccessTitle", lang)}</div>
+        <p style={styles.hint}>{t("adminSwapAccessHint", lang)}</p>
+        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+          <input
+            type="number"
+            placeholder={t("crewNumberLabel", lang)}
+            value={newSwapCrew}
+            onChange={(e) => setNewSwapCrew(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") addSwapAccess(); }}
+            style={{ ...styles.numInputWide, minWidth: 90, width: 90, flex: "none" }}
+          />
+          <button onClick={addSwapAccess} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}>
+            <Plus size={14} />
+          </button>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {swapAccess.length === 0 && <p style={styles.hint}>{t("adminSwapAccessEmpty", lang)}</p>}
+          {swapAccess.map((num) => (
+            <span key={num} style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid var(--border)", borderRadius: 20, padding: "3px 4px 3px 10px", fontSize: 12 }}>
+              {t("crewWord", lang)} {num}
+              <button onClick={() => removeSwapAccess(num)} style={{ ...styles.smallActionBtn, padding: "3px 5px", border: "none" }}>
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
       </div>
 
       <button onClick={onLogout} style={{ ...styles.smallActionBtn, color: "#B3432A", marginTop: 12 }}>
