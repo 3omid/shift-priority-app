@@ -40,22 +40,25 @@ const ADMIN_PASSWORD = "ABC2020";
 // itself doesn't have a Driver Name column). This is the lowest-priority
 // name source: an auto-read "Driver Name" column in an uploaded file wins
 // over it, and a manual Admin entry wins over both — see resolveCrewName().
-// A few crew numbers share one driver (e.g. 2/3/4), matching the sheet.
+// Each crew number belongs to exactly one driver — never repeat a name
+// under two different crew numbers here. Crew numbers deliberately left
+// OUT of this list (2, 4, 11, 19, ...) are open/unassigned runs on the
+// current board: no driver, and none should be guessed. Leave a newly-open
+// crew out entirely rather than adding it with an empty string —
+// resolveCrewName() already treats "not in this list" as "no default name".
 // To update this list later (someone moves crews, a new hire, etc.), either
 // edit it here and redeploy, or just fix it per-crew from the Admin panel —
-// a manual edit there always overrides this list.
+// a manual edit there always overrides this list, and the Admin panel
+// itself refuses to save the same name under two different crew numbers.
 const CREW_NAME_DEFAULTS = {
   "1": "Sam Singh",
-  "2": "Pirapa Maheswaran",
   "3": "Pirapa Maheswaran",
-  "4": "Pirapa Maheswaran",
   "5": "Mojtaba Hosseini",
   "6": "Bosco James",
   "7": "Jun Wang",
   "8": "Behnaz Kheirandish",
   "9": "Jeremy Range",
   "10": "Elahe Alamdar",
-  "11": "Hussein Jiwan",
   "12": "Hussein Jiwan",
   "13": "Greg Black",
   "14": "Durley Torres",
@@ -63,7 +66,6 @@ const CREW_NAME_DEFAULTS = {
   "16": "On Phan",
   "17": "Ibrar Khan",
   "18": "Aneesa Salmon",
-  "19": "Aneesa Salmon",
   "20": "Jasmine Majaski",
   "21": "Protacio Mapanao",
   "22": "Jibril Abdinasir",
@@ -88,6 +90,7 @@ const CREW_NAME_DEFAULTS = {
   "41": "Candy Lin",
   "42": "Morteza Hosseini",
 };
+
 // The last successfully-parsed schedule (already-parsed crew data, not the
 // raw Excel file) so re-opening the app — closing and reopening the tab,
 // relaunching the installed PWA, restarting the Electron app — shows the
@@ -498,13 +501,16 @@ const STRINGS = {
   adminLoginError: { fa: "نام کاربری یا رمز عبور اشتباهه.", en: "Incorrect username or password.", hi: "गलत उपयोगकर्ता नाम या पासवर्ड।" },
   adminPanelTitle: { fa: "پنل ادمین — فهرست اسامی گروه‌ها", en: "Admin panel — crew name directory", hi: "एडमिन पैनल — क्रू नाम सूची" },
   adminPanelHint: {
-    fa: "اسم جلوی هر شماره گروه رو می‌تونی ویرایش کنی. مواردی که دکمهٔ حذف دارن دستی ثبت شدن؛ بقیه از ستون «Driver Name» همون فایل اکسل خونده شدن. این فهرست فقط روی همین دستگاه/مرورگر ذخیره می‌شه.",
-    en: "Edit the name next to each crew number. Entries with a delete button were entered manually; the rest were auto-read from the file's \"Driver Name\" column. This list is saved only on this device/browser.",
-    hi: "हर क्रू नंबर के सामने नाम बदल सकते हैं। जिनके पास डिलीट बटन है वे मैन्युअल रूप से जोड़े गए हैं; बाकी फ़ाइल के \"Driver Name\" कॉलम से अपने आप पढ़े गए हैं। यह सूची केवल इसी डिवाइस/ब्राउज़र पर सहेजी जाती है।",
+    fa: "اسم جلوی هر شماره گروه رو می‌تونی ویرایش کنی. اولویت: ویرایش دستی (دکمهٔ حذف داره) > ستون «Driver Name» فایل اکسل > فهرست پیش‌فرض توی خود برنامه. هر گروهی که راننده نداره می‌تونه خالی بمونه — با دکمهٔ پاک‌کردن (✕) کنار هر ردیف می‌تونی هر گروهی رو صریحاً خالی کنی. برنامه جلوی ثبت یه اسم رو برای دو شماره گروه مختلف می‌گیره. ویرایش‌های دستی فقط روی همین دستگاه/مرورگر ذخیره می‌شن.",
+    en: "Edit the name next to each crew number. Priority: a manual edit (has a delete button) beats the file's \"Driver Name\" column, which beats the app's built-in default list. A crew with no driver can stay blank — use the ✕ button on any row to explicitly blank it. The app won't let the same name be saved for two different crew numbers. Manual edits are saved only on this device/browser.",
+    hi: "हर क्रू नंबर के सामने नाम बदल सकते हैं। प्राथमिकता: मैन्युअल एडिट (डिलीट बटन वाला) > फ़ाइल के \"Driver Name\" कॉलम से > ऐप की बिल्ट-इन डिफ़ॉल्ट सूची। जिस क्रू में ड्राइवर नहीं है वह खाली रह सकता है — किसी भी पंक्ति को साफ़ तौर पर खाली करने के लिए ✕ बटन इस्तेमाल करें। एक ही नाम दो अलग-अलग क्रू नंबर के लिए सेव नहीं हो सकता। मैन्युअल बदलाव केवल इसी डिवाइस/ब्राउज़र पर सहेजे जाते हैं।",
   },
   adminNoCrews: { fa: "هنوز هیچ شماره گروهی ثبت نشده.", en: "No crew numbers yet.", hi: "अभी तक कोई क्रू नंबर नहीं है।" },
   adminManualBadge: { fa: "دستی", en: "Manual", hi: "मैनुअल" },
   adminAutoBadge: { fa: "از اکسل", en: "From Excel", hi: "एक्सेल से" }, adminDefaultBadge: { fa: "فهرست پیش‌فرض", en: "Default list", hi: "डिफ़ॉल्ट सूची" },
+  adminBlankBadge: { fa: "خالی", en: "Blank", hi: "खाली" },
+  adminClearTooltip: { fa: "خالی کردن این گروه", en: "Clear this crew", hi: "इस क्रू को खाली करें" },
+  adminDupWarning: { fa: "این اسم قبلاً برای این گروه ثبت شده و ذخیره نشد:", en: "This name is already saved for another crew and was not saved:", hi: "यह नाम पहले से एक और क्रू के लिए सेव है, इसलिए सेव नहीं हुआ:" },
   adminLogoutBtn: { fa: "خروج از حالت ادمین", en: "Log out of Admin", hi: "एडमिन से लॉग आउट" },
   crewNumberLabel: { fa: "شماره گروه", en: "Crew number", hi: "क्रू नंबर" },
   driverNameLabel: { fa: "نام راننده", en: "Driver name", hi: "ड्राइवर का नाम" },
@@ -1053,24 +1059,57 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, onLogout, onClose })
   const [drafts, setDrafts] = useState({});
   const [newCrew, setNewCrew] = useState("");
   const [newName, setNewName] = useState("");
+  const [dupWarning, setDupWarning] = useState({}); // { [crewNum]: theOtherCrewNumItClashesWith }
+  const [newDup, setNewDup] = useState(null);
 
-  // Union of every crew number in the currently loaded file, plus every
-  // crew number that already has a manually-saved name (so manual entries
-  // survive even once the file that had them is gone, or a different file
-  // is loaded).
+  // Union of every crew number in the currently loaded file, every crew
+  // number in the built-in default list, plus every crew number that
+  // already has a manually-saved name (so manual entries survive even once
+  // the file that had them is gone, or a different file is loaded).
   const allNumbers = useMemo(() => {
     const set = new Set();
-    (crews || []).forEach((c) => set.add(String(c.crew))); Object.keys(CREW_NAME_DEFAULTS).forEach((k) => set.add(k));
+    (crews || []).forEach((c) => set.add(String(c.crew)));
+    Object.keys(CREW_NAME_DEFAULTS).forEach((k) => set.add(k));
     Object.keys(crewNames || {}).forEach((k) => set.add(k));
     return Array.from(set).sort((a, b) => (Number(a) - Number(b)) || a.localeCompare(b));
   }, [crews, crewNames]);
 
-  const autoNameFor = (num) => (crews || []).find((c) => String(c.crew) === num)?.driverName || ""; const defaultNameFor = (num) => CREW_NAME_DEFAULTS[num] || "";
+  const autoNameFor = (num) => (crews || []).find((c) => String(c.crew) === num)?.driverName || "";
+  const defaultNameFor = (num) => CREW_NAME_DEFAULTS[num] || "";
+  // What a crew currently resolves to, same priority as resolveCrewName()
+  // (manual override > auto-read > built-in default) — used to check a new
+  // name against every OTHER crew before it's allowed to save.
+  const resolvedNameFor = (num) => {
+    if (crewNames && Object.prototype.hasOwnProperty.call(crewNames, num)) return crewNames[num];
+    return autoNameFor(num) || defaultNameFor(num);
+  };
+  // A blank name never counts as a clash (every open crew is blank on
+  // purpose); a real name can't be saved under two different crew numbers.
+  const findDuplicate = (num, name) => {
+    const clean = name.trim().toLowerCase();
+    if (!clean) return null;
+    const hit = allNumbers.find((n) => n !== num && resolvedNameFor(n).trim().toLowerCase() === clean);
+    return hit || null;
+  };
 
   const commit = (num, value) => {
-    const next = { ...crewNames, [String(num)]: value };
+    const clean = value.trim();
+    const dup = findDuplicate(num, clean);
+    if (dup) {
+      setDupWarning((prev) => ({ ...prev, [num]: dup }));
+      return false;
+    }
+    setDupWarning((prev) => { if (!(num in prev)) return prev; const n = { ...prev }; delete n[num]; return n; });
+    const next = { ...crewNames, [String(num)]: clean };
     setCrewNames(next);
     saveCrewNames(next);
+    return true;
+  };
+  // Explicitly blanks a crew (an open/unassigned run) rather than relying on
+  // clearing the text field and hoping blur saves it.
+  const clearRow = (num) => {
+    commit(num, "");
+    setDrafts((prev) => { const n = { ...prev }; delete n[num]; return n; });
   };
   const removeOverride = (num) => {
     const next = { ...crewNames };
@@ -1078,10 +1117,14 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, onLogout, onClose })
     setCrewNames(next);
     saveCrewNames(next);
     setDrafts((prev) => { const n = { ...prev }; delete n[num]; return n; });
+    setDupWarning((prev) => { if (!(num in prev)) return prev; const n = { ...prev }; delete n[num]; return n; });
   };
   const addNew = () => {
     const num = newCrew.trim();
     if (!num) return;
+    const dup = findDuplicate(num, newName.trim());
+    if (dup) { setNewDup(dup); return; }
+    setNewDup(null);
     commit(num, newName.trim());
     setNewCrew("");
     setNewName("");
@@ -1091,49 +1134,70 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, onLogout, onClose })
     <Modal title={t("adminPanelTitle", lang)} onClose={onClose}>
       <p style={styles.hint}>{t("adminPanelHint", lang)}</p>
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
         <input
           type="number"
           placeholder={t("crewNumberLabel", lang)}
           value={newCrew}
-          onChange={(e) => setNewCrew(e.target.value)}
+          onChange={(e) => { setNewCrew(e.target.value); setNewDup(null); }}
           style={{ ...styles.numInputWide, minWidth: 90, width: 90, flex: "none" }}
         />
         <input
           type="text"
           placeholder={t("driverNameLabel", lang)}
           value={newName}
-          onChange={(e) => setNewName(e.target.value)}
+          onChange={(e) => { setNewName(e.target.value); setNewDup(null); }}
           style={styles.numInputWide}
         />
         <button onClick={addNew} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}>
           <Plus size={14} />
         </button>
       </div>
+      {newDup && (
+        <p style={{ fontSize: 11, color: "#B3432A", margin: "0 0 8px" }}>
+          {t("adminDupWarning", lang)} {t("crewWord", lang)} {newDup}
+        </p>
+      )}
 
       <div style={{ maxHeight: 340, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
         {allNumbers.length === 0 && <p style={styles.hint}>{t("adminNoCrews", lang)}</p>}
         {allNumbers.map((num) => {
           const hasOverride = Object.prototype.hasOwnProperty.call(crewNames || {}, num);
           const auto = autoNameFor(num);
-          const def = defaultNameFor(num); const value = drafts[num] !== undefined ? drafts[num] : (hasOverride ? crewNames[num] : (auto || def));
+          const def = defaultNameFor(num);
+          const value = drafts[num] !== undefined ? drafts[num] : (hasOverride ? crewNames[num] : (auto || def));
+          const badge = hasOverride
+            ? (crewNames[num] === "" ? t("adminBlankBadge", lang) : t("adminManualBadge", lang))
+            : auto ? t("adminAutoBadge", lang) : def ? t("adminDefaultBadge", lang) : t("adminBlankBadge", lang);
+          const dup = dupWarning[num];
           return (
-            <div key={num} style={{ display: "flex", alignItems: "center", gap: 6, border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px" }}>
-              <span style={{ fontWeight: 700, fontSize: 12.5, minWidth: 60 }}>{t("crewWord", lang)} {num}</span>
-              <input
-                type="text"
-                value={value}
-                onChange={(e) => setDrafts((prev) => ({ ...prev, [num]: e.target.value }))}
-                onBlur={() => { if (drafts[num] !== undefined) commit(num, drafts[num]); }}
-                style={{ ...styles.numInputWide, padding: "5px 8px", fontSize: 12.5 }}
-              />
-              <span style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap" }}>
-                {hasOverride ? t("adminManualBadge", lang) : auto ? t("adminAutoBadge", lang) : def ? t("adminDefaultBadge", lang) : ""}
-              </span>
-              {hasOverride && (
-                <button onClick={() => removeOverride(num)} style={{ ...styles.smallActionBtn, padding: "5px 7px", color: "#B3432A" }}>
-                  <Trash2 size={13} />
+            <div key={num} style={{ display: "flex", flexDirection
+ "column", gap: 3 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px" }}>
+                <span style={{ fontWeight: 700, fontSize: 12.5, minWidth: 60 }}>{t("crewWord", lang)} {num}</span>
+                <input
+                  type="text"
+                  value={value}
+                  onChange={(e) => setDrafts((prev) => ({ ...prev, [num]: e.target.value }))}
+                  onBlur={() => { if (drafts[num] !== undefined) commit(num, drafts[num]); }}
+                  style={{ ...styles.numInputWide, padding: "5px 8px", fontSize: 12.5 }}
+                />
+                <span style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap" }}>
+                  {badge}
+                </span>
+                <button onClick={() => clearRow(num)} title={t("adminClearTooltip", lang)} style={{ ...styles.smallActionBtn, padding: "5px 7px" }}>
+                  <X size={13} />
                 </button>
+                {hasOverride && (
+                  <button onClick={() => removeOverride(num)} style={{ ...styles.smallActionBtn, padding: "5px 7px", color: "#B3432A" }}>
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+              {dup && (
+                <p style={{ fontSize: 11, color: "#B3432A", margin: "0 4px" }}>
+                  {t("adminDupWarning", lang)} {t("crewWord", lang)} {dup}
+                </p>
               )}
             </div>
           );
@@ -1146,6 +1210,7 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, onLogout, onClose })
     </Modal>
   );
 }
+
 
 // ---------- Settings (theme) ----------
 
