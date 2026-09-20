@@ -1892,6 +1892,14 @@ export default function ShiftPriorityRanker() {
   // The crew picked from the "Browse crews" lookup panel, or null.
   const [lookupCrew, setLookupCrew] = useState(null);
 
+  // Crew numbers (besides Admin) that Admin has granted access to the
+  // Shift Swap Finder -- see loadSwapAccess/saveSwapAccess above.
+  const [swapAccess, setSwapAccess] = useState(() => loadSwapAccess());
+
+  // Admin can always see "Find a Replacement"; other crews only if Admin
+  // added their crew number to swapAccess above.
+  const swapFinderVisible = isAdmin || (profile && profile.crewNumber && swapAccess.includes(String(profile.crewNumber)));
+
   // Restore the last successfully-parsed schedule (if any) so the app opens
   // straight to it instead of forcing a re-upload every time — see
   // LAST_FILE_KEY above. `workbook`/`sheetNames` are NOT restorable (the raw
@@ -2163,6 +2171,11 @@ export default function ShiftPriorityRanker() {
               <button style={styles.menuItem} onClick={() => { setActivePanel("crewLookup"); setMenuOpen(false); }}>
                 <Search size={15} /> {t("crewLookupTitle", lang)}
               </button>
+              {swapFinderVisible && (
+                <button style={styles.menuItem} onClick={() => { setActivePanel("swapFinder"); setMenuOpen(false); }}>
+                  <Repeat size={15} /> {t("swapFinderMenuLabel", lang)}
+                </button>
+              )}
               <button style={styles.menuItem} onClick={() => { setActivePanel("helpMenu"); setMenuOpen(false); }}>
                 <HelpCircle size={15} /> {t("helpMenuLabel", lang)}
               </button>
@@ -2216,6 +2229,15 @@ export default function ShiftPriorityRanker() {
           onClose={() => setActivePanel(null)}
         />
       )}
+      {activePanel === "swapFinder" && parsed && swapFinderVisible && (
+        <SwapFinderPanel
+          lang={lang}
+          crews={parsed.crews}
+          crewNames={crewNames}
+          myCrew={profile && profile.crewNumber ? parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber)) : null}
+          onClose={() => setActivePanel(null)}
+        />
+      )}
       {lookupCrew && (
         <MyScheduleModal
           crew={lookupCrew}
@@ -2238,6 +2260,8 @@ export default function ShiftPriorityRanker() {
           crews={parsed?.crews}
           crewNames={crewNames}
           setCrewNames={setCrewNames}
+          swapAccess={swapAccess}
+          setSwapAccess={setSwapAccess}
           onLogout={() => { setIsAdmin(false); saveAdminSession(false); setActivePanel(null); }}
           onClose={() => setActivePanel(null)}
         />
