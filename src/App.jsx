@@ -1171,8 +1171,7 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, onLogout, onClose })
             : auto ? t("adminAutoBadge", lang) : def ? t("adminDefaultBadge", lang) : t("adminBlankBadge", lang);
           const dup = dupWarning[num];
           return (
-            <div key={num} style={{ display: "flex", flexDirection
- "column", gap: 3 }}>
+            <div key={num} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px" }}>
                 <span style={{ fontWeight: 700, fontSize: 12.5, minWidth: 60 }}>{t("crewWord", lang)} {num}</span>
                 <input
