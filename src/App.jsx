@@ -5,7 +5,7 @@ import {
   Upload, RotateCcw, ListChecks, AlertCircle, Check, Printer,
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, ArrowLeft, Plus,
   Menu, Sun, Moon, HelpCircle, Trash2, Users, Info, Mail, LogOut,
-  User, Star, CalendarOff, Shield, Lock, Search,
+  User, Star, CalendarOff, Shield, Lock, Search, Repeat,
 } from "lucide-react";
 
 const APP_VERSION = pkg.version;
@@ -514,6 +514,31 @@ const STRINGS = {
   adminLogoutBtn: { fa: "خروج از حالت ادمین", en: "Log out of Admin", hi: "एडमिन से लॉग आउट" },
   crewNumberLabel: { fa: "شماره گروه", en: "Crew number", hi: "क्रू नंबर" },
   driverNameLabel: { fa: "نام راننده", en: "Driver name", hi: "ड्राइवर का नाम" },
+
+  // ---- shift swap finder ----
+  swapFinderMenuLabel: { fa: "یافتن جایگزین", en: "Find a Replacement", hi: "प्रतिस्थापन ढूंढें" },
+  swapFinderTitle: { fa: "یافتن جایگزین برای شیفت", en: "Find a Shift Replacement", hi: "शिफ्ट प्रतिस्थापन खोजें" },
+  swapFinderHint: {
+    fa: "این فقط یه فهرست پیشنهادیه — به هیچ‌کس پیامی فرستاده نمی‌شه. خودت باید با فردی که مایله تماس بگیری.",
+    en: "This is just a suggestion list — it doesn't message anyone. You still need to reach out to whoever's willing yourself.",
+    hi: "यह सिर्फ एक सुझाव सूची है — किसी को कोई संदेश नहीं भेजा जाता। आपको खुद इच्छुक व्यक्ति से संपर्क करना होगा।",
+  },
+  swapFinderDateLabel: { fa: "تاریخ", en: "Date", hi: "तारीख़" },
+  swapFinderMyShiftIs: { fa: "شیفت من:", en: "My shift:", hi: "मेरी शिफ्ट:" },
+  swapFinderYouAreOff: { fa: "این روز خودت آف هستی", en: "You're off that day", hi: "आप उस दिन ऑफ़ हैं" },
+  swapFinderAvailableLabel: { fa: "این روز شیفت ندارن:", en: "No shift that day:", hi: "उस दिन कोई शिफ्ट नहीं:" },
+  swapFinderPickDate: { fa: "یه تاریخ انتخاب کن", en: "Pick a date", hi: "एक तारीख़ चुनें" },
+  swapFinderNoneOff: { fa: "هیچ‌کس این روز آف نیست", en: "No one is off that day", hi: "उस दिन कोई ऑफ़ नहीं है" },
+  swapFinderShiftMatch: { fa: "هم‌شیفت", en: "Same shift", hi: "समान शिफ्ट" },
+
+  // ---- admin: swap-finder access ----
+  adminSwapAccessTitle: { fa: "دسترسی به «یافتن جایگزین»", en: 'Access to "Find a Replacement"', hi: "\"प्रतिस्थापन ढूंढें\" तक पहुंच" },
+  adminSwapAccessHint: {
+    fa: "شماره‌گروه‌هایی که اینجا اضافه کنی، علاوه بر ادمین، می‌تونن از «یافتن جایگزین» استفاده کنن. این هم مثل رمز ادمین فقط سمت کلاینته، یه سیستم امنیتی واقعی نیست.",
+    en: "Crew numbers added here can use \"Find a Replacement\" in addition to Admin. Like the Admin password, this is client-side only, not real security.",
+    hi: "यहां जोड़े गए क्रू नंबर, एडमिन के अलावा, \"प्रतिस्थापन ढूंढें\" का उपयोग कर सकते हैं। एडमिन पासवर्ड की तरह, यह केवल क्लाइंट-साइड है, वास्तविक सुरक्षा नहीं।",
+  },
+  adminSwapAccessEmpty: { fa: "هنوز کسی اضافه نشده (فقط ادمین می‌بینه)", en: "No one added yet (only Admin sees it)", hi: "अभी तक कोई नहीं जोड़ा गया (केवल एडमिन देखता है)" },
 };
 
 function t(key, lang) { return STRINGS[key] ? (STRINGS[key][lang] || STRINGS[key].en) : key; }
@@ -762,6 +787,20 @@ function resolveCrewName(crewNumber, crews, manualNames) {
   if (manualNames && Object.prototype.hasOwnProperty.call(manualNames, key)) return manualNames[key];
   const c = crews?.find((cc) => String(cc.crew) === key);
   return c?.driverName || CREW_NAME_DEFAULTS[key] || "";
+}
+
+// ---------- Swap-finder access list ----------
+// Crew numbers allowed to see/use "Find a Replacement" (Shift Swap
+// Finder), in addition to Admin (who can always see it) — Admin manages
+// this list from the Admin panel. Same trust model as everything else
+// here: client-side only, not real access control, it just keeps the
+// feature out of view for crews who weren't given access.
+const SWAP_ACCESS_KEY = "shiftPrioritySwapAccess";
+function loadSwapAccess() {
+  try { const v = JSON.parse(localStorage.getItem(SWAP_ACCESS_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+function saveSwapAccess(list) {
+  try { localStorage.setItem(SWAP_ACCESS_KEY, JSON.stringify(list)); } catch { /* ignore storage errors */ }
 }
 
 // ---------- Admin session ----------
