@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import pkg from "../package.json";
 import {
   Upload, RotateCcw, ListChecks, AlertCircle, Check, Printer,
-  FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, Plus,
+  FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, ArrowLeft, Plus,
   Menu, Sun, Moon, HelpCircle, Trash2, Users, Info, Mail, LogOut,
   User, Star, CalendarOff, Shield, Lock, Search,
 } from "lucide-react";
@@ -727,12 +727,17 @@ function DateTimeWidget({ lang }) {
 
 // ---------- Modal shell ----------
 
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, onBack, children }) {
   return (
     <div className="no-print" style={styles.modalOverlay} onClick={onClose}>
       <div style={styles.modalBox} onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalHeader}>
-          <span style={styles.modalTitle}>{title}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            {onBack && (
+              <button onClick={onBack} style={styles.modalCloseBtn} title="Back"><ArrowLeft size={16} /></button>
+            )}
+            <span style={styles.modalTitle}>{title}</span>
+          </div>
           <button onClick={onClose} style={styles.modalCloseBtn}><X size={16} /></button>
         </div>
         <div style={styles.modalBody}>{children}</div>
@@ -843,11 +848,11 @@ function ProfilePanel({ lang, profile, onSave, onClear, onClose }) {
 // own small component instead of reusing CompareTwoPanel's table (which is
 // built around 2-5 typed-in crew numbers), so this stays a pure addition
 // that can't regress the existing compare feature.
-function MyScheduleModal({ crew, name, lang, onClose }) {
+function MyScheduleModal({ crew, name, lang, onClose, onBack }) {
   const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
   const dayCell = (i) => crew.days.find((d) => d.dayIdx === i);
   return (
-    <Modal title={`${t("myScheduleTitle", lang)} — ${t("crewWord", lang)} ${String(crew.crew)}${name ? " · " + name : ""}`} onClose={onClose}>
+        <Modal title={`${t("myScheduleTitle", lang)} — ${t("crewWord", lang)} ${String(crew.crew)}${name ? " · " + name : ""}`} onClose={onClose} onBack={onBack}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {weekdayNames.map((wd, i) => {
           const d = dayCell(i);
@@ -2057,6 +2062,7 @@ export default function ShiftPriorityRanker() {
           name={resolveCrewName(lookupCrew.crew, parsed?.crews, crewNames)}
           lang={lang}
           onClose={() => setLookupCrew(null)}
+          onBack={() => { setLookupCrew(null); setActivePanel("crewLookup"); }}
         />
       )}
       {activePanel === "adminLogin" && (
