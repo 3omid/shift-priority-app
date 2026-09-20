@@ -1051,6 +1051,81 @@ function CrewLookupPanel({ lang, crews, crewNames, onPick, onClose }) {
   );
 }
 
+// ---------- Shift swap finder ----------
+// Given a date you want off, shows who has no shift that weekday — so you
+// know who to ask about covering it. This is purely a lookup over the
+// already-loaded schedule: it never sends or requests anything on its
+// own, and never messages anyone. Visibility is controlled from the
+// Admin panel (see swapAccess) — Admin can always see it regardless.
+function SwapFinderPanel({ lang, crews, crewNames, myCrew, onClose }) {
+  const [dateStr, setDateStr] = useState(() => new Date().toISOString().slice(0, 10));
+  const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
+
+  // Parsed with an explicit local-midnight time (no "Z") so the weekday
+  // matches the calendar date typed, regardless of the browser's timezone.
+  const dayIdx = useMemo(() => {
+    const d = new Date(dateStr + "T00:00:00");
+    return isNaN(d.getTime()) ? null : d.getDay();
+  }, [dateStr]);
+
+  const myDayCell = useMemo(() => {
+    if (!myCrew || dayIdx === null) return undefined;
+    return myCrew.days.find((d) => d.dayIdx === dayIdx);
+  }, [myCrew, dayIdx]);
+
+  const offCrews = useMemo(() => {
+    if (dayIdx === null) return [];
+    return (crews || [])
+      .filter((c) => !myCrew || String(c.crew) !== String(myCrew.crew))
+      .filter((c) => !c.days.some((d) => d.dayIdx === dayIdx))
+      .map((c) => ({ crew: c.crew, name: resolveCrewName(c.crew, crews, crewNames), shiftRaw: c.shiftRaw }))
+      .sort((a, b) => {
+        const aMatch = myCrew && a.shiftRaw === myCrew.shiftRaw ? 0 : 1;
+        const bMatch = myCrew && b.shiftRaw === myCrew.shiftRaw ? 0 : 1;
+        if (aMatch !== bMatch) return aMatch - bMatch;
+        return Number(a.crew) - Number(b.crew) || String(a.crew).localeCompare(String(b.crew));
+      });
+  }, [crews, crewNames, dayIdx, myCrew]);
+
+  return (
+    <Modal title={t("swapFinderTitle", lang)} onClose={onClose}>
+      <p style={styles.hint}>{t("swapFinderHint", lang)}</p>
+      <div style={styles.smallLabel}>{t("swapFinderDateLabel", lang)}</div>
+      <input
+        type="date"
+        value={dateStr}
+        onChange={(e) => setDateStr(e.target.value)}
+        style={styles.numInputWide}
+      />
+      {dayIdx !== null && (
+        <p style={{ fontSize: 12, color: "var(--muted)", margin: "8px 0 0" }}>
+          {weekdayNames[dayIdx]}
+          {myCrew && (
+            myDayCell
+              ? ` · ${t("swapFinderMyShiftIs", lang)} ${myDayCell.code || myCrew.shiftRaw} (${formatExcelTime(myDayCell.start)}–${formatExcelTime(myDayCell.end)})`
+              : ` · ${t("swapFinderYouAreOff", lang)}`
+          )}
+        </p>
+      )}
+
+      <div style={{ marginTop: 14, fontWeight: 700, fontSize: 12.5 }}>{t("swapFinderAvailableLabel", lang)}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 320, overflowY: "auto", marginTop: 6 }}>
+        {dayIdx === null && <p style={styles.hint}>{t("swapFinderPickDate", lang)}</p>}
+        {dayIdx !== null && offCrews.length === 0 && <p style={styles.hint}>{t("swapFinderNoneOff", lang)}</p>}
+        {offCrews.map((c) => (
+          <div key={c.crew} style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px" }}>
+            <span style={{ fontWeight: 700, fontSize: 12.5, minWidth: 60 }}>{t("crewWord", lang)} {c.crew}</span>
+            <span style={{ fontSize: 12.5, flex: 1 }}>{c.name || "—"}</span>
+            {myCrew && c.shiftRaw === myCrew.shiftRaw && (
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent)", whiteSpace: "nowrap" }}>{t("swapFinderShiftMatch", lang)}</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
 // ---------- Admin ----------
 // See the ADMIN_USERNAME/ADMIN_PASSWORD note near the top of this file: this
 // login only hides the panel below from casual users, it is not real
