@@ -1265,7 +1265,7 @@ function DailyLogPanel({ lang, onClose }) {
             {lang === "fa"
               ? `${toFaDigits(importResult.added)} رکورد اضافه شد` + (importResult.skipped ? ` (${toFaDigits(importResult.skipped)} خط رد شد)` : "")
               : lang === "hi"
-              ? `${importResult.added} प्रविष्टियाँ जोड़ी गईं` + (importResult.skipped ? ` (${importResult.skipped} पंक्तियाँ ञोड़ी गईं)` : "")
+              ? `${importResult.added} प्रविष्टियाँ जोड़ी गईं` + (importResult.skipped ? ` (${importResult.skipped} पंक्तियाँ छोड़ी गईं)` : "")
               : `${importResult.added} entries added` + (importResult.skipped ? ` (${importResult.skipped} skipped)` : "")}
           </p>
         )}
