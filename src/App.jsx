@@ -536,6 +536,13 @@ const STRINGS = {
   dailyLogUpdateBtn: { fa: "بروزرسانی", en: "Update", hi: "अपडेट करें" },
   cancelBtn: { fa: "انصراف", en: "Cancel", hi: "रद्द करें" },
   dailyLogEntriesTitle: { fa: "رکوردهای ثبت‌شده", en: "Saved entries", hi: "सहेजी गई प्रविष्टियाँ" },
+  dailyLogImportTitle: { fa: "درون‌ریزی چندتایی", en: "Import multiple entries", hi: "कई प्रविष्टियाँ आयात करें" },
+  dailyLogImportHint: {
+    fa: "هر شیفت رو تو یه خط بنویس، با Tab از هم جدا: تاریخ (YYYY-MM-DD)، ساعت شروع (HH:MM)، ساعت پایان (HH:MM)، یارد شروع، یارد پایان، توضیحات. دو تای آخر اختیاری‌ان. روزهایی که از قبل رکورد دارن رد می‌شن.",
+    en: "One shift per line, Tab-separated: Date (YYYY-MM-DD), Start time (HH:MM), End time (HH:MM), Start yard, End yard, Description. The last two are optional. Days that already have an entry are skipped.",
+    hi: "हर शिफ्ट एक पंक्ति में, Tab से अलग: तारीख़ (YYYY-MM-DD), शुरू (HH:MM), समाप्ति (HH:MM), शुरुआती यार्ड, समाप्ति यार्ड, विवरण। आख़िरी दो वैकल्पिक हैं।",
+  },
+  dailyLogImportBtn: { fa: "درون‌ریزی", en: "Import", hi: "आयात करें" },
   dailyLogEmpty: { fa: "هنوز هیچ رکوردی ثبت نشده.", en: "No entries yet.", hi: "अभी तक कोई प्रविष्टि नहीं।" },
   dailyLogExportTitle: { fa: "خروجی گزارش", en: "Export report", hi: "रिपोर्ट निर्यात करें" },
   dailyLogFromLabel: { fa: "از تاریخ", en: "From", hi: "से" },
@@ -1008,6 +1015,8 @@ function DailyLogPanel({ lang, onClose }) {
   const [description, setDescription] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [importText, setImportText] = useState("");
+  const [importResult, setImportResult] = useState(null);
 
   const dayIdx = useMemo(() => {
     const d = new Date(date + "T00:00:00");
@@ -1090,6 +1099,37 @@ function DailyLogPanel({ lang, onClose }) {
     setEditingId(null);
     setDate(todayStr());
     setDescription("");
+  };
+
+  // Bulk-import: one shift per pasted line, Tab-separated (matches what a
+  // spreadsheet gives you on copy). Skips a line whose date already has an
+  // entry, rather than overwriting it -- the single-entry form + edit is
+  // still the way to fix or replace one day.
+  const handleImport = () => {
+    const lines = importText.split("\n").map((l) => l.trim()).filter(Boolean);
+    const existingDates = new Set(entries.map((e) => e.date));
+    const imported = [];
+    let skipped = 0;
+    lines.forEach((line, i) => {
+      const cols = line.split("\t").map((c) => c.trim());
+      const [rDate, rStart, rEnd, rStartYard, rEndYard, rDescription] = cols;
+      if (!rDate || !rStart || !rEnd || existingDates.has(rDate)) { skipped += 1; return; }
+      imported.push({
+        id: `${Date.now()}_${i}`,
+        date: rDate, startTime: rStart, endTime: rEnd,
+        startYard: rStartYard || "", endYard: rEndYard || "",
+        description: rDescription || "",
+        totalHours: computeLogHours(rStart, rEnd),
+      });
+      existingDates.add(rDate);
+    });
+    if (imported.length) {
+      const next = [...entries, ...imported].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+      setEntries(next);
+      saveDailyLogEntries(next);
+    }
+    setImportText("");
+    setImportResult({ added: imported.length, skipped });
   };
 
   const handleDelete = (id) => {
@@ -1200,6 +1240,34 @@ function DailyLogPanel({ lang, onClose }) {
           <button onClick={handleCancelEdit} style={styles.smallActionBtn}>
             <X size={14} /> {t("cancelBtn", lang)}
           </button>
+        )}
+      </div>
+
+      <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
+        <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 4 }}>{t("dailyLogImportTitle", lang)}</div>
+        <p style={styles.hint}>{t("dailyLogImportHint", lang)}</p>
+        <textarea
+          value={importText}
+          onChange={(e) => setImportText(e.target.value)}
+          rows={4}
+          placeholder="2026-09-05\t07:30\t15:50\tRichmond Hill\tRichmond Hill"
+          style={{ ...styles.numInputWide, width: "100%", resize: "vertical", fontFamily: "monospace", fontSize: 11.5, boxSizing: "border-box" }}
+        />
+        <button
+          onClick={handleImport}
+          disabled={!importText.trim()}
+          style={{ ...styles.smallActionBtn, marginTop: 8, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)", opacity: importText.trim() ? 1 : 0.5 }}
+        >
+          <Upload size={14} /> {t("dailyLogImportBtn", lang)}
+        </button>
+        {importResult && (
+          <p style={styles.hint}>
+            {lang === "fa"
+              ? `${toFaDigits(importResult.added)} رکورد اضافه شد` + (importResult.skipped ? ` (${toFaDigits(importResult.skipped)} خط رد شد)` : "")
+              : lang === "hi"
+              ? `${importResult.added} प्रविष्टियाँ जोड़ी गईं` + (importResult.skipped ? ` (${importResult.skipped} पंक्तियाँ ञोड़ी गईं)` : "")
+              : `${importResult.added} entries added` + (importResult.skipped ? ` (${importResult.skipped} skipped)` : "")}
+          </p>
         )}
       </div>
 
