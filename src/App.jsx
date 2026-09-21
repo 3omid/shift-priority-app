@@ -873,7 +873,7 @@ function computeLogHours(startTime, endTime) {
 // (a plain select beats free text: no typos, easy to scan on the printed
 // report). A legacy/free-typed value that isn't one of these three is
 // still kept as an extra option so older entries never lose their data.
-const DAILY_LOG_YARDS = ["Newmarket", "Richmond Hill", "Caledon"];
+const DAILY_LOG_YARDS = ["Newmarket", "Richmond Hill", "Caldari"];
 
 // Gregorian month names for the Daily Log's month-group headers. Entries
 // are stored and shown with Gregorian dates (matching the <input type="date">
