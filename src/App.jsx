@@ -2320,9 +2320,11 @@ export default function ShiftPriorityRanker() {
 
   // Daily Log -- see loadDailyLogAccess/saveDailyLogAccess above.
   const [dailyLogAccess, setDailyLogAccess] = useState(() => loadDailyLogAccess());
-  // Visible to Admin always, plus any crew number Admin has explicitly
-  // added their crew number to dailyLogAccess above.
-  const dailyLogVisible = isAdmin || (profile && profile.crewNumber && dailyLogAccess.includes(String(profile.crewNumber)));
+  // Open to everyone now (Omid asked to drop the per-crew Admin gate so
+  // nobody has to log in as Admin just to use their own Daily Shift Log).
+  // dailyLogAccess/the Admin panel list are kept around, unused, in case
+  // per-crew gating is wanted again later.
+  const dailyLogVisible = true;
 
   // Restore the last successfully-parsed schedule (if any) so the app opens
   // straight to it instead of forcing a re-upload every time — see
