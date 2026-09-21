@@ -820,7 +820,7 @@ function ProfilePanel({ lang, profile, onSave, onClear, onClose }) {
       <input
         type="text"
         value={firstName}
-        onChange={(e) => setFirstName(e.target.value)}
+        onChange={(e) => setFirstName(e.target.value)}       
         style={styles.numInputWide}
       />
       <div style={{ ...styles.smallLabel, marginTop: 10 }}>{t("myCrewLabel", lang)}</div>
@@ -849,12 +849,16 @@ function ProfilePanel({ lang, profile, onSave, onClear, onClose }) {
 // own small component instead of reusing CompareTwoPanel's table (which is
 // built around 2-5 typed-in crew numbers), so this stays a pure addition
 // that can't regress the existing compare feature.
-function MyScheduleModal({ crew, name, lang, onClose, onBack }) {
+function MyScheduleModal({ crew, name, lang, themeMode, onClose, onBack }) {
   const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
   const dayCell = (i) => crew.days.find((d) => d.dayIdx === i);
   // Today's weekday index (0=Sunday, matching dayIdx/Date.getDay()), so we can
   // highlight the current day's row below.
   const todayIdx = new Date().getDay();
+  // Today's highlight color: neon lime pops on dark backgrounds but is
+  // nearly invisible on light ones, so light mode gets a high-contrast
+  // orange instead, same treatment (border + glow + badge), different hue.
+  const todayTheme = themeMode === "dark" ? { accent: "#CCFF00", ring: "rgba(204,255,0,0.22)", glow: "rgba(204,255,0,0.6)", badgeGlow: "rgba(204,255,0,0.7)", badgeText: "#111" } : { accent: "#FF6A00", ring: "rgba(255,106,0,0.22)", glow: "rgba(255,106,0,0.5)", badgeGlow: "rgba(255,106,0,0.55)", badgeText: "#fff" };
   return (
         <Modal title={`${t("myScheduleTitle", lang)} — ${t("crewWord", lang)} ${String(crew.crew)}${name ? " · " + name : ""}`} onClose={onClose} onBack={onBack}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -862,8 +866,8 @@ function MyScheduleModal({ crew, name, lang, onClose, onBack }) {
           const d = dayCell(i);
         const isToday = i === todayIdx;
           return (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, borderRadius: 8, padding: isToday ? "4px 6px" : "4px 0", border: isToday ? "2px solid #CCFF00" : "2px solid transparent", boxShadow: isToday ? "0 0 0 3px rgba(204,255,0,0.22), 0 0 16px rgba(204,255,0,0.6)" : "none", background: isToday ? "var(--card)" : "transparent" }}>
-              <span style={{ width: 88, flexShrink: 0, fontWeight: 700, fontSize: 12.5, display: "flex", alignItems: "center", gap: 5 }}>{wd}{isToday && (<span style={{ fontSize: 9.5, fontWeight: 800, color: "#111", background: "#CCFF00", borderRadius: 999, padding: "1.5px 7px", whiteSpace: "nowrap", boxShadow: "0 0 6px rgba(204,255,0,0.7)" }}>{t("todayLabel", lang)}</span>)}</span>
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, borderRadius: 8, padding: isToday ? "4px 6px" : "4px 0", border: isToday ? `2px solid ${todayTheme.accent}` : "2px solid transparent", boxShadow: isToday ? `0 0 0 3px ${todayTheme.ring}, 0 0 16px ${todayTheme.glow}` : "none", background: isToday ? "var(--card)" : "transparent" }}>
+                                                        <span style={{ width: 88, flexShrink: 0, fontWeight: 700, fontSize: 12.5, display: "flex", alignItems: "center", gap: 5 }}>{wd}{isToday && (<span style={{ fontSize: 9.5, fontWeight: 800, color: todayTheme.badgeText, background: todayTheme.accent, borderRadius: 999, padding: "1.5px 7px", whiteSpace: "nowrap", boxShadow: `0 0 6px ${todayTheme.badgeGlow}` }}>{t("todayLabel", lang)}</span>)}</span>
               {d ? (
                 <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px" }}>
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: REGION_COLORS[d.regionKey] || "#9AA0A6", flexShrink: 0 }} />
@@ -2066,6 +2070,7 @@ export default function ShiftPriorityRanker() {
           crew={lookupCrew}
           name={resolveCrewName(lookupCrew.crew, parsed?.crews, crewNames)}
           lang={lang}
+          themeMode={themeMode}
           onClose={() => setLookupCrew(null)}
           onBack={() => { setLookupCrew(null); setActivePanel("crewLookup"); }}
         />
@@ -2094,6 +2099,7 @@ export default function ShiftPriorityRanker() {
             crew={myCrew}
             name={resolveCrewName(myCrew.crew, parsed.crews, crewNames)}
             lang={lang}
+            themeMode={themeMode}
             onClose={() => setShowMySchedule(false)}
           />
         ) : null;
