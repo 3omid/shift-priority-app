@@ -2109,6 +2109,12 @@ export default function ShiftPriorityRanker() {
   // The crew picked from the "Browse crews" lookup panel, or null.
   const [lookupCrew, setLookupCrew] = useState(null);
 
+  // Daily Log -- see loadDailyLogAccess/saveDailyLogAccess above.
+  const [dailyLogAccess, setDailyLogAccess] = useState(() => loadDailyLogAccess());
+  // Visible to Admin always, plus any crew number Admin has explicitly
+  // added their crew number to dailyLogAccess above.
+  const dailyLogVisible = isAdmin || (profile && profile.crewNumber && dailyLogAccess.includes(String(profile.crewNumber)));
+
   // Restore the last successfully-parsed schedule (if any) so the app opens
   // straight to it instead of forcing a re-upload every time — see
   // LAST_FILE_KEY above. `workbook`/`sheetNames` are NOT restorable (the raw
@@ -2380,6 +2386,11 @@ export default function ShiftPriorityRanker() {
               <button style={styles.menuItem} onClick={() => { setActivePanel("crewLookup"); setMenuOpen(false); }}>
                 <Search size={15} /> {t("crewLookupTitle", lang)}
               </button>
+              {dailyLogVisible && (
+                <button style={styles.menuItem} onClick={() => { setActivePanel("dailyLog"); setMenuOpen(false); }}>
+                  <ClipboardList size={15} /> {t("dailyLogMenuLabel", lang)}
+                </button>
+              )}
               <button style={styles.menuItem} onClick={() => { setActivePanel("helpMenu"); setMenuOpen(false); }}>
                 <HelpCircle size={15} /> {t("helpMenuLabel", lang)}
               </button>
@@ -2433,6 +2444,9 @@ export default function ShiftPriorityRanker() {
           onClose={() => setActivePanel(null)}
         />
       )}
+      {activePanel === "dailyLog" && dailyLogVisible && (
+        <DailyLogPanel lang={lang} onClose={() => setActivePanel(null)} />
+      )}
       {lookupCrew && (
         <MyScheduleModal
           crew={lookupCrew}
@@ -2456,6 +2470,8 @@ export default function ShiftPriorityRanker() {
           crews={parsed?.crews}
           crewNames={crewNames}
           setCrewNames={setCrewNames}
+          dailyLogAccess={dailyLogAccess}
+          setDailyLogAccess={setDailyLogAccess}
           onLogout={() => { setIsAdmin(false); saveAdminSession(false); setActivePanel(null); }}
           onClose={() => setActivePanel(null)}
         />
