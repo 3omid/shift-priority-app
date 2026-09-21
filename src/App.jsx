@@ -2578,7 +2578,7 @@ export default function ShiftPriorityRanker() {
           <div style={styles.splashInner}>
             <div style={styles.splashRing}>
               <div className="spp-ring" />
-              <img src="/logo.png" alt="" style={styles.splashLogo} />
+              <img src="./logo.png" alt="" style={styles.splashLogo} />
             </div>
             <p style={styles.splashText}>{t(booting ? "loadingBoot" : "loadingCompute", lang)}</p>
           </div>
@@ -2714,7 +2714,7 @@ export default function ShiftPriorityRanker() {
 
       <div>
         <header className="no-print" style={styles.header}>
-          <img src="/logo.png" alt="" style={styles.headerLogo} />
+          <img src="./logo.png" alt="" style={styles.headerLogo} />
           <div style={styles.routeDots}>
             <span style={styles.dot} /><span style={styles.routeLine} /><span style={styles.dot} /><span style={styles.routeLine} /><span style={{ ...styles.dot, background: "var(--accent2)" }} />
           </div>
