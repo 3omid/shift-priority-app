@@ -545,6 +545,11 @@ const STRINGS = {
   dailyLogNoEntriesInRange: { fa: "رکوردی در این بازه پیدا نشد.", en: "No entries in this range.", hi: "इस सीमा में कोई प्रविष्टि नहीं मिली।" },
   dailyLogTotalRowLabel: { fa: "جمع کل", en: "Total", hi: "कुल" },
   dailyLogColDay: { fa: "روز هفته", en: "Weekday", hi: "सप्ताह का दिन" },
+  dailyLogColNo: { fa: "ردیف", en: "No.", hi: "क्रम" },
+  dailyLogSelectYardPlaceholder: { fa: "انتخاب کنید", en: "Select...", hi: "चुनें..." },
+  dailyLogWeekLabel: { fa: "هفته", en: "Week", hi: "सप्ताह" },
+  dailyLogWeekTotalLabel: { fa: "جمع این هفته", en: "Total this week", hi: "इस सप्ताह का कुल" },
+  dailyLogMonthTotalLabel: { fa: "جمع این ماه", en: "Total this month", hi: "इस महीने का कुल" },
   adminDailyLogAccessTitle: { fa: "دسترسی به «دفترچه شیفت روزانه»", en: 'Access to "Daily Shift Log"', hi: '"दैनिक शिफ्ट लॉग" तक पहुंच' },
   adminDailyLogAccessHint: {
     fa: "شماره‌گروه‌هایی که اینجا اضافه کنی، علاوه بر ادمین، می‌تونن از «دفترچه شیفت روزانه» استفاده کنن. این هم مثل رمز ادمین فقط سمت کلاینته، یه سیستم امنیتی واقعی نیست. توجه: اطلاعات ثبت‌شده هرکس فقط روی دستگاه خودش ذخیره می‌شه، نه اینجا — برای دیدنش باید خودش خروجی پرینت/PDF بگیره و بهت بده.",
@@ -864,6 +869,39 @@ function computeLogHours(startTime, endTime) {
   return Math.round((mins / 60) * 100) / 100;
 }
 
+// Fixed set of TOK Transit yards for the Daily Log start/end-yard pickers
+// (a plain select beats free text: no typos, easy to scan on the printed
+// report). A legacy/free-typed value that isn't one of these three is
+// still kept as an extra option so older entries never lose their data.
+const DAILY_LOG_YARDS = ["Newmarket", "Richmond Hill", "Caledon"];
+
+// Gregorian month names for the Daily Log's month-group headers. Entries
+// are stored and shown with Gregorian dates (matching the <input type="date">
+// picker), so this stays Gregorian too rather than switching to the Jalali
+// calendar used elsewhere in the app for fa -- mixing the two would make the
+// month header disagree with the day rows underneath it.
+const GREGORIAN_MONTH_NAMES = {
+  fa: ["ژانویه", "فوریه", "مارس", "آوریل", "مه", "ژوئن", "ژوئیه", "اوت", "سپتامبر", "اکتبر", "نوامبر", "دسامبر"],
+  en: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+  hi: ["जनवरी", "फरवरी", "मार्च", "अप्रैल", "मई", "जून", "जुलाई", "अगस्त", "सितंबर", "अक्टूबर", "नवंबर", "दिसंबर"],
+};
+function formatMonthYear(dateStr, lang) {
+  const [y, m] = dateStr.split("-").map(Number);
+  const names = GREGORIAN_MONTH_NAMES[lang] || GREGORIAN_MONTH_NAMES.en;
+  const monthName = names[m - 1] || "";
+  const yearStr = lang === "fa" ? toFaDigits(y) : String(y);
+  return `${monthName} ${yearStr}`;
+}
+// Sunday-Saturday week-of-month index, 1-based, matching how a wall
+// calendar (and Omid's own paper log) breaks a month into weeks: the
+// first week can be a short partial week if the month doesn't start on
+// a Sunday.
+function weekOfMonth(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  const firstWeekday = new Date(d.getFullYear(), d.getMonth(), 1).getDay();
+  return Math.ceil((d.getDate() + firstWeekday) / 7);
+}
+
 function ProfilePanel({ lang, profile, onSave, onClear, onClose }) {
   const [firstName, setFirstName] = useState(profile?.firstName || "");
   const [crewNumber, setCrewNumber] = useState(profile?.crewNumber || "");
@@ -978,10 +1016,40 @@ function DailyLogPanel({ lang, onClose }) {
 
   const totalHours = useMemo(() => computeLogHours(startTime, endTime), [startTime, endTime]);
 
-  const yardOptions = useMemo(() => {
-    const set = new Set();
-    entries.forEach((e) => { if (e.startYard) set.add(e.startYard); if (e.endYard) set.add(e.endYard); });
-    return Array.from(set).sort();
+  // Entries grouped by calendar month, then by Sunday-Saturday week within
+  // that month, each carrying its own subtotal -- mirrors the weekly-table
+  // layout of Omid's own paper work log, so the on-screen list reads the
+  // same way as the sheet he cross-checks against his paystub.
+  const monthGroups = useMemo(() => {
+    const byMonth = new Map();
+    entries.forEach((e) => {
+      const monthKey = e.date.slice(0, 7);
+      if (!byMonth.has(monthKey)) byMonth.set(monthKey, []);
+      byMonth.get(monthKey).push(e);
+    });
+    return Array.from(byMonth.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([monthKey, monthEntries]) => {
+        const byWeek = new Map();
+        monthEntries.forEach((e) => {
+          const wk = weekOfMonth(e.date);
+          if (!byWeek.has(wk)) byWeek.set(wk, []);
+          byWeek.get(wk).push(e);
+        });
+        const weeks = Array.from(byWeek.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([weekIdx, weekEntries]) => ({
+            weekIdx,
+            entries: weekEntries,
+            totalHours: weekEntries.reduce((s, e) => s + (e.totalHours || 0), 0),
+          }));
+        return {
+          monthKey,
+          sampleDate: monthEntries[0].date,
+          weeks,
+          monthTotalHours: monthEntries.reduce((s, e) => s + (e.totalHours || 0), 0),
+        };
+      });
   }, [entries]);
 
   const resetFormAfterSave = () => {
@@ -1031,7 +1099,15 @@ function DailyLogPanel({ lang, onClose }) {
     if (editingId === id) handleCancelEdit();
   };
 
-  const applyChip = (label) => setDescription(label);
+  const applyChip = (label) => {
+    setDescription((prev) => {
+      const parts = prev.split(",").map((p) => p.trim()).filter(Boolean);
+      const idx = parts.indexOf(label);
+      if (idx >= 0) parts.splice(idx, 1);
+      else parts.push(label);
+      return parts.join(", ");
+    });
+  };
 
   const setThisMonth = () => {
     const now = new Date();
@@ -1068,22 +1144,37 @@ function DailyLogPanel({ lang, onClose }) {
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <div style={{ flex: 1 }}>
           <div style={styles.smallLabel}>{t("dailyLogStartYardLabel", lang)}</div>
-          <input type="text" value={startYard} onChange={(e) => setStartYard(e.target.value)} style={styles.numInputWide} list="dailyLogYardOptions" />
+          <select value={startYard} onChange={(e) => setStartYard(e.target.value)} style={styles.numInputWide}>
+            <option value="">{t("dailyLogSelectYardPlaceholder", lang)}</option>
+            {DAILY_LOG_YARDS.map((y) => <option key={y} value={y}>{y}</option>)}
+            {startYard && !DAILY_LOG_YARDS.includes(startYard) && <option value={startYard}>{startYard}</option>}
+          </select>
         </div>
         <div style={{ flex: 1 }}>
           <div style={styles.smallLabel}>{t("dailyLogEndYardLabel", lang)}</div>
-          <input type="text" value={endYard} onChange={(e) => setEndYard(e.target.value)} style={styles.numInputWide} list="dailyLogYardOptions" />
+          <select value={endYard} onChange={(e) => setEndYard(e.target.value)} style={styles.numInputWide}>
+            <option value="">{t("dailyLogSelectYardPlaceholder", lang)}</option>
+            {DAILY_LOG_YARDS.map((y) => <option key={y} value={y}>{y}</option>)}
+            {endYard && !DAILY_LOG_YARDS.includes(endYard) && <option value={endYard}>{endYard}</option>}
+          </select>
         </div>
       </div>
-      <datalist id="dailyLogYardOptions">
-        {yardOptions.map((y) => <option key={y} value={y} />)}
-      </datalist>
 
       <div style={{ ...styles.smallLabel, marginTop: 10 }}>{t("dailyLogDescriptionLabel", lang)}</div>
       <div style={{ ...styles.chipRow, marginBottom: 6 }}>
-        <button type="button" style={styles.chip} onClick={() => applyChip(t("dailyLogChipYardChange", lang))}>{t("dailyLogChipYardChange", lang)}</button>
-        <button type="button" style={styles.chip} onClick={() => applyChip(t("dailyLogChipShuttleBus", lang))}>{t("dailyLogChipShuttleBus", lang)}</button>
-        <button type="button" style={styles.chip} onClick={() => applyChip(t("dailyLogChipHoliday", lang))}>{t("dailyLogChipHoliday", lang)}</button>
+        {[t("dailyLogChipYardChange", lang), t("dailyLogChipShuttleBus", lang), t("dailyLogChipHoliday", lang)].map((label) => {
+          const active = description.split(",").map((p) => p.trim()).includes(label);
+          return (
+            <button
+              key={label}
+              type="button"
+              style={active ? { ...styles.chip, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" } : styles.chip}
+              onClick={() => applyChip(label)}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
       <textarea
         value={description}
@@ -1115,21 +1206,71 @@ function DailyLogPanel({ lang, onClose }) {
       <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
         <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 8 }}>{t("dailyLogEntriesTitle", lang)}</div>
         {entries.length === 0 && <p style={styles.hint}>{t("dailyLogEmpty", lang)}</p>}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 240, overflowY: "auto" }}>
-          {[...entries].reverse().map((e) => (
-            <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, border: "1px solid var(--border)", borderRadius: 8, padding: "6px 10px", fontSize: 12 }}>
-              <div>
-                <div style={{ fontWeight: 700 }}>{e.date} · {weekdayNames[new Date(e.date + "T00:00:00").getDay()]}</div>
-                <div style={{ color: "var(--muted)" }}>{e.startTime}–{e.endTime} · {e.startYard || "-"} → {e.endYard || "-"} · {formatDuration(e.totalHours, lang)}</div>
-                {e.description && <div style={{ color: "var(--muted)" }}>{e.description}</div>}
+        {monthGroups.map((mg) => {
+          let rowNo = 0;
+          return (
+            <div key={mg.monthKey} style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 800, fontSize: 12.5, marginBottom: 6, color: "var(--accent)" }}>
+                {formatMonthYear(mg.sampleDate, lang)}
               </div>
-              <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                <button onClick={() => handleEdit(e)} style={{ ...styles.smallActionBtn, padding: "4px 6px" }}><Pencil size={12} /></button>
-                <button onClick={() => handleDelete(e.id)} style={{ ...styles.smallActionBtn, padding: "4px 6px", color: "#B3432A" }}><Trash2 size={12} /></button>
+              <div style={{ overflowX: "auto" }}>
+                {mg.weeks.map((wk) => (
+                  <div key={wk.weekIdx} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)", margin: "6px 0 4px" }}>
+                      {t("dailyLogWeekLabel", lang)} {lang === "fa" ? toFaDigits(wk.weekIdx) : wk.weekIdx}
+                    </div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 640 }}>
+                      <thead>
+                        <tr>
+                          <th style={styles.dailyLogTh}>{t("dailyLogColNo", lang)}</th>
+                          <th style={styles.dailyLogTh}>{t("dailyLogColDay", lang)}</th>
+                          <th style={styles.dailyLogTh}>{t("dailyLogDateLabel", lang)}</th>
+                          <th style={styles.dailyLogTh}>{t("dailyLogStartTimeLabel", lang)}</th>
+                          <th style={styles.dailyLogTh}>{t("dailyLogEndTimeLabel", lang)}</th>
+                          <th style={styles.dailyLogTh}>{t("dailyLogStartYardLabel", lang)}</th>
+                          <th style={styles.dailyLogTh}>{t("dailyLogEndYardLabel", lang)}</th>
+                          <th style={styles.dailyLogTh}>{t("dailyLogDescriptionLabel", lang)}</th>
+                          <th style={styles.dailyLogTh}>{t("dailyLogTotalHoursLabel", lang)}</th>
+                          <th style={styles.dailyLogTh}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {wk.entries.map((e) => {
+                          rowNo += 1;
+                          return (
+                            <tr key={e.id}>
+                              <td style={styles.dailyLogTd}>{lang === "fa" ? toFaDigits(rowNo) : rowNo}</td>
+                              <td style={styles.dailyLogTd}>{weekdayNames[new Date(e.date + "T00:00:00").getDay()]}</td>
+                              <td style={styles.dailyLogTd}>{e.date}</td>
+                              <td style={styles.dailyLogTd}>{e.startTime}</td>
+                              <td style={styles.dailyLogTd}>{e.endTime}</td>
+                              <td style={styles.dailyLogTd}>{e.startYard || "-"}</td>
+                              <td style={styles.dailyLogTd}>{e.endYard || "-"}</td>
+                              <td style={styles.dailyLogTd}>{e.description || "-"}</td>
+                              <td style={styles.dailyLogTd}>{formatDuration(e.totalHours, lang)}</td>
+                              <td style={{ ...styles.dailyLogTd, whiteSpace: "nowrap" }}>
+                                <button onClick={() => handleEdit(e)} style={{ ...styles.smallActionBtn, padding: "3px 5px" }}><Pencil size={11} /></button>
+                                <button onClick={() => handleDelete(e.id)} style={{ ...styles.smallActionBtn, padding: "3px 5px", color: "#B3432A" }}><Trash2 size={11} /></button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        <tr>
+                          <td colSpan={8} style={{ ...styles.dailyLogTd, fontWeight: 700, background: "var(--bg)", textAlign: lang === "fa" ? "left" : "right" }}>{t("dailyLogWeekTotalLabel", lang)}</td>
+                          <td colSpan={2} style={{ ...styles.dailyLogTd, fontWeight: 700, background: "var(--bg)" }}>{formatDuration(wk.totalHours, lang)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, padding: "8px 10px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontWeight: 800, fontSize: 12.5 }}>
+                <span>{t("dailyLogMonthTotalLabel", lang)}</span>
+                <span>{formatDuration(mg.monthTotalHours, lang)}</span>
               </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
       <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
@@ -2841,6 +2982,8 @@ const styles = {
   arrowBtn: { border: "1px solid var(--border)", background: "var(--card)", borderRadius: 5, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--text)" },
   computeBtn: { width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "var(--accent)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "12px 0", fontSize: 14.5, fontWeight: 700, cursor: "pointer", marginTop: 4 },
   smallActionBtn: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, padding: "7px 11px", borderRadius: 7, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", cursor: "pointer" },
+  dailyLogTh: { border: "1px solid var(--border)", padding: "5px 6px", background: "var(--bg)", fontWeight: 700, whiteSpace: "nowrap", textAlign: "start" },
+  dailyLogTd: { border: "1px solid var(--border)", padding: "5px 6px" },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 },
   topLabel: { fontSize: 12.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 },
   topGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12, marginBottom: 6 },
