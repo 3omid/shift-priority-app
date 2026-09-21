@@ -548,6 +548,15 @@ const STRINGS = {
     hi: "हर शिफ्ट एक पंक्ति में, Tab से अलग: तारीख़ (YYYY-MM-DD), शुरू (HH:MM), समाप्ति (HH:MM), शुरुआती यार्ड, समाप्ति यार्ड, विवरण। आख़िरी दो वैकल्पिक हैं।",
   },
   dailyLogImportBtn: { fa: "درون‌ریزی", en: "Import", hi: "आयात करें" },
+  dailyLogBackupTitle: { fa: "پشتیبان‌گیری", en: "Backup", hi: "बैकअप" },
+  dailyLogBackupHint: {
+    fa: "این متن رو کپی کن و یه‌جای امن (مثلاً یادداشت گوشی یا ایمیل به خودت) نگه‌دار. اگه اطلاعات این دستگاه پاک شد، همین متن رو تو کادر «درون‌ریزی چندتایی» بالا پیست کن و دکمهٔ درون‌ریزی رو بزن تا همه برگردن.",
+    en: "Copy this text and keep it somewhere safe (like Notes or an email to yourself). If this device's data ever gets cleared, paste it back into the \"Import multiple entries\" box above and tap Import to restore everything.",
+    hi: "इस टेक्स्ट को कॉपी करके कहीं सुरक्षित रखें (जैसे नोट्स या खुद को भेजा गया ईमेल)। अगर इस डिवाइस का डेटा मिट जाए, तो इसे ऊपर वाले \"कई प्रविष्टियाँ आयात करें\" बॉक्स में पेस्ट करके आयात करें बटन दबाएं।",
+  },
+  dailyLogBackupBtn: { fa: "کپی متن پشتیبان", en: "Copy backup text", hi: "बैकअप टेक्स्ट कॉपी करें" },
+  dailyLogBackupCopied: { fa: "کپی شد", en: "Copied", hi: "कॉपी हो गया" },
+  dailyLogBackupEmpty: { fa: "هنوز چیزی برای پشتیبان‌گیری ثبت نشده", en: "Nothing saved yet to back up", hi: "बैकअप के लिए अभी कुछ नहीं है" },
   dailyLogEmpty: { fa: "هنوز هیچ رکوردی ثبت نشده.", en: "No entries yet.", hi: "अभी तक कोई प्रविष्टि नहीं।" },
   dailyLogExportTitle: { fa: "خروجی گزارش", en: "Export report", hi: "रिपोर्ट निर्यात करें" },
   dailyLogFromLabel: { fa: "از تاریخ", en: "From", hi: "से" },
@@ -1022,6 +1031,7 @@ function DailyLogPanel({ lang, onClose }) {
   const [toDate, setToDate] = useState("");
   const [importText, setImportText] = useState("");
   const [importResult, setImportResult] = useState(null);
+  const [backupCopied, setBackupCopied] = useState(false);
 
   const dayIdx = useMemo(() => {
     const d = new Date(date + "T00:00:00");
@@ -1167,6 +1177,28 @@ function DailyLogPanel({ lang, onClose }) {
     printDailyLogTable(filtered, lang);
   };
 
+  // Plain-text, tab-separated backup of every saved entry -- same format
+  // the bulk-import box above accepts, so copying this out and pasting it
+  // back in is a full restore. This is the safety net for local storage
+  // getting cleared (e.g. iOS Safari evicting site data after a period of
+  // disuse) -- nothing here is sent anywhere, it just leaves the device
+  // through the person's own copy/paste.
+  const buildBackupText = () => entries.map((e) => [e.date, e.startTime, e.endTime, e.startYard || "", e.endYard || "", e.description || ""].join("\t")).join("\n");
+
+  const handleCopyBackup = async () => {
+    const text = buildBackupText();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setBackupCopied(true);
+      setTimeout(() => setBackupCopied(false), 2000);
+    } catch {
+      // Clipboard API blocked/unavailable in this context (happens on some
+      // iOS Safari setups) -- the textarea below is still visible and can
+      // be selected and copied by hand.
+    }
+  };
+
   return (
     <Modal title={t("dailyLogTitle", lang)} onClose={onClose}>
       <p style={styles.hint}>{t("dailyLogHint", lang)}</p>
@@ -1246,6 +1278,26 @@ function DailyLogPanel({ lang, onClose }) {
             <X size={14} /> {t("cancelBtn", lang)}
           </button>
         )}
+      </div>
+
+      <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
+        <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 4 }}>{t("dailyLogBackupTitle", lang)}</div>
+        <p style={styles.hint}>{t("dailyLogBackupHint", lang)}</p>
+        <textarea
+          readOnly
+          value={buildBackupText()}
+          placeholder={t("dailyLogBackupEmpty", lang)}
+          onFocus={(e) => e.target.select()}
+          rows={3}
+          style={{ ...styles.numInputWide, width: "100%", resize: "vertical", fontFamily: "monospace", fontSize: 11.5, boxSizing: "border-box" }}
+        />
+        <button
+          onClick={handleCopyBackup}
+          disabled={!entries.length}
+          style={{ ...styles.smallActionBtn, marginTop: 8, opacity: entries.length ? 1 : 0.5 }}
+        >
+          <ClipboardList size={14} /> {backupCopied ? t("dailyLogBackupCopied", lang) : t("dailyLogBackupBtn", lang)}
+        </button>
       </div>
 
       <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
