@@ -5,7 +5,7 @@ import {
   Upload, RotateCcw, ListChecks, AlertCircle, Check, Printer,
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, ArrowLeft, Plus,
   Menu, Sun, Moon, HelpCircle, Trash2, Users, Info, Mail, LogOut,
-  User, Star, CalendarOff, Shield, Lock, Search,
+  User, Star, CalendarOff, Shield, Lock, Search, ClipboardList, Pencil,
 } from "lucide-react";
 
 const APP_VERSION = pkg.version;
@@ -515,6 +515,43 @@ const STRINGS = {
   adminLogoutBtn: { fa: "خروج از حالت ادمین", en: "Log out of Admin", hi: "एडमिन से लॉग आउट" },
   crewNumberLabel: { fa: "شماره گروه", en: "Crew number", hi: "क्रू नंबर" },
   driverNameLabel: { fa: "نام راننده", en: "Driver name", hi: "ड्राइवर का नाम" },
+  dailyLogMenuLabel: { fa: "دفترچه شیفت روزانه", en: "Daily Shift Log", hi: "दैनिक शिफ्ट लॉग" },
+  dailyLogTitle: { fa: "دفترچه شیفت روزانه", en: "Daily Shift Log", hi: "दैनिक शिफ्ट लॉग" },
+  dailyLogHint: {
+    fa: "هر روز ساعت و یارد شیفتت رو ثبت کن. این اطلاعات فقط روی همین دستگاه/مرورگر ذخیره می‌شه (مثل بقیه تنظیمات این اپ) و جایی ارسال نمی‌شه. برای دادنش به کسی، از بخش «خروجی گزارش» پایین پرینت یا PDF بگیر.",
+    en: "Log your shift's times and yards each day. Saved only on this device/browser (like the rest of this app's settings) — nothing is sent anywhere. To share it, use the Export report section below to print or save as PDF.",
+    hi: "हर दिन अपनी शिफ्ट का समय और यार्ड लॉग करें। यह केवल इसी डिवाइस/ब्राउज़र पर सहेजा जाता है। साझा करने के लिए नीचे रिपोर्ट निर्यात अनुभाग का उपयोग करें।",
+  },
+  dailyLogDateLabel: { fa: "تاریخ", en: "Date", hi: "तारीख़" },
+  dailyLogStartTimeLabel: { fa: "ساعت شروع شیفت", en: "Shift start time", hi: "शिफ्ट शुरू होने का समय" },
+  dailyLogEndTimeLabel: { fa: "ساعت پایان شیفت", en: "Shift end time", hi: "शिफ्ट समाप्ति समय" },
+  dailyLogStartYardLabel: { fa: "یارد شروع شیفت", en: "Starting yard", hi: "शुरुआती यार्ड" },
+  dailyLogEndYardLabel: { fa: "یارد پایان شیفت", en: "Ending yard", hi: "समाप्ति यार्ड" },
+  dailyLogDescriptionLabel: { fa: "توضیحات", en: "Description", hi: "विवरण" },
+  dailyLogChipYardChange: { fa: "تغییر یارد", en: "Yard change", hi: "यार्ड परिवर्तन" },
+  dailyLogChipShuttleBus: { fa: "شاتل‌باس", en: "Shuttle bus", hi: "शटल बस" },
+  dailyLogChipHoliday: { fa: "تعطیلی رسمی", en: "Official holiday", hi: "आधिकारिक अवकाश" },
+  dailyLogTotalHoursLabel: { fa: "جمع ساعت", en: "Total hours", hi: "कुल घंटे" },
+  dailyLogSaveBtn: { fa: "ذخیره", en: "Save", hi: "सहेजें" },
+  dailyLogUpdateBtn: { fa: "بروزرسانی", en: "Update", hi: "अपडेट करें" },
+  cancelBtn: { fa: "انصراف", en: "Cancel", hi: "रद्द करें" },
+  dailyLogEntriesTitle: { fa: "رکوردهای ثبت‌شده", en: "Saved entries", hi: "सहेजी गई प्रविष्टियाँ" },
+  dailyLogEmpty: { fa: "هنوز هیچ رکوردی ثبت نشده.", en: "No entries yet.", hi: "अभी तक कोई प्रविष्टि नहीं।" },
+  dailyLogExportTitle: { fa: "خروجی گزارش", en: "Export report", hi: "रिपोर्ट निर्यात करें" },
+  dailyLogFromLabel: { fa: "از تاریخ", en: "From", hi: "से" },
+  dailyLogToLabel: { fa: "تا تاریخ", en: "To", hi: "तक" },
+  dailyLogThisMonthBtn: { fa: "این ماه", en: "This month", hi: "इस महीने" },
+  dailyLogReportTitle: { fa: "گزارش شیفت روزانه", en: "Daily Shift Log Report", hi: "दैनिक शिफ्ट लॉग रिपोर्ट" },
+  dailyLogNoEntriesInRange: { fa: "رکوردی در این بازه پیدا نشد.", en: "No entries in this range.", hi: "इस सीमा में कोई प्रविष्टि नहीं मिली।" },
+  dailyLogTotalRowLabel: { fa: "جمع کل", en: "Total", hi: "कुल" },
+  dailyLogColDay: { fa: "روز هفته", en: "Weekday", hi: "सप्ताह का दिन" },
+  adminDailyLogAccessTitle: { fa: "دسترسی به «دفترچه شیفت روزانه»", en: 'Access to "Daily Shift Log"', hi: '"दैनिक शिफ्ट लॉग" तक पहुंच' },
+  adminDailyLogAccessHint: {
+    fa: "شماره‌گروه‌هایی که اینجا اضافه کنی، علاوه بر ادمین، می‌تونن از «دفترچه شیفت روزانه» استفاده کنن. این هم مثل رمز ادمین فقط سمت کلاینته، یه سیستم امنیتی واقعی نیست. توجه: اطلاعات ثبت‌شده هرکس فقط روی دستگاه خودش ذخیره می‌شه، نه اینجا — برای دیدنش باید خودش خروجی پرینت/PDF بگیره و بهت بده.",
+    en: "Crew numbers added here can use \"Daily Shift Log\" in addition to Admin. Like the Admin password, this is client-side only, not real security. Note: each person's entries are saved only on their own device, not here — to see them, they need to export a print/PDF and send it to you.",
+    hi: "यहां जोड़े गए क्रू नंबर, एडमिन के अलावा, \"दैनिक शिफ्ट लॉग\" का उपयोग कर सकते हैं। यह केवल क्लाइंट-साइड है। नोट: हर व्यक्ति की प्रविष्टियाँ केवल उसके अपने डिवाइस पर सहेजी जाती हैं।",
+  },
+  adminDailyLogAccessEmpty: { fa: "هنوز کسی اضافه نشده (فقط ادمین می‌بینه)", en: "No one added yet (only Admin sees it)", hi: "अभी तक कोई नहीं जोड़ा गया (केवल एडमिन देखता है)" },
 };
 
 function t(key, lang) { return STRINGS[key] ? (STRINGS[key][lang] || STRINGS[key].en) : key; }
@@ -800,6 +837,31 @@ function saveLastFile(entry) {
 }
 function clearLastFileStorage() {
   try { localStorage.removeItem(LAST_FILE_KEY); } catch { /* ignore */ }
+}
+
+// ---------- Daily Log (per-device only, not synced anywhere) ----------
+const DAILY_LOG_ENTRIES_KEY = "shiftPriorityDailyLogEntries";
+const DAILY_LOG_ACCESS_KEY = "shiftPriorityDailyLogAccess";
+function loadDailyLogEntries() {
+  try { const v = JSON.parse(localStorage.getItem(DAILY_LOG_ENTRIES_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+function saveDailyLogEntries(list) {
+  try { localStorage.setItem(DAILY_LOG_ENTRIES_KEY, JSON.stringify(list)); } catch { /* ignore storage errors */ }
+}
+function loadDailyLogAccess() {
+  try { const v = JSON.parse(localStorage.getItem(DAILY_LOG_ACCESS_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+function saveDailyLogAccess(list) {
+  try { localStorage.setItem(DAILY_LOG_ACCESS_KEY, JSON.stringify(list)); } catch { /* ignore storage errors */ }
+}
+function computeLogHours(startTime, endTime) {
+  if (!startTime || !endTime) return 0;
+  const [sh, sm] = startTime.split(":").map(Number);
+  const [eh, em] = endTime.split(":").map(Number);
+  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return 0;
+  let mins = (eh * 60 + em) - (sh * 60 + sm);
+  if (mins <= 0) mins += 24 * 60;
+  return Math.round((mins / 60) * 100) / 100;
 }
 
 function ProfilePanel({ lang, profile, onSave, onClear, onClose }) {
