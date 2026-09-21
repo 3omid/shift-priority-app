@@ -484,6 +484,7 @@ const STRINGS = {
   crewNumberNotInFile: { fa: "این شمارهٔ گروه توی این فایل پیدا نشد.", en: "That crew number wasn't found in this file.", hi: "यह क्रू नंबर इस फ़ाइल में नहीं मिला।" },
   myShiftBadge: { fa: "شیفت من", en: "Mine", hi: "मेरा" },
   myScheduleTitle: { fa: "برنامهٔ هفتگی من", en: "My weekly schedule", hi: "मेरा साप्ताहिक कार्यक्रम" },
+  todayLabel: { fa: "امروز", en: "Today", hi: "आज" },
 
   // ---- help submenu ----
   helpMenuLabel: { fa: "راهنما", en: "Help", hi: "सहायता" },
@@ -851,14 +852,18 @@ function ProfilePanel({ lang, profile, onSave, onClear, onClose }) {
 function MyScheduleModal({ crew, name, lang, onClose, onBack }) {
   const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
   const dayCell = (i) => crew.days.find((d) => d.dayIdx === i);
+  // Today's weekday index (0=Sunday, matching dayIdx/Date.getDay()), so we can
+  // highlight the current day's row below.
+  const todayIdx = new Date().getDay();
   return (
         <Modal title={`${t("myScheduleTitle", lang)} — ${t("crewWord", lang)} ${String(crew.crew)}${name ? " · " + name : ""}`} onClose={onClose} onBack={onBack}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {weekdayNames.map((wd, i) => {
           const d = dayCell(i);
+        const isToday = i === todayIdx;
           return (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ width: 88, flexShrink: 0, fontWeight: 700, fontSize: 12.5 }}>{wd}</span>
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, borderRadius: 8, padding: isToday ? "4px 6px" : "4px 0", border: isToday ? "2px solid #CCFF00" : "2px solid transparent", boxShadow: isToday ? "0 0 0 3px rgba(204,255,0,0.22), 0 0 16px rgba(204,255,0,0.6)" : "none", background: isToday ? "var(--card)" : "transparent" }}>
+              <span style={{ width: 88, flexShrink: 0, fontWeight: 700, fontSize: 12.5, display: "flex", alignItems: "center", gap: 5 }}>{wd}{isToday && (<span style={{ fontSize: 9.5, fontWeight: 800, color: "#111", background: "#CCFF00", borderRadius: 999, padding: "1.5px 7px", whiteSpace: "nowrap", boxShadow: "0 0 6px rgba(204,255,0,0.7)" }}>{t("todayLabel", lang)}</span>)}</span>
               {d ? (
                 <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px" }}>
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: REGION_COLORS[d.regionKey] || "#9AA0A6", flexShrink: 0 }} />
