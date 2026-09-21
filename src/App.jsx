@@ -1292,7 +1292,7 @@ function DailyLogPanel({ lang, onClose }) {
                     <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)", margin: "6px 0 4px" }}>
                       {t("dailyLogWeekLabel", lang)} {lang === "fa" ? toFaDigits(wk.weekIdx) : wk.weekIdx}
                     </div>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 640 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 480 }}>
                       <thead>
                         <tr>
                           <th style={styles.dailyLogTh}>{t("dailyLogColNo", lang)}</th>
@@ -1319,7 +1319,7 @@ function DailyLogPanel({ lang, onClose }) {
                               <td style={styles.dailyLogTd}>{e.endTime}</td>
                               <td style={styles.dailyLogTd}>{e.startYard || "-"}</td>
                               <td style={styles.dailyLogTd}>{e.endYard || "-"}</td>
-                              <td style={styles.dailyLogTd}>{e.description || "-"}</td>
+                              <td style={{ ...styles.dailyLogTd, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }} title={e.description || undefined}>{e.description || "-"}</td>
                               <td style={styles.dailyLogTd}>{formatDuration(e.totalHours, lang)}</td>
                               <td style={{ ...styles.dailyLogTd, whiteSpace: "nowrap" }}>
                                 <button onClick={() => handleEdit(e)} style={{ ...styles.smallActionBtn, padding: "3px 5px" }}><Pencil size={11} /></button>
@@ -3064,8 +3064,8 @@ const styles = {
   arrowBtn: { border: "1px solid var(--border)", background: "var(--card)", borderRadius: 5, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--text)" },
   computeBtn: { width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "var(--accent)", color: "#fff", border: "none", borderRadius: "var(--radius)", padding: "12px 0", fontSize: 14.5, fontWeight: 700, cursor: "pointer", marginTop: 4 },
   smallActionBtn: { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, padding: "7px 11px", borderRadius: 7, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", cursor: "pointer" },
-  dailyLogTh: { border: "1px solid var(--border)", padding: "5px 6px", background: "var(--bg)", fontWeight: 700, whiteSpace: "nowrap", textAlign: "start" },
-  dailyLogTd: { border: "1px solid var(--border)", padding: "5px 6px" },
+  dailyLogTh: { border: "1px solid var(--border)", padding: "4px 3px", background: "var(--bg)", fontWeight: 700, whiteSpace: "normal", wordBreak: "normal", textAlign: "center", verticalAlign: "bottom", lineHeight: 1.25, fontSize: 10 },
+  dailyLogTd: { border: "1px solid var(--border)", padding: "5px 6px", whiteSpace: "nowrap" },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 },
   topLabel: { fontSize: 12.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 },
   topGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12, marginBottom: 6 },
