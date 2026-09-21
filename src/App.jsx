@@ -954,6 +954,207 @@ function MyScheduleModal({ crew, name, lang, themeMode, onClose, onBack }) {
   );
 }
 
+// ---------- Daily Log ----------
+
+function DailyLogPanel({ lang, onClose }) {
+  const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
+  const todayStr = () => new Date().toISOString().slice(0, 10);
+  const [entries, setEntries] = useState(() => loadDailyLogEntries());
+  const [editingId, setEditingId] = useState(null);
+  const lastEntry = entries.length ? entries[entries.length - 1] : null;
+  const [date, setDate] = useState(todayStr());
+  const [startTime, setStartTime] = useState(lastEntry?.startTime || "");
+  const [endTime, setEndTime] = useState(lastEntry?.endTime || "");
+  const [startYard, setStartYard] = useState(lastEntry?.startYard || "");
+  const [endYard, setEndYard] = useState(lastEntry?.endYard || "");
+  const [description, setDescription] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+
+  const dayIdx = useMemo(() => {
+    const d = new Date(date + "T00:00:00");
+    return isNaN(d.getTime()) ? null : d.getDay();
+  }, [date]);
+
+  const totalHours = useMemo(() => computeLogHours(startTime, endTime), [startTime, endTime]);
+
+  const yardOptions = useMemo(() => {
+    const set = new Set();
+    entries.forEach((e) => { if (e.startYard) set.add(e.startYard); if (e.endYard) set.add(e.endYard); });
+    return Array.from(set).sort();
+  }, [entries]);
+
+  const resetFormAfterSave = () => {
+    setDate(todayStr());
+    setDescription("");
+    setEditingId(null);
+  };
+
+  const handleSave = () => {
+    if (!date || !startTime || !endTime) return;
+    const entry = {
+      id: editingId || String(Date.now()),
+      date, startTime, endTime,
+      startYard: startYard.trim(), endYard: endYard.trim(),
+      description: description.trim(),
+      totalHours,
+    };
+    const next = editingId
+      ? entries.map((e) => (e.id === editingId ? entry : e))
+      : [...entries, entry];
+    next.sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+    setEntries(next);
+    saveDailyLogEntries(next);
+    resetFormAfterSave();
+  };
+
+  const handleEdit = (entry) => {
+    setEditingId(entry.id);
+    setDate(entry.date);
+    setStartTime(entry.startTime);
+    setEndTime(entry.endTime);
+    setStartYard(entry.startYard);
+    setEndYard(entry.endYard);
+    setDescription(entry.description);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setDate(todayStr());
+    setDescription("");
+  };
+
+  const handleDelete = (id) => {
+    const next = entries.filter((e) => e.id !== id);
+    setEntries(next);
+    saveDailyLogEntries(next);
+    if (editingId === id) handleCancelEdit();
+  };
+
+  const applyChip = (label) => setDescription(label);
+
+  const setThisMonth = () => {
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    setFromDate(first.toISOString().slice(0, 10));
+    setToDate(last.toISOString().slice(0, 10));
+  };
+
+  const handleExport = () => {
+    const filtered = entries.filter((e) => (!fromDate || e.date >= fromDate) && (!toDate || e.date <= toDate));
+    printDailyLogTable(filtered, lang);
+  };
+
+  return (
+    <Modal title={t("dailyLogTitle", lang)} onClose={onClose}>
+      <p style={styles.hint}>{t("dailyLogHint", lang)}</p>
+
+      <div style={styles.smallLabel}>{t("dailyLogDateLabel", lang)}</div>
+      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={styles.numInputWide} />
+      {dayIdx !== null && <p style={{ fontSize: 12, color: "var(--muted)", margin: "6px 0 10px" }}>{weekdayNames[dayIdx]}</p>}
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1 }}>
+          <div style={styles.smallLabel}>{t("dailyLogStartTimeLabel", lang)}</div>
+          <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={styles.numInputWide} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={styles.smallLabel}>{t("dailyLogEndTimeLabel", lang)}</div>
+          <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={styles.numInputWide} />
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <div style={{ flex: 1 }}>
+          <div style={styles.smallLabel}>{t("dailyLogStartYardLabel", lang)}</div>
+          <input type="text" value={startYard} onChange={(e) => setStartYard(e.target.value)} style={styles.numInputWide} list="dailyLogYardOptions" />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={styles.smallLabel}>{t("dailyLogEndYardLabel", lang)}</div>
+          <input type="text" value={endYard} onChange={(e) => setEndYard(e.target.value)} style={styles.numInputWide} list="dailyLogYardOptions" />
+        </div>
+      </div>
+      <datalist id="dailyLogYardOptions">
+        {yardOptions.map((y) => <option key={y} value={y} />)}
+      </datalist>
+
+      <div style={{ ...styles.smallLabel, marginTop: 10 }}>{t("dailyLogDescriptionLabel", lang)}</div>
+      <div style={{ ...styles.chipRow, marginBottom: 6 }}>
+        <button type="button" style={styles.chip} onClick={() => applyChip(t("dailyLogChipYardChange", lang))}>{t("dailyLogChipYardChange", lang)}</button>
+        <button type="button" style={styles.chip} onClick={() => applyChip(t("dailyLogChipShuttleBus", lang))}>{t("dailyLogChipShuttleBus", lang)}</button>
+        <button type="button" style={styles.chip} onClick={() => applyChip(t("dailyLogChipHoliday", lang))}>{t("dailyLogChipHoliday", lang)}</button>
+      </div>
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        rows={2}
+        style={{ ...styles.numInputWide, width: "100%", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+      />
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, background: "var(--bg)", borderRadius: 8, padding: "8px 12px" }}>
+        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{t("dailyLogTotalHoursLabel", lang)}</span>
+        <span style={{ fontSize: 15, fontWeight: 700 }}>{formatDuration(totalHours, lang)}</span>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button
+          onClick={handleSave}
+          disabled={!date || !startTime || !endTime}
+          style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)", opacity: (!date || !startTime || !endTime) ? 0.5 : 1 }}
+        >
+          <Check size={14} /> {editingId ? t("dailyLogUpdateBtn", lang) : t("dailyLogSaveBtn", lang)}
+        </button>
+        {editingId && (
+          <button onClick={handleCancelEdit} style={styles.smallActionBtn}>
+            <X size={14} /> {t("cancelBtn", lang)}
+          </button>
+        )}
+      </div>
+
+      <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
+        <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 8 }}>{t("dailyLogEntriesTitle", lang)}</div>
+        {entries.length === 0 && <p style={styles.hint}>{t("dailyLogEmpty", lang)}</p>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 240, overflowY: "auto" }}>
+          {[...entries].reverse().map((e) => (
+            <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, border: "1px solid var(--border)", borderRadius: 8, padding: "6px 10px", fontSize: 12 }}>
+              <div>
+                <div style={{ fontWeight: 700 }}>{e.date} · {weekdayNames[new Date(e.date + "T00:00:00").getDay()]}</div>
+                <div style={{ color: "var(--muted)" }}>{e.startTime}–{e.endTime} · {e.startYard || "-"} → {e.endYard || "-"} · {formatDuration(e.totalHours, lang)}</div>
+                {e.description && <div style={{ color: "var(--muted)" }}>{e.description}</div>}
+              </div>
+              <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                <button onClick={() => handleEdit(e)} style={{ ...styles.smallActionBtn, padding: "4px 6px" }}><Pencil size={12} /></button>
+                <button onClick={() => handleDelete(e.id)} style={{ ...styles.smallActionBtn, padding: "4px 6px", color: "#B3432A" }}><Trash2 size={12} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
+        <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 4 }}>{t("dailyLogExportTitle", lang)}</div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 130 }}>
+            <div style={styles.smallLabel}>{t("dailyLogFromLabel", lang)}</div>
+            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} style={styles.numInputWide} />
+          </div>
+          <div style={{ flex: 1, minWidth: 130 }}>
+            <div style={styles.smallLabel}>{t("dailyLogToLabel", lang)}</div>
+            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} style={styles.numInputWide} />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={setThisMonth} style={styles.smallActionBtn}>{t("dailyLogThisMonthBtn", lang)}</button>
+          <button onClick={handleExport} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}>
+            <Printer size={14} /> {t("printBtn", lang)}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ---------- Help ----------
 
 const HELP_CONTENT = {
@@ -1469,6 +1670,65 @@ function printResultsTable(results, priorityList, lang) {
   const win = window.open("", "_blank", "width=1000,height=750");
   if (!win) return;
   win.document.write(buildResultsHtml(results, priorityList, lang, timestamp));
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 350);
+}
+
+function buildDailyLogHtml(entries, lang, timestamp) {
+  const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
+  const dir = lang === "fa" ? "rtl" : "ltr";
+  const headers = [
+    t("dailyLogColDay", lang), t("dailyLogDateLabel", lang), t("dailyLogStartTimeLabel", lang),
+    t("dailyLogEndTimeLabel", lang), t("dailyLogStartYardLabel", lang), t("dailyLogEndYardLabel", lang),
+    t("dailyLogDescriptionLabel", lang), t("dailyLogTotalHoursLabel", lang),
+  ];
+  const headCells = headers.map((h) => `<th style="border:1px solid #ddd;padding:8px;background:#EAF1EF;">${h}</th>`).join("");
+  const rows = entries.map((e, idx) => {
+    const wd = weekdayNames[new Date(e.date + "T00:00:00").getDay()];
+    const bg = idx % 2 ? "#FAFAF8" : "#FFFFFF";
+    const cells = [wd, e.date, e.startTime, e.endTime, e.startYard || "-", e.endYard || "-", e.description || "-", formatDuration(e.totalHours, lang)];
+    return `<tr>${cells.map((c) => `<td style="border:1px solid #ddd;padding:7px;background:${bg};">${c}</td>`).join("")}</tr>`;
+  }).join("");
+  const totalHours = entries.reduce((sum, e) => sum + (e.totalHours || 0), 0);
+  const totalRow = `<tr><td colspan="7" style="border:1px solid #ddd;padding:8px;font-weight:800;background:#faf8f3;text-align:${dir === "rtl" ? "left" : "right"};">${t("dailyLogTotalRowLabel", lang)}</td><td style="border:1px solid #ddd;padding:8px;font-weight:800;background:#faf8f3;">${formatDuration(totalHours, lang)}</td></tr>`;
+  const body = entries.length
+    ? `<table><thead><tr>${headCells}</tr></thead><tbody>${rows}${totalRow}</tbody></table>`
+    : `<p>${t("dailyLogNoEntriesInRange", lang)}</p>`;
+
+  return `<!doctype html><html lang="${lang}" dir="${dir}"><head><meta charset="UTF-8" />
+  <title>${t("dailyLogReportTitle", lang)}</title>
+  <style>
+    body { font-family: Tahoma, 'Vazirmatn', sans-serif; margin: 24px; color:#20242B; }
+    table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+    .hdr { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
+    .hdr h1 { font-size:20px; margin:0 0 4px; }
+    .ts { text-align:left; font-size:12px; color:#666; }
+    .toolbar { position: sticky; top: 0; background: #fff; padding: 10px 0 16px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; margin-bottom: 16px; z-index: 10; }
+    .toolbar button { font-size:14px; padding:10px 16px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
+    .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
+    .toolbar .print-btn { background:#2F5D62; color:#fff; border-color:#2F5D62; font-weight:700; }
+    @media print { .toolbar { display: none !important; } }
+  </style></head>
+  <body>
+    <div class="toolbar">
+      <button class="print-btn" onclick="window.print()">🖨️ ${t("printBtn", lang)}</button>
+      <button class="close-btn" onclick="window.close()">✕ ${t("close", lang)}</button>
+    </div>
+    <div class="hdr">
+      <div><h1>${t("dailyLogReportTitle", lang)}</h1></div>
+      <div class="ts">${timestamp}</div>
+    </div>
+    ${body}
+  </body></html>`;
+}
+
+function printDailyLogTable(entries, lang) {
+  const now = new Date();
+  const timestamp = `${formatJalaliDate(now)} — ${new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric" }).format(now)} — ${now.toLocaleTimeString("en-GB")}`;
+  const win = window.open("", "_blank", "width=1000,height=750");
+  if (!win) return;
+  win.document.write(buildDailyLogHtml(entries, lang, timestamp));
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 350);
