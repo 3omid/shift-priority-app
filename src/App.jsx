@@ -1126,16 +1126,16 @@ function DailyLogPanel({ lang, onClose }) {
     <Modal title={t("dailyLogTitle", lang)} onClose={onClose}>
       <p style={styles.hint}>{t("dailyLogHint", lang)}</p>
 
-      <div style={styles.smallLabel}>{t("dailyLogDateLabel", lang)}</div>
-      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={styles.numInputWide} />
-      {dayIdx !== null && <p style={{ fontSize: 12, color: "var(--muted)", margin: "6px 0 10px" }}>{weekdayNames[dayIdx]}</p>}
-
-      <div style={{ display: "flex", gap: 8 }}>
-        <div style={{ flex: 1 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 140px" }}>
+          <div style={styles.smallLabel}>{t("dailyLogDateLabel", lang)}{dayIdx !== null ? ` · ${weekdayNames[dayIdx]}` : ""}</div>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={styles.numInputWide} />
+        </div>
+        <div style={{ flex: "1 1 100px" }}>
           <div style={styles.smallLabel}>{t("dailyLogStartTimeLabel", lang)}</div>
           <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={styles.numInputWide} />
         </div>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: "1 1 100px" }}>
           <div style={styles.smallLabel}>{t("dailyLogEndTimeLabel", lang)}</div>
           <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={styles.numInputWide} />
         </div>
