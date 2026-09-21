@@ -424,7 +424,11 @@ const STRINGS = {
   hours: { fa: "ساعت", en: "hrs", hi: "घंटे" },
   addCompare: { fa: "مقایسه", en: "Compare", hi: "तुलना" },
   compareTitle: { fa: "مقایسه گروه‌های انتخابی", en: "Compare selected crews", hi: "चयनित क्रू की तुलना" },
-  printBtn: { fa: "پرینت / ذخیره PDF", en: "Print / Save as PDF", hi: "प्रिंट / PDF सेव करें" },
+  printPopupBlocked: {
+    fa: "مرورگر نتونست پنجره گزارش رو باز کنه (پاپ‌آپ مسدود شده). از تنظیمات مرورگر، پاپ‌آپ رو برای این سایت مجاز کن و دوباره امتحان کن.",
+    en: "Your browser blocked the report window (pop-up blocked). Allow pop-ups for this site in your browser settings and try again.",
+    hi: "ब्राउज़र रिपोर्ट विंडो नहीं खोल सका (पॉप-अप ब्लॉक)। इस साइट के लिए पॉप-अप की अनुमति दें और फिर से कोशिश करें.",
+  },
   excelBtn: { fa: "خروجی اکسل", en: "Export Excel", hi: "एक्सेल में निर्यात करें" },
   resetBtn: { fa: "شروع دوباره با فایل جدید", en: "Start over with a new file", hi: "नई फ़ाइल से फिर शुरू करें" },
   errNoLayout: { fa: "ساختار جدول شیفت در این شیت پیدا نشد.", en: "Could not detect the schedule structure in this sheet.", hi: "इस शीट में शेड्यूल संरचना नहीं मिली।" },
@@ -1919,15 +1923,32 @@ function buildResultsHtml(results, priorityList, lang, timestamp) {
   </body></html>`;
 }
 
+// Opens `html` as a real new-tab navigation (a blob: URL) instead of the
+// classic window.open("") + document.write() combo -- mobile Safari (in
+// particular the installed home-screen PWA) frequently blocks or silently
+// fails that combo, so nothing visibly happens when the person taps Print.
+// A direct window.open(url, "_blank") is a real link-like navigation the
+// browser is far less likely to block. Returns false if the popup was
+// blocked so the caller can tell the person what to do.
+function openPrintableReport(html, lang) {
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, "_blank");
+  if (!win) {
+    URL.revokeObjectURL(url);
+    alert(t("printPopupBlocked", lang));
+    return false;
+  }
+  // Give the new tab time to actually load the blob before releasing it --
+  // revoking too early can blank the page on some mobile browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  return true;
+}
+
 function printResultsTable(results, priorityList, lang) {
   const now = new Date();
   const timestamp = `${formatJalaliDate(now)} — ${new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric" }).format(now)} — ${now.toLocaleTimeString("en-GB")}`;
-  const win = window.open("", "_blank", "width=1000,height=750");
-  if (!win) return;
-  win.document.write(buildResultsHtml(results, priorityList, lang, timestamp));
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 350);
+  openPrintableReport(buildResultsHtml(results, priorityList, lang, timestamp), lang);
 }
 
 function buildDailyLogHtml(entries, lang, timestamp) {
@@ -1981,23 +2002,13 @@ function buildDailyLogHtml(entries, lang, timestamp) {
 function printDailyLogTable(entries, lang) {
   const now = new Date();
   const timestamp = `${formatJalaliDate(now)} — ${new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric" }).format(now)} — ${now.toLocaleTimeString("en-GB")}`;
-  const win = window.open("", "_blank", "width=1000,height=750");
-  if (!win) return;
-  win.document.write(buildDailyLogHtml(entries, lang, timestamp));
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 350);
+  openPrintableReport(buildDailyLogHtml(entries, lang, timestamp), lang);
 }
 
 function printCompareTable(matched, lang) {
   const now = new Date();
   const timestamp = `${formatJalaliDate(now)} — ${new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric" }).format(now)} — ${now.toLocaleTimeString("en-GB")}`;
-  const win = window.open("", "_blank", "width=1000,height=750");
-  if (!win) return;
-  win.document.write(buildCompareHtml(matched, lang, timestamp));
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 350);
+  openPrintableReport(buildCompareHtml(matched, lang, timestamp), lang);
 }
 
 function hexNoHash(h) { return h.replace("#", "").toUpperCase(); }
