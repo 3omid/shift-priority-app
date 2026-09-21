@@ -1332,12 +1332,29 @@ function AdminLoginModal({ lang, onSuccess, onClose }) {
   );
 }
 
-function AdminPanel({ lang, crews, crewNames, setCrewNames, onLogout, onClose }) {
+function AdminPanel({ lang, crews, crewNames, setCrewNames, dailyLogAccess, setDailyLogAccess, onLogout, onClose }) {
   const [drafts, setDrafts] = useState({});
   const [newCrew, setNewCrew] = useState("");
   const [newName, setNewName] = useState("");
   const [dupWarning, setDupWarning] = useState({}); // { [crewNum]: theOtherCrewNumItClashesWith }
   const [newDup, setNewDup] = useState(null);
+  const [newDailyLogCrew, setNewDailyLogCrew] = useState("");
+
+  const addDailyLogAccess = () => {
+    const num = newDailyLogCrew.trim();
+    if (!num) return;
+    if (!dailyLogAccess.includes(num)) {
+      const next = [...dailyLogAccess, num];
+      setDailyLogAccess(next);
+      saveDailyLogAccess(next);
+    }
+    setNewDailyLogCrew("");
+  };
+  const removeDailyLogAccess = (num) => {
+    const next = dailyLogAccess.filter((n) => n !== num);
+    setDailyLogAccess(next);
+    saveDailyLogAccess(next);
+  };
 
   // Union of every crew number in the currently loaded file, every crew
   // number in the built-in default list, plus every crew number that
@@ -1478,6 +1495,35 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, onLogout, onClose })
             </div>
           );
         })}
+      </div>
+
+      <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
+        <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 4 }}>{t("adminDailyLogAccessTitle", lang)}</div>
+        <p style={styles.hint}>{t("adminDailyLogAccessHint", lang)}</p>
+        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+          <input
+            type="number"
+            placeholder={t("crewNumberLabel", lang)}
+            value={newDailyLogCrew}
+            onChange={(e) => setNewDailyLogCrew(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") addDailyLogAccess(); }}
+            style={{ ...styles.numInputWide, minWidth: 90, width: 90, flex: "none" }}
+          />
+          <button onClick={addDailyLogAccess} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}>
+            <Plus size={14} />
+          </button>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {dailyLogAccess.length === 0 && <p style={styles.hint}>{t("adminDailyLogAccessEmpty", lang)}</p>}
+          {dailyLogAccess.map((num) => (
+            <span key={num} style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid var(--border)", borderRadius: 20, padding: "3px 4px 3px 10px", fontSize: 12 }}>
+              {t("crewWord", lang)} {num}
+              <button onClick={() => removeDailyLogAccess(num)} style={{ ...styles.smallActionBtn, padding: "3px 5px", border: "none" }}>
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
       </div>
 
       <button onClick={onLogout} style={{ ...styles.smallActionBtn, color: "#B3432A", marginTop: 12 }}>
