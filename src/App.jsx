@@ -424,6 +424,7 @@ const STRINGS = {
   hours: { fa: "ساعت", en: "hrs", hi: "घंटे" },
   addCompare: { fa: "مقایسه", en: "Compare", hi: "तुलना" },
   compareTitle: { fa: "مقایسه گروه‌های انتخابی", en: "Compare selected crews", hi: "चयनित क्रू की तुलना" },
+  printBtn: { fa: "پرینت / ذخیره PDF", en: "Print / Save as PDF", hi: "प्रिंट / PDF सेव करें" },
   printPopupBlocked: {
     fa: "مرورگر نتونست پنجره گزارش رو باز کنه (پاپ‌آپ مسدود شده). از تنظیمات مرورگر، پاپ‌آپ رو برای این سایت مجاز کن و دوباره امتحان کن.",
     en: "Your browser blocked the report window (pop-up blocked). Allow pop-ups for this site in your browser settings and try again.",
