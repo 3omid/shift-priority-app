@@ -501,6 +501,30 @@ const STRINGS = {
   hubGroupMe: { fa: "من", en: "Me", hi: "मेरा" },
   hubComingSoon: { fa: "به‌زودی", en: "Coming soon", hi: "जल्द आ रहा है" },
   hubSwapFinder: { fa: "جایگزین برای مرخصی", en: "Find a leave replacement", hi: "छुट्टी बदली खोजें" },
+  swapIntro: { fa: "روز و ساعت شیفتی که می‌خوای مرخصی بگیری رو بده. اول کسایی میان که اون روز شیفت ندارن و روزهای استراحت تو سر کارن — یعنی می‌تونی باهاشون جابه‌جا کنی.", en: "Enter the day and hours you want off. Crews who are off that day come up first if they work one of YOUR rest days — so you can offer a straight trade.", hi: "जिस दिन और समय की छुट्टी चाहिए, दर्ज करें। जो क्रू उस दिन फ्री हैं और आपकी छुट्टी वाले दिन काम करते हैं, वे पहले आएंगे — ताकि आप अदला-बदली कर सकें।" },
+  swapMyCrew: { fa: "شمارهٔ گروه من", en: "My crew #", hi: "मेरा क्रू #" },
+  swapDate: { fa: "تاریخ", en: "Date", hi: "तारीख" },
+  swapStart: { fa: "شروع شیفت", en: "Shift start", hi: "शिफ्ट शुरू" },
+  swapEnd: { fa: "پایان شیفت", en: "Shift end", hi: "शिफ्ट समाप्त" },
+  swapFindBtn: { fa: "پیدا کن", en: "Find replacements", hi: "बदली खोजें" },
+  swapNeedInputs: { fa: "تاریخ و ساعت شروع و پایان رو وارد کن.", en: "Enter the date, start and end time.", hi: "तारीख, शुरू और समाप्ति समय दर्ज करें।" },
+  swapNoCrewHint: { fa: "بدون شمارهٔ گروهت فقط کسایی که اون روز آزادن نشون داده می‌شن (پیشنهاد جابه‌جایی نه).", en: "Without your crew #, only crews free that day are shown — no trade suggestions.", hi: "क्रू # के बिना केवल उस दिन फ्री क्रू दिखेंगे — अदला-बदली सुझाव नहीं।" },
+  swapAlreadyOff: { fa: "طبق برنامه، تو این روز خودت شیفت نداری.", en: "Per the schedule, you're already off on this day.", hi: "शेड्यूल के अनुसार, इस दिन आप पहले से छुट्टी पर हैं।" },
+  swapMyRestDays: { fa: "روزهای استراحت من", en: "My rest days", hi: "मेरे आराम के दिन" },
+  swapResultsTitle: { fa: "بهترین گزینه‌ها", en: "Best options", hi: "सबसे अच्छे विकल्प" },
+  swapCandidatesWord: { fa: "نفر", en: "candidates", hi: "उम्मीदवार" },
+  swapNoResults: { fa: "هیچ گروهی اون روز آزاد نیست.", en: "No crew is off on that day.", hi: "उस दिन कोई क्रू फ्री नहीं है।" },
+  swapFit: { fa: "تناسب", en: "Fit", hi: "मेल" },
+  swapOffThatDay: { fa: "آزاد در روز", en: "Off on", hi: "छुट्टी:" },
+  swapUsualStart: { fa: "شروع معمول:", en: "Usually starts", hi: "आमतौर पर शुरू:" },
+  swapTradeFor: { fa: "جابه‌جایی: تو شیفتش رو بری در", en: "Trade: you take their shift on", hi: "अदला-बदली: आप उनकी शिफ्ट लें" },
+  swapNoTrade: { fa: "روزهای استراحت تو سر کار نیست — فقط کاور بدون جابه‌جایی", en: "Doesn't work on your rest days — cover only, no trade", hi: "आपके आराम के दिनों में काम नहीं — केवल कवर" },
+  swapMyRestWarn: { fa: "برای تو استراحت کمتر از ۸ ساعت بین شیفت‌ها می‌شه", en: "Would leave YOU under 8h rest between shifts", hi: "आपको शिफ्टों के बीच 8 घंटे से कम आराम मिलेगा" },
+  swapTheirRestWarn: { fa: "استراحت اون کمتر از ۸ ساعت می‌شه", en: "Would leave them under 8h rest", hi: "उन्हें 8 घंटे से कम आराम मिलेगा" },
+  swapBefore: { fa: "قبل:", en: "before:", hi: "पहले:" },
+  swapAfter: { fa: "بعد:", en: "after:", hi: "बाद:" },
+  swapViewSchedule: { fa: "برنامهٔ هفتگی", en: "Weekly schedule", hi: "साप्ताहिक शेड्यूल" },
+  swapShowMore: { fa: "نمایش بیشتر", en: "Show more", hi: "और दिखाएं" },
   crewLookupSearch: { fa: "جستجوی شماره یا اسم...", en: "Search number or name…", hi: "नंबर या नाम खोजें…" },
 
   // ---- admin ----
@@ -1559,6 +1583,244 @@ function CrewLookupPanel({ lang, crews, crewNames, onPick, onClose }) {
   );
 }
 
+// ---------- Leave replacement finder ----------
+// Given a day the user wants off (date + shift hours), rank the crews that
+// could cover it. Hard rule: the candidate must have NO shift on that
+// weekday. Then, because the easiest ask is a straight trade, crews that
+// WORK on one of the user's own rest days rank first — the user can offer
+// to take that shift back in return. Ties break on rest gaps around the
+// shift (a candidate finishing late the night before is a harder ask) and
+// on how close the shift is to the candidate's usual hours and region.
+
+const SWAP_MIN_REST_MIN = 8 * 60;
+
+function timeToMinutes(v) {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "number") {
+    const m = Math.round((v % 1) * 1440);
+    return ((m % 1440) + 1440) % 1440;
+  }
+  const s = String(v).trim().toLowerCase();
+  const m = s.match(/^(\d{1,2})(?::|\.|h)?(\d{2})?\s*(am|pm|a|p)?$/);
+  if (!m) return null;
+  let h = Number(m[1]);
+  const mm = Number(m[2] || 0);
+  const ap = m[3];
+  if (ap && ap.startsWith("p") && h < 12) h += 12;
+  if (ap && ap.startsWith("a") && h === 12) h = 0;
+  if (h > 24 || mm > 59) return null;
+  return (h * 60 + mm) % 1440;
+}
+
+function minutesToHHMM(m) {
+  const x = ((Math.round(m) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}`;
+}
+
+// A day's shift as [start, end] in minutes relative to that day's midnight;
+// an end at or before the start means the shift runs past midnight.
+function shiftSpan(startMin, endMin) {
+  if (startMin === null) return null;
+  let end = endMin === null ? startMin : endMin;
+  if (end <= startMin) end += 1440;
+  return [startMin, end];
+}
+
+function daySpan(crew, dayIdx) {
+  const d = crew.days.find((x) => x.dayIdx === dayIdx);
+  if (!d) return null;
+  return shiftSpan(timeToMinutes(d.start), timeToMinutes(d.end));
+}
+
+// Rest (minutes) this crew would get before and after working [start,end]
+// on `dayIdx`, given its own shifts on the neighbouring days. null = that
+// neighbour day is off (plenty of rest).
+function restAround(crew, dayIdx, span) {
+  const prev = daySpan(crew, (dayIdx + 6) % 7);
+  const next = daySpan(crew, (dayIdx + 1) % 7);
+  const before = prev ? span[0] - (prev[1] - 1440) : null;
+  const after = next ? (next[0] + 1440) - span[1] : null;
+  return { before, after, ok: (before === null || before >= SWAP_MIN_REST_MIN) && (after === null || after >= SWAP_MIN_REST_MIN) };
+}
+
+function usualStart(crew) {
+  const starts = crew.days.map((d) => timeToMinutes(d.start)).filter((x) => x !== null).sort((a, b) => a - b);
+  if (!starts.length) return null;
+  return starts[Math.floor(starts.length / 2)];
+}
+
+function findLeaveReplacements(crews, { weekday, startMin, endMin, myCrew, targetRegion }) {
+  const span = shiftSpan(startMin, endMin);
+  if (!span) return [];
+  const myOffDays = myCrew ? [0, 1, 2, 3, 4, 5, 6].filter((d) => !myCrew.days.some((x) => x.dayIdx === d)) : [];
+  const out = [];
+  for (const c of crews || []) {
+    if (myCrew && String(c.crew) === String(myCrew.crew)) continue;
+    if (c.days.some((d) => d.dayIdx === weekday)) continue; // works that day -> can't cover
+    if (!c.days.length) continue; // empty row / not an active crew
+
+    const candRest = restAround(c, weekday, span);
+
+    // Their shifts on my rest days = what I can offer to take in return.
+    const swapOptions = c.days
+      .filter((d) => myOffDays.includes(d.dayIdx))
+      .map((d) => {
+        const s = shiftSpan(timeToMinutes(d.start), timeToMinutes(d.end));
+        const myRest = s ? restAround(myCrew, d.dayIdx, s) : { ok: true, before: null, after: null };
+        // Days after the requested day first (the natural "I'll pay you back"), wrapping the week.
+        const dist = (d.dayIdx - weekday + 7) % 7;
+        return { ...d, myRest, dist };
+      })
+      .sort((a, b) => (b.myRest.ok - a.myRest.ok) || (a.dist - b.dist));
+
+    const us = usualStart(c);
+    const diffH = us === null ? 6 : Math.min(Math.abs(us - startMin), 1440 - Math.abs(us - startMin)) / 60;
+    const timeFit = Math.max(0, 100 - diffH * 15);
+    const regionShare = targetRegion ? c.days.filter((d) => d.regionKey === targetRegion).length / c.days.length : null;
+    const fit = Math.round(regionShare === null ? timeFit : timeFit * 0.7 + regionShare * 100 * 0.3);
+
+    out.push({
+      crew: c,
+      swapOptions,
+      canSwap: swapOptions.length > 0,
+      swapRestOk: swapOptions.some((o) => o.myRest.ok),
+      candRest,
+      usualStart: us,
+      fit,
+    });
+  }
+  out.sort((a, b) =>
+    (b.canSwap - a.canSwap) ||
+    (b.candRest.ok - a.candRest.ok) ||
+    (b.swapRestOk - a.swapRestOk) ||
+    (b.fit - a.fit) ||
+    (a.crew.totalHours - b.crew.totalHours) ||
+    (Number(a.crew.crew) - Number(b.crew.crew))
+  );
+  return out;
+}
+
+function localDateStr(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose }) {
+  const [myCrewNum, setMyCrewNum] = useState(profile?.crewNumber ? String(profile.crewNumber) : "");
+  const [date, setDate] = useState(localDateStr());
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [results, setResults] = useState(null);
+  const [showAll, setShowAll] = useState(false);
+  const [error, setError] = useState("");
+
+  const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
+  const weekday = date ? new Date(date + "T00:00:00").getDay() : null;
+  const myCrew = useMemo(() => (crews || []).find((c) => String(c.crew) === myCrewNum.trim()) || null, [crews, myCrewNum]);
+  const myShiftThatDay = myCrew && weekday !== null ? myCrew.days.find((d) => d.dayIdx === weekday) : null;
+
+  // Pre-fill the hours from my own shift on that weekday; still editable.
+  useEffect(() => {
+    if (myShiftThatDay) {
+      setStartTime(formatExcelTime(myShiftThatDay.start));
+      setEndTime(formatExcelTime(myShiftThatDay.end));
+    }
+    setResults(null);
+  }, [myCrew, weekday]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const doFind = () => {
+    const s = timeToMinutes(startTime);
+    const e = timeToMinutes(endTime);
+    if (weekday === null || s === null || e === null) { setError(t("swapNeedInputs", lang)); setResults(null); return; }
+    setError("");
+    setShowAll(false);
+    setResults(findLeaveReplacements(crews, { weekday, startMin: s, endMin: e, myCrew, targetRegion: myShiftThatDay?.regionKey || null }));
+  };
+
+  const fmtRest = (m) => formatDuration(m / 60, lang);
+  const shown = results ? results.slice(0, showAll ? 15 : 5) : [];
+
+  return (
+    <Modal title={t("hubSwapFinder", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #D9480F, #F59F00)" accent="#D9480F">
+      <p style={styles.hint}>{t("swapIntro", lang)}</p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapMyCrew", lang)}
+          <input type="number" value={myCrewNum} onChange={(e) => setMyCrewNum(e.target.value)} placeholder={t("crewWord", lang)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
+        </label>
+        <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapDate", lang)}{weekday !== null ? ` · ${weekdayNames[weekday]}` : ""}
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
+        </label>
+        <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapStart", lang)}
+          <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
+        </label>
+        <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapEnd", lang)}
+          <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
+        </label>
+      </div>
+      {myCrewNum.trim() && !myCrew && <div style={styles.errorBox}><AlertCircle size={15} /><span>{t("crewNumberNotInFile", lang)}</span></div>}
+      {!myCrewNum.trim() && <p style={{ ...styles.hint, marginTop: 8 }}>{t("swapNoCrewHint", lang)}</p>}
+      {myCrew && weekday !== null && !myShiftThatDay && <p style={{ ...styles.hint, marginTop: 8, color: "#B3432A" }}>{t("swapAlreadyOff", lang)}</p>}
+      {myCrew && (
+        <p style={{ ...styles.hint, marginTop: 8 }}>
+          {t("swapMyRestDays", lang)}: <b>{[0, 1, 2, 3, 4, 5, 6].filter((d) => !myCrew.days.some((x) => x.dayIdx === d)).map((d) => weekdayNames[d]).join(DAY_LIST_SEP[lang] || ", ") || "—"}</b>
+        </p>
+      )}
+      <button onClick={doFind} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)", marginTop: 8 }}>
+        <Search size={14} /> {t("swapFindBtn", lang)}
+      </button>
+      {error && <div style={styles.errorBox}><AlertCircle size={15} /><span>{error}</span></div>}
+
+      {results && (
+        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800 }}>
+            {t("swapResultsTitle", lang)} — {weekdayNames[weekday]} <bdi dir="ltr">{startTime}–{endTime}</bdi> · {results.length} {t("swapCandidatesWord", lang)}
+          </div>
+          {results.length === 0 && <p style={styles.hint}>{t("swapNoResults", lang)}</p>}
+          {shown.map((r, i) => {
+            const name = resolveCrewName(r.crew.crew, crews, crewNames);
+            const best = r.swapOptions[0];
+            return (
+              <div key={r.crew.crew} style={{ border: "1px solid var(--border)", borderInlineStart: `4px solid ${r.canSwap ? "#0EA37E" : "#C9A227"}`, borderRadius: 10, padding: "9px 11px", background: "var(--card)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontWeight: 900, fontSize: 15, color: "var(--accent)" }}>{i + 1}</span>
+                  <span style={{ fontWeight: 800, fontSize: 13.5 }}>{t("crewWord", lang)} {String(r.crew.crew)}{name ? ` · ${name}` : ""}</span>
+                  <span style={{ marginInlineStart: "auto", fontSize: 11, color: "var(--muted)" }}>{t("swapFit", lang)} {r.fit}%</span>
+                </div>
+                <div style={{ fontSize: 12, marginTop: 5, display: "flex", flexDirection: "column", gap: 3 }}>
+                  <span style={{ color: "#0EA37E", fontWeight: 700 }}>✓ {t("swapOffThatDay", lang)} {weekdayNames[weekday]}</span>
+                  {r.usualStart !== null && <span style={{ color: "var(--muted)" }}>{t("swapUsualStart", lang)} {minutesToHHMM(r.usualStart)} · {r.crew.type} {r.crew.shiftRaw}</span>}
+                  {r.canSwap ? (
+                    <span style={{ fontWeight: 700 }}>
+                      ⇄ {t("swapTradeFor", lang)} {r.swapOptions.map((o, k) => (
+                        <span key={o.dayIdx}>{k > 0 ? (DAY_LIST_SEP[lang] || ", ") : ""}{weekdayNames[o.dayIdx]} <bdi dir="ltr">{formatExcelTime(o.start)}–{formatExcelTime(o.end)}</bdi>{o.myRest.ok ? "" : " ⚠"}</span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span style={{ color: "#A07C00" }}>{t("swapNoTrade", lang)}</span>
+                  )}
+                  {best && !best.myRest.ok && <span style={{ color: "#B3432A" }}>⚠ {t("swapMyRestWarn", lang)}</span>}
+                  {!r.candRest.ok && (
+                    <span style={{ color: "#B3432A" }}>
+                      ⚠ {t("swapTheirRestWarn", lang)}
+                      {r.candRest.before !== null && r.candRest.before < SWAP_MIN_REST_MIN ? ` (${t("swapBefore", lang)} ${fmtRest(r.candRest.before)})` : ""}
+                      {r.candRest.after !== null && r.candRest.after < SWAP_MIN_REST_MIN ? ` (${t("swapAfter", lang)} ${fmtRest(r.candRest.after)})` : ""}
+                    </span>
+                  )}
+                </div>
+                <button onClick={() => onViewCrew(r.crew)} style={{ ...styles.smallActionBtn, marginTop: 7, padding: "5px 9px", fontSize: 11.5 }}>
+                  <CalendarOff size={13} /> {t("swapViewSchedule", lang)}
+                </button>
+              </div>
+            );
+          })}
+          {results.length > 5 && !showAll && (
+            <button onClick={() => setShowAll(true)} style={styles.smallActionBtn}>{t("swapShowMore", lang)}</button>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 // ---------- Admin ----------
 // See the ADMIN_USERNAME/ADMIN_PASSWORD note near the top of this file: this
 // login only hides the panel below from casual users, it is not real
@@ -2390,6 +2652,7 @@ export default function ShiftPriorityRanker() {
   const [isAdmin, setIsAdmin] = useState(() => loadAdminSession());
   // The crew picked from the "Browse crews" lookup panel, or null.
   const [lookupCrew, setLookupCrew] = useState(null);
+  const [swapViewCrew, setSwapViewCrew] = useState(null);
 
   // Daily Log -- see loadDailyLogAccess/saveDailyLogAccess above.
   const [dailyLogAccess, setDailyLogAccess] = useState(() => loadDailyLogAccess());
@@ -2688,6 +2951,26 @@ export default function ShiftPriorityRanker() {
       {activePanel === "compare2" && parsed && (
         <CompareTwoPanel lang={lang} crews={parsed.crews} onClose={() => setActivePanel(null)} />
       )}
+      {activePanel === "swapFinder" && parsed && (
+        <SwapFinderPanel
+          lang={lang}
+          crews={parsed.crews}
+          crewNames={crewNames}
+          profile={profile}
+          onViewCrew={(c) => setSwapViewCrew(c)}
+          onClose={() => setActivePanel(null)}
+        />
+      )}
+      {swapViewCrew && (
+        <MyScheduleModal
+          crew={swapViewCrew}
+          name={resolveCrewName(swapViewCrew.crew, parsed?.crews, crewNames)}
+          lang={lang}
+          themeMode={themeMode}
+          onClose={() => setSwapViewCrew(null)}
+          onBack={() => setSwapViewCrew(null)}
+        />
+      )}
       {activePanel === "crewLookup" && parsed && (
         <CrewLookupPanel
           lang={lang}
@@ -2780,8 +3063,7 @@ export default function ShiftPriorityRanker() {
                 <Search size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("crewLookupTitle", lang)}</span>
               </button>
-              <button disabled style={{ ...styles.hubTile, background: "linear-gradient(135deg, #9CA6B4, #C7CFD9)", opacity: 0.8, cursor: "not-allowed" }}>
-                <span style={styles.hubComingSoonBadge}>{t("hubComingSoon", lang)}</span>
+              <button onClick={() => setActivePanel("swapFinder")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #D9480F, #F59F00)" }}>
                 <CalendarOff size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("hubSwapFinder", lang)}</span>
               </button>
