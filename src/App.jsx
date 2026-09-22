@@ -670,8 +670,10 @@ const THEME_PALETTES = {
     dark: { bg: "#1E1E1E", card: "#2C2C2E", border: "#3A3A3C", text: "#F5F5F7", muted: "#98989D", accent: "#0A84FF", accent2: "#D8A94A", radius: "14px" },
   },
   universal: {
-    light: { bg: "#EFEDE6", card: "#FBFAF6", border: "#DDD8C9", text: "#20242B", muted: "#7A7F85", accent: "#2F5D62", accent2: "#B98A2E", radius: "10px" },
-    dark: { bg: "#15191C", card: "#1F252A", border: "#2C333A", text: "#EDEFF1", muted: "#9AA3AA", accent: "#4C9AA0", accent2: "#D8A94A", radius: "10px" },
+    // Indigo/violet to match the hub tiles, hero banner and app icon
+    // (was a muted teal on cream from the original design).
+    light: { bg: "#F3F2FA", card: "#FFFFFF", border: "#E2E0F0", text: "#1D1B33", muted: "#6C6A86", accent: "#4C3FD9", accent2: "#E08A1E", radius: "10px" },
+    dark: { bg: "#121120", card: "#1C1B2E", border: "#2D2B45", text: "#EEEDF8", muted: "#A3A0BF", accent: "#8E82FF", accent2: "#F6B93B", radius: "10px" },
   },
 };
 
@@ -2647,7 +2649,7 @@ function TopCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
           {t("crewWord", lang)} {String(r.crew)}
           {isMine && <span style={styles.mineBadge}><Star size={10} /> {t("myShiftBadge", lang)}</span>}
         </div>
-        <div style={{ ...styles.scoreBadge, color: fpColor(ds) }}>{scorePercent(ds)}%</div>
+        <div style={{ ...styles.scoreBadge, color: fpColor(scorePercent(ds)) }}>{scorePercent(ds)}%</div>
       </div>
       <div style={styles.heroMeta}>{r.type} · {r.shiftRaw} · {r.workedCount} {t("days", lang)} · {r.totalHours} {t("hours", lang)}</div>
       <FingerprintList fingerprint={r.fingerprint} lang={lang} />
@@ -2671,7 +2673,7 @@ function ResultCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
           <span style={styles.resultCrew}>{t("crewWord", lang)} {String(r.crew)}</span>
           {isMine && <span style={styles.mineBadge}><Star size={10} /> {t("myShiftBadge", lang)}</span>}
         </div>
-        <span style={{ ...styles.scoreBadgeSm, color: fpColor(ds) }}>{scorePercent(ds)}%</span>
+        <span style={{ ...styles.scoreBadgeSm, color: fpColor(scorePercent(ds)) }}>{scorePercent(ds)}%</span>
       </div>
       <div style={styles.resultMeta}>{r.type} · {r.shiftRaw} · {r.workedCount} {t("days", lang)} · {r.totalHours} {t("hours", lang)}</div>
       <FingerprintStrip fingerprint={r.fingerprint} />
@@ -2776,6 +2778,11 @@ export default function ShiftPriorityRanker() {
 
   const dir = lang === "fa" ? "rtl" : "ltr";
   const palette = getPalette(themeStyle, themeMode);
+  // Keep the installed app's window/title bar in step with the active theme.
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", themeMode === "dark" ? palette.card : palette.accent);
+  }, [palette, themeMode]);
 
   const handleFile = (e) => {
     const file = e.target.files?.[0];
