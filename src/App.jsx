@@ -782,7 +782,7 @@ function DateTimeWidget({ lang }) {
   const secondAngle = seconds * 6;
 
   return (
-    <div style={styles.dtWidget}>
+    <div style={{ ...styles.dtWidget, background: "linear-gradient(120deg, #6D5CE0 0%, #B15CE0 26%, #E0447F 52%, #E08A1E 76%, #0EA37E 100%)", border: "none", boxShadow: "0 6px 14px rgba(96,60,180,0.28)", "--card": "rgba(255,255,255,0.16)", "--border": "rgba(255,255,255,0.55)", "--text": "#fff", "--muted": "rgba(255,255,255,0.85)", "--accent": "#fff", "--accent2": "#FFE9A8" }}>
       <AnalogClock hourAngle={hourAngle} minuteAngle={minuteAngle} secondAngle={secondAngle} />
       <div style={styles.dtTextCol}>
         <div style={styles.dtDigital}>{digital}</div>
@@ -795,18 +795,22 @@ function DateTimeWidget({ lang }) {
 
 // ---------- Modal shell ----------
 
-function Modal({ title, onClose, onBack, children }) {
+function Modal({ title, onClose, onBack, children, headerGradient, accent }) {
+  const headerStyle = headerGradient ? { ...styles.modalHeader, background: headerGradient, borderBottom: "none" } : styles.modalHeader;
+  const titleStyle = headerGradient ? { ...styles.modalTitle, color: "#fff" } : styles.modalTitle;
+  const closeBtnStyle = headerGradient ? { ...styles.modalCloseBtn, color: "#fff", background: "rgba(255,255,255,0.18)", borderRadius: 8, width: 28, height: 28, alignItems: "center", justifyContent: "center" } : styles.modalCloseBtn;
+  const boxVars = accent ? { "--accent": accent } : {};
   return (
     <div className="no-print" style={styles.modalOverlay} onClick={onClose}>
-      <div style={styles.modalBox} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.modalHeader}>
+      <div style={{ ...styles.modalBox, ...boxVars }} onClick={(e) => e.stopPropagation()}>
+        <div style={headerStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             {onBack && (
-              <button onClick={onBack} style={styles.modalCloseBtn} title="Back"><ArrowLeft size={16} /></button>
+              <button onClick={onBack} style={closeBtnStyle} title="Back"><ArrowLeft size={16} /></button>
             )}
-            <span style={styles.modalTitle}>{title}</span>
+            <span style={titleStyle}>{title}</span>
           </div>
-          <button onClick={onClose} style={styles.modalCloseBtn}><X size={16} /></button>
+          <button onClick={onClose} style={closeBtnStyle}><X size={16} /></button>
         </div>
         <div style={styles.modalBody}>{children}</div>
       </div>
@@ -940,7 +944,7 @@ function ProfilePanel({ lang, profile, onSave, onClear, onClose }) {
   };
 
   return (
-    <Modal title={t("profileTitle", lang)} onClose={onClose}>
+    <Modal title={t("profileTitle", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #E0447F, #F17CA6)" accent="#E0447F">
       <div style={styles.smallLabel}>{t("firstNameLabel", lang)}</div>
       <input
         type="text"
@@ -985,7 +989,7 @@ function MyScheduleModal({ crew, name, lang, themeMode, onClose, onBack }) {
   // orange instead, same treatment (border + glow + badge), different hue.
   const todayTheme = themeMode === "dark" ? { accent: "#CCFF00", ring: "rgba(204,255,0,0.22)", glow: "rgba(204,255,0,0.6)", badgeGlow: "rgba(204,255,0,0.7)", badgeText: "#111" } : { accent: "#FF6A00", ring: "rgba(255,106,0,0.22)", glow: "rgba(255,106,0,0.5)", badgeGlow: "rgba(255,106,0,0.55)", badgeText: "#fff" };
   return (
-        <Modal title={`${t("myScheduleTitle", lang)} — ${t("crewWord", lang)} ${String(crew.crew)}${name ? " · " + name : ""}`} onClose={onClose} onBack={onBack}>
+        <Modal title={`${t("myScheduleTitle", lang)} — ${t("crewWord", lang)} ${String(crew.crew)}${name ? " · " + name : ""}`} onClose={onClose} onBack={onBack} headerGradient="linear-gradient(135deg, #4C3FD9, #6D5CE0)" accent="#4C3FD9">
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {weekdayNames.map((wd, i) => {
           const d = dayCell(i);
@@ -1204,7 +1208,7 @@ function DailyLogPanel({ lang, onClose }) {
   };
 
   return (
-    <Modal title={t("dailyLogTitle", lang)} onClose={onClose}>
+    <Modal title={t("dailyLogTitle", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #2463EB, #4F8CFB)" accent="#2463EB">
       <p style={styles.hint}>{t("dailyLogHint", lang)}</p>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1526,7 +1530,7 @@ function CrewLookupPanel({ lang, crews, crewNames, onPick, onClose }) {
   }, [crews, crewNames, query]);
 
   return (
-    <Modal title={t("crewLookupTitle", lang)} onClose={onClose}>
+    <Modal title={t("crewLookupTitle", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #0EA37E, #3DDC97)" accent="#0EA37E">
       <div style={{ position: "relative", marginBottom: 10 }}>
         <Search size={14} style={{ position: "absolute", insetInlineStart: 10, top: 10, color: "var(--muted)" }} />
         <input
@@ -1813,7 +1817,7 @@ function SettingsPanel({ lang, themeStyle, setThemeStyle, themeMode, setThemeMod
     { v: "universal", l: t("themeUniversal", lang) },
   ];
   return (
-    <Modal title={t("settingsTitle", lang)} onClose={onClose}>
+    <Modal title={t("settingsTitle", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #E08A1E, #F6B93B)" accent="#E08A1E">
       <div style={styles.prefGroup}>
         <div style={styles.prefTitle}>{t("themeMode", lang)}</div>
         <div style={styles.chipRow}>
@@ -2200,7 +2204,7 @@ function CompareTwoPanel({ lang, crews, onClose }) {
   const dayCell = (crew, i) => crew.days.find((d) => d.dayIdx === i);
 
   return (
-    <Modal title={t("compare2Title", lang)} onClose={onClose}>
+    <Modal title={t("compare2Title", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #6D5CE0, #9C8CFB)" accent="#6D5CE0">
       <div style={styles.chipRow}>
         {crewNums.map((n, i) => (
           <div key={i} style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -2815,7 +2819,7 @@ export default function ShiftPriorityRanker() {
         )}
 
         {showPriorityFlow && (
-        <>
+        <div style={{ "--accent": "#4C3FD9" }}>
         {profile?.crewNumber && parsed && (() => {
           const myCrew = parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber));
           return (
@@ -3090,7 +3094,7 @@ export default function ShiftPriorityRanker() {
           </button>
         )}
 
-        </>
+        </div>
         )}
 
         <footer className="no-print" style={styles.footer}>
