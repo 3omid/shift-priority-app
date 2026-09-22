@@ -387,6 +387,12 @@ function displayScore(fingerprint) {
   return pct;
 }
 
+// UI-only: show the priority score (0..1) as a whole-number percent of 100.
+// Floor, not round, so only a perfect match can ever read "100%".
+function scorePercent(ds) {
+  return Math.floor(Number(ds) * 100 + 1e-9);
+}
+
 // ---------- i18n ----------
 
 const REGION_LABELS = {
@@ -2641,7 +2647,7 @@ function TopCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
           {t("crewWord", lang)} {String(r.crew)}
           {isMine && <span style={styles.mineBadge}><Star size={10} /> {t("myShiftBadge", lang)}</span>}
         </div>
-        <div style={{ ...styles.scoreBadge, color: fpColor(ds) }}>{ds.toFixed(4)}%</div>
+        <div style={{ ...styles.scoreBadge, color: fpColor(ds) }}>{scorePercent(ds)}%</div>
       </div>
       <div style={styles.heroMeta}>{r.type} · {r.shiftRaw} · {r.workedCount} {t("days", lang)} · {r.totalHours} {t("hours", lang)}</div>
       <FingerprintList fingerprint={r.fingerprint} lang={lang} />
@@ -2665,7 +2671,7 @@ function ResultCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
           <span style={styles.resultCrew}>{t("crewWord", lang)} {String(r.crew)}</span>
           {isMine && <span style={styles.mineBadge}><Star size={10} /> {t("myShiftBadge", lang)}</span>}
         </div>
-        <span style={{ ...styles.scoreBadgeSm, color: fpColor(ds) }}>{ds.toFixed(4)}%</span>
+        <span style={{ ...styles.scoreBadgeSm, color: fpColor(ds) }}>{scorePercent(ds)}%</span>
       </div>
       <div style={styles.resultMeta}>{r.type} · {r.shiftRaw} · {r.workedCount} {t("days", lang)} · {r.totalHours} {t("hours", lang)}</div>
       <FingerprintStrip fingerprint={r.fingerprint} />
