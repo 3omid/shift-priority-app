@@ -496,6 +496,10 @@ const STRINGS = {
 
   // ---- crew lookup ----
   crewLookupTitle: { fa: "مشاهدهٔ گروه‌ها", en: "Browse crews", hi: "क्रू ब्राउज़ करें" },
+  hubGroupCrews: { fa: "مقایسه و جست‌وجوی گروه‌ها", en: "Compare & look up crews", hi: "क्रू तुलना और खोज" },
+  hubGroupMe: { fa: "من", en: "Me", hi: "मेरा" },
+  hubComingSoon: { fa: "به‌زودی", en: "Coming soon", hi: "जल्द आ रहा है" },
+  hubSwapFinder: { fa: "جایگزین برای مرخصی", en: "Find a leave replacement", hi: "छुट्टी बदली खोजें" },
   crewLookupSearch: { fa: "جستجوی شماره یا اسم...", en: "Search number or name…", hi: "नंबर या नाम खोजें…" },
 
   // ---- admin ----
@@ -2362,7 +2366,7 @@ export default function ShiftPriorityRanker() {
   const [lang, setLang] = useState("en");
   const [themeStyle, setThemeStyle] = useState("universal");
   const [themeMode, setThemeMode] = useState("light");
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [showPriorityFlow, setShowPriorityFlow] = useState(false);
   // 'settings' | 'help' | 'about' | 'helpMenu' | 'compare2' | 'profile'
   // | 'crewLookup' | 'adminLogin' | 'admin'
   const [activePanel, setActivePanel] = useState(null);
@@ -2646,36 +2650,8 @@ export default function ShiftPriorityRanker() {
           ))}
         </div>
         <div style={{ position: "relative" }}>
-          <button onClick={() => setMenuOpen((v) => !v)} style={styles.menuBtn}><Menu size={16} /></button>
-          {menuOpen && (
-            <div style={{ ...styles.menuDropdown, left: 0 }}>
-              <button style={styles.menuItem} onClick={() => { setActivePanel("profile"); setMenuOpen(false); }}>
-                <User size={15} /> {t("profileTitle", lang)}
-              </button>
-              <button style={styles.menuItem} onClick={() => { setActivePanel("settings"); setMenuOpen(false); }}>
-                <Sun size={15} /> {t("settingsTitle", lang)}
-              </button>
-              <button style={styles.menuItem} onClick={() => { setActivePanel("compare2"); setMenuOpen(false); }}>
-                <GitCompare size={15} /> {t("compare2Title", lang)}
-              </button>
-              <button style={styles.menuItem} onClick={() => { setActivePanel("crewLookup"); setMenuOpen(false); }}>
-                <Search size={15} /> {t("crewLookupTitle", lang)}
-              </button>
-              {dailyLogVisible && (
-                <button style={styles.menuItem} onClick={() => { setActivePanel("dailyLog"); setMenuOpen(false); }}>
-                  <ClipboardList size={15} /> {t("dailyLogMenuLabel", lang)}
-                </button>
-              )}
-              <button style={styles.menuItem} onClick={() => { setActivePanel("helpMenu"); setMenuOpen(false); }}>
-                <HelpCircle size={15} /> {t("helpMenuLabel", lang)}
-              </button>
-              <button style={styles.menuItem} onClick={() => { setActivePanel(isAdmin ? "admin" : "adminLogin"); setMenuOpen(false); }}>
-                <Shield size={15} /> {t("adminMenuLabel", lang)}
-              </button>
-              <button style={{ ...styles.menuItem, color: "#B3432A" }} onClick={() => { setMenuOpen(false); exitApp(lang); }}>
-                <LogOut size={15} /> {t("exitApp", lang)}
-              </button>
-            </div>
+          {showPriorityFlow && (
+            <button onClick={() => setShowPriorityFlow(false)} style={styles.menuBtn}><ArrowLeft size={16} /></button>
           )}
         </div>
       </div>
@@ -2778,6 +2754,68 @@ export default function ShiftPriorityRanker() {
           <DateTimeWidget lang={lang} />
         </header>
 
+        {!showPriorityFlow && (
+          <div className="no-print">
+            <button onClick={() => setShowPriorityFlow(true)} style={styles.heroTile}>
+              <span style={styles.heroTileIcon}><Star size={22} color="#fff" /></span>
+              <span style={{ flex: 1 }}>
+                <div style={styles.heroTileTitle}>{t("title", lang)}</div>
+                <div style={styles.heroTileSubtitle}>{t("subtitle", lang)}</div>
+              </span>
+              <ArrowLeft size={16} color="#fff" />
+            </button>
+
+            <div style={styles.hubGroupLabel}>{t("hubGroupCrews", lang)}</div>
+            <div style={styles.hubGrid}>
+              <button onClick={() => setActivePanel("compare2")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #6D5CE0, #9C8CFB)" }}>
+                <GitCompare size={18} color="#fff" />
+                <span style={styles.hubTileLabel}>{t("compare2Title", lang)}</span>
+              </button>
+              <button onClick={() => setActivePanel("crewLookup")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #0EA37E, #3DDC97)" }}>
+                <Search size={18} color="#fff" />
+                <span style={styles.hubTileLabel}>{t("crewLookupTitle", lang)}</span>
+              </button>
+              <button disabled style={{ ...styles.hubTile, background: "linear-gradient(135deg, #9CA6B4, #C7CFD9)", opacity: 0.8, cursor: "not-allowed" }}>
+                <span style={styles.hubComingSoonBadge}>{t("hubComingSoon", lang)}</span>
+                <CalendarOff size={18} color="#fff" />
+                <span style={styles.hubTileLabel}>{t("hubSwapFinder", lang)}</span>
+              </button>
+            </div>
+
+            <div style={styles.hubGroupLabel}>{t("hubGroupMe", lang)}</div>
+            <div style={styles.hubGrid}>
+              <button onClick={() => setActivePanel("profile")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #E0447F, #F17CA6)" }}>
+                <User size={18} color="#fff" />
+                <span style={styles.hubTileLabel}>{t("profileTitle", lang)}</span>
+              </button>
+              {dailyLogVisible && (
+                <button onClick={() => setActivePanel("dailyLog")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #2463EB, #4F8CFB)" }}>
+                  <ClipboardList size={18} color="#fff" />
+                  <span style={styles.hubTileLabel}>{t("dailyLogMenuLabel", lang)}</span>
+                </button>
+              )}
+              <button onClick={() => setActivePanel("settings")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #E08A1E, #F6B93B)" }}>
+                <Sun size={18} color="#fff" />
+                <span style={styles.hubTileLabel}>{t("settingsTitle", lang)}</span>
+              </button>
+            </div>
+
+            <div style={styles.hubListCard}>
+              <button style={styles.menuItem} onClick={() => setActivePanel("helpMenu")}>
+                <HelpCircle size={15} /> {t("helpMenuLabel", lang)}
+              </button>
+              <button style={styles.menuItem} onClick={() => setActivePanel(isAdmin ? "admin" : "adminLogin")}>
+                <Shield size={15} /> {t("adminMenuLabel", lang)}
+              </button>
+              <button style={{ ...styles.menuItem, color: "#B3432A" }} onClick={() => exitApp(lang)}>
+                <LogOut size={15} /> {t("exitApp", lang)}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showPriorityFlow && (
+        <>
         {profile?.crewNumber && parsed && (() => {
           const myCrew = parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber));
           return (
@@ -3052,6 +3090,9 @@ export default function ShiftPriorityRanker() {
           </button>
         )}
 
+        </>
+        )}
+
         <footer className="no-print" style={styles.footer}>
           Shift Priority v{APP_VERSION} · © Omid Farhadnia · MIT License (Open Source)
         </footer>
@@ -3069,6 +3110,16 @@ const styles = {
   menuBtn: { display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", cursor: "pointer", color: "var(--text)" },
   menuDropdown: { position: "absolute", top: 36, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 6px 20px rgba(0,0,0,0.12)", padding: 6, display: "flex", flexDirection: "column", gap: 2, width: "max-content", minWidth: 220, maxWidth: "min(280px, calc(100vw - 24px))", zIndex: 200 },
   menuItem: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "8px 10px", borderRadius: 7, border: "none", background: "transparent", color: "var(--text)", cursor: "pointer", textAlign: "start", whiteSpace: "nowrap" },
+  heroTile: { display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "start", border: "none", borderRadius: "var(--radius)", padding: 16, marginBottom: 18, background: "linear-gradient(135deg, #4C3FD9, #6D5CE0)", cursor: "pointer", boxShadow: "0 6px 16px rgba(0,0,0,0.18)" },
+  heroTileIcon: { width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  heroTileTitle: { fontSize: 15, fontWeight: 800, color: "#fff" },
+  heroTileSubtitle: { fontSize: 11.5, color: "rgba(255,255,255,0.85)", marginTop: 2 },
+  hubGroupLabel: { fontSize: 12, fontWeight: 700, color: "var(--muted)", marginBottom: 8 },
+  hubGrid: { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 18 },
+  hubTile: { display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 10, borderRadius: "var(--radius)", minHeight: 84, border: "none", cursor: "pointer", textAlign: "start", position: "relative", boxShadow: "0 4px 10px rgba(0,0,0,0.14)" },
+  hubTileLabel: { fontSize: 10.5, fontWeight: 700, color: "#fff", lineHeight: 1.3, marginTop: 8 },
+  hubComingSoonBadge: { position: "absolute", top: 6, insetInlineStart: 6, fontSize: 8, fontWeight: 700, padding: "1px 5px", borderRadius: 20, background: "rgba(255,255,255,0.9)", color: "#4B5563" },
+  hubListCard: { border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--card)", padding: 6, display: "flex", flexDirection: "column", gap: 1, marginBottom: 14 },
   header: { textAlign: "center", marginBottom: 18, paddingTop: 10 },
   headerLogo: { width: 56, height: 56, borderRadius: 14, objectFit: "contain", marginBottom: 6 },
   routeDots: { display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 },
