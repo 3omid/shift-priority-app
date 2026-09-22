@@ -400,6 +400,7 @@ const STRINGS = {
   subtitle: { fa: "جدول شیفت رو آپلود کن، اولویت‌هاتو بچین", en: "Upload your shift sheet and build your priorities", hi: "अपनी शिफ्ट शीट अपलोड करें और प्राथमिकताएँ तय करें" },
   uploadStep: { fa: "۱. فایل اکسل شیفت‌ها", en: "1. Shift Excel File", hi: "१. शिफ्ट एक्सेल फ़ाइल" },
   uploadPlaceholder: { fa: "برای انتخاب فایل ضربه بزن (xlsx / xls)", en: "Tap to choose a file (xlsx / xls)", hi: "फ़ाइल चुनने के लिए टैप करें (xlsx / xls)" },
+  changeFileLink: { fa: "تغییر", en: "Change", hi: "बदलें" },
   sheetLabel: { fa: "شیت:", en: "Sheet:", hi: "शीट:" },
   columnsDetected: { fa: "ستون‌های Crew #، Type، شیفت AM/PM، روزهای هفته و مجموع ساعات تشخیص داده شدند", en: "Crew #, Type, AM/PM shift, weekday and total-hours columns detected", hi: "Crew #, Type, AM/PM शिफ्ट, सप्ताह के दिन और कुल घंटे कॉलम पहचाने गए" },
   colorsDetectedYes: { fa: "منطقه از رنگ گراج + کدهای STF/MRG/RPT تشخیص داده شد", en: "Region detected from garage color + STF/MRG/RPT codes", hi: "गैराज रंग + STF/MRG/RPT कोड से क्षेत्र पहचाना गया" },
@@ -2847,11 +2848,26 @@ export default function ShiftPriorityRanker() {
 
         <section className="no-print" style={styles.card}>
           <div style={styles.stepLabel}>{t("uploadStep", lang)}</div>
-          <label style={styles.uploadZone}>
-            <Upload size={22} color="var(--accent)" />
-            <span style={{ marginTop: 8, fontSize: 14, color: "var(--text)" }}>{fileName || t("uploadPlaceholder", lang)}</span>
-            <input type="file" accept=".xlsx,.xls" onChange={handleFile} style={{ display: "none" }} />
-          </label>
+          {!parsed && (
+            <label style={styles.uploadZone}>
+              <Upload size={22} color="var(--accent)" />
+              <span style={{ marginTop: 8, fontSize: 14, color: "var(--text)" }}>{fileName || t("uploadPlaceholder", lang)}</span>
+              <input type="file" accept=".xlsx,.xls" onChange={handleFile} style={{ display: "none" }} />
+            </label>
+          )}
+
+          {parsed && (
+            <div style={styles.fileSummaryRow}>
+              <FileSpreadsheet size={18} color="var(--accent)" style={{ flexShrink: 0 }} />
+              <span style={styles.fileSummaryText}>
+                {fileName} · {parsed.crews.length} {t("crewsFoundWord", lang)}{sheetNames.length > 1 ? ` · ${selectedSheet}` : ""}
+              </span>
+              <label style={styles.fileChangeLink}>
+                {t("changeFileLink", lang)}
+                <input type="file" accept=".xlsx,.xls" onChange={handleFile} style={{ display: "none" }} />
+              </label>
+            </div>
+          )}
 
           {sheetNames.length > 1 && (
             <div style={{ marginTop: 12 }}>
@@ -2874,11 +2890,10 @@ export default function ShiftPriorityRanker() {
             </div>
           )}
 
-          {parsed && (
-            <div style={styles.detectBox}>
-              <CheckLine text={`${parsed.crews.length} ${t("crewsFoundWord", lang)}`} />
-              <CheckLine text={t("columnsDetected", lang)} />
-              <CheckLine text={parsed.colorsDetected ? t("colorsDetectedYes", lang) : t("colorsDetectedNo", lang)} />
+          {parsed && !parsed.colorsDetected && (
+            <div style={styles.warnLine}>
+              <AlertCircle size={13} />
+              <span>{t("colorsDetectedNo", lang)}</span>
             </div>
           )}
         </section>
@@ -2891,15 +2906,16 @@ export default function ShiftPriorityRanker() {
             {groupedCatalog.map(({ group, items }) => (
               <div key={group} style={styles.prefGroup}>
                 <div style={styles.prefTitle}>{t(groupLabelKey[group], lang)}</div>
-                <div style={styles.chipRow}>
-                  {items.map((item) => {
+                <div style={styles.prefChipRow}>
+                  {items.map((item, i) => {
                     const rankIdx = priorityList.indexOf(item.id);
                     const selected = rankIdx !== -1;
+                    const isLastOdd = items.length % 2 === 1 && i === items.length - 1;
                     return (
                       <button
                         key={item.id}
                         onClick={() => (selected ? removeCriterion(item.id) : addCriterion(item.id))}
-                        style={{ ...styles.chip, ...(selected ? { ...styles.chipActive, borderColor: criterionColor(item.id) } : {}) }}
+                        style={{ ...styles.prefChip, ...(selected ? { ...styles.prefChipActive, borderColor: criterionColor(item.id) } : {}), ...(isLastOdd ? { gridColumn: "1 / span 2" } : {}) }}
                       >
                         {selected ? <span style={styles.chipRankBadge}>{rankIdx + 1}</span> : <Plus size={12} />}
                         {item.group === "region" && <span style={{ ...styles.regionDot, background: criterionColor(item.id) }} />}
@@ -2922,50 +2938,53 @@ export default function ShiftPriorityRanker() {
                 )}
               </div>
               {priorityList.length === 0 && <p style={styles.hint}>{t("emptyPriorities", lang)}</p>}
-              {priorityList.map((id, idx) => {
+              {priorityList.length > 0 && (
+                <div style={styles.priorityChipRow}>
+                  {priorityList.map((id, idx) => (
+                    <span key={id} style={{ ...styles.priorityChip, borderColor: criterionColor(id) }}>
+                      <span style={{ ...styles.priorityChipRank, background: criterionColor(id) }}>{idx + 1}</span>
+                      <span style={styles.priorityChipLabel}>{resolveCriterionLabel(id, dayOffChoices)[lang]}</span>
+                      <button onClick={() => moveCriterion(idx, -1)} style={styles.priorityChipBtn} disabled={idx === 0}><ArrowUp size={12} /></button>
+                      <button onClick={() => moveCriterion(idx, 1)} style={styles.priorityChipBtn} disabled={idx === priorityList.length - 1}><ArrowDown size={12} /></button>
+                      <button onClick={() => removeCriterion(id)} style={{ ...styles.priorityChipBtn, color: "#B3432A" }}><X size={12} /></button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {priorityList.map((id) => {
                 const crit = CRITERIA_CATALOG.find((c) => c.id === id);
+                if (!crit?.dynamic) return null;
                 const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
                 const chosenDays = Array.isArray(dayOffChoices[id]) ? dayOffChoices[id] : [];
                 return (
-                  <div key={id}>
-                    <div style={styles.priorityRow}>
-                      <span style={{ ...styles.priorityRank, background: criterionColor(id) }}>{idx + 1}</span>
-                      <span style={styles.priorityLabel}>{resolveCriterionLabel(id, dayOffChoices)[lang]}</span>
-                      <div style={styles.regionArrows}>
-                        <button onClick={() => moveCriterion(idx, -1)} style={styles.arrowBtn} disabled={idx === 0}><ArrowUp size={14} /></button>
-                        <button onClick={() => moveCriterion(idx, 1)} style={styles.arrowBtn} disabled={idx === priorityList.length - 1}><ArrowDown size={14} /></button>
-                        <button onClick={() => removeCriterion(id)} style={{ ...styles.arrowBtn, color: "#B3432A" }}><X size={14} /></button>
-                      </div>
+                  <div key={id} style={styles.dayPickBlock}>
+                    <span style={styles.dayPickHint}>{resolveCriterionLabel(id, dayOffChoices)[lang]} — {t("pickDayHint", lang)}</span>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 5 }}>
+                      {weekdayNames.map((wd, di) => {
+                        const isChosen = chosenDays.includes(di);
+                        const atMax = chosenDays.length >= DAY_OFF_MAX_DAYS;
+                        return (
+                          <button
+                            key={di}
+                            disabled={!isChosen && atMax}
+                            onClick={() => setDayOffChoices((prev) => {
+                              const cur = Array.isArray(prev[id]) ? prev[id] : [];
+                              const next = isChosen
+                                ? cur.filter((d) => d !== di)
+                                : (cur.length >= DAY_OFF_MAX_DAYS ? cur : [...cur, di]);
+                              return { ...prev, [id]: next };
+                            })}
+                            style={{
+                              ...styles.dayPickBtn,
+                              ...(isChosen ? styles.dayPickBtnActive : {}),
+                              ...(!isChosen && atMax ? { opacity: 0.45, cursor: "not-allowed" } : {}),
+                            }}
+                          >
+                            {wd}
+                          </button>
+                        );
+                      })}
                     </div>
-                    {crit?.dynamic && (
-                      <div style={styles.dayPickRow}>
-                        <span style={styles.dayPickHint}>{t("pickDayHint", lang)}</span>
-                        {weekdayNames.map((wd, di) => {
-                          const isChosen = chosenDays.includes(di);
-                          const atMax = chosenDays.length >= DAY_OFF_MAX_DAYS;
-                          return (
-                            <button
-                              key={di}
-                              disabled={!isChosen && atMax}
-                              onClick={() => setDayOffChoices((prev) => {
-                                const cur = Array.isArray(prev[id]) ? prev[id] : [];
-                                const next = isChosen
-                                  ? cur.filter((d) => d !== di)
-                                  : (cur.length >= DAY_OFF_MAX_DAYS ? cur : [...cur, di]);
-                                return { ...prev, [id]: next };
-                              })}
-                              style={{
-                                ...styles.dayPickBtn,
-                                ...(isChosen ? styles.dayPickBtnActive : {}),
-                                ...(!isChosen && atMax ? { opacity: 0.45, cursor: "not-allowed" } : {}),
-                              }}
-                            >
-                              {wd}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -3146,6 +3165,10 @@ const styles = {
   uploadZone: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "1.5px dashed var(--border)", borderRadius: "var(--radius)", padding: "22px 10px", cursor: "pointer", background: "var(--bg)" },
   errorBox: { display: "flex", gap: 6, alignItems: "flex-start", color: "#B3432A", fontSize: 12.5, marginTop: 10, background: "#F7E9E4", borderRadius: 6, padding: 8 },
   detectBox: { marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 10 },
+  fileSummaryRow: { display: "flex", alignItems: "center", gap: 8, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 12px" },
+  fileSummaryText: { flex: 1, fontSize: 12.5, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  fileChangeLink: { fontSize: 12, fontWeight: 600, color: "var(--accent)", cursor: "pointer", flexShrink: 0, textDecoration: "underline" },
+  warnLine: { display: "flex", gap: 6, alignItems: "flex-start", color: "var(--muted)", fontSize: 11.5, marginTop: 10 },
   prefGroup: { marginBottom: 14 },
   prefTitle: { fontSize: 13.5, fontWeight: 600, marginBottom: 8, color: "var(--text)" },
   radioRow: { display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" },
@@ -3153,6 +3176,9 @@ const styles = {
   chipRow: { display: "flex", flexWrap: "wrap", gap: 8 },
   chip: { display: "flex", alignItems: "center", gap: 5, fontSize: 13, padding: "7px 12px", borderRadius: 20, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", cursor: "pointer" },
   chipActive: { background: "var(--bg)", color: "var(--text)", borderWidth: 2 },
+  prefChipRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 },
+  prefChip: { display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 13, padding: "8px 10px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", cursor: "pointer" },
+  prefChipActive: { background: "var(--bg)", color: "var(--text)", borderWidth: 2 },
   chipRankBadge: { width: 16, height: 16, borderRadius: "50%", background: "var(--accent)", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" },
   smallLabel: { fontSize: 12.5, color: "var(--muted)" },
   regionDot: { width: 9, height: 9, borderRadius: "50%", display: "inline-block", flexShrink: 0 },
@@ -3166,6 +3192,12 @@ const styles = {
   dayPickHint: { fontSize: 11, color: "var(--muted)", marginInlineEnd: 4 },
   dayPickBtn: { fontSize: 11, fontWeight: 600, padding: "4px 9px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", cursor: "pointer" },
   dayPickBtnActive: { background: "#B3432A", color: "#fff", borderColor: "#B3432A" },
+  dayPickBlock: { marginTop: 8, padding: "8px 10px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--card)" },
+  priorityChipRow: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 },
+  priorityChip: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5, borderRadius: 20, paddingInlineStart: 10, paddingInlineEnd: 6, paddingTop: 4, paddingBottom: 4, background: "var(--card)", border: "1.5px solid var(--border)" },
+  priorityChipRank: { width: 16, height: 16, borderRadius: "50%", color: "#fff", fontSize: 9.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  priorityChipLabel: { fontSize: 12.5, color: "var(--text)" },
+  priorityChipBtn: { width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", background: "transparent", border: "none", padding: 0 },
   welcomeLine: { fontSize: 13.5, fontWeight: 600, color: "var(--text)", marginTop: 4 },
   myShiftCard: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", background: "var(--bg)", border: "1.5px solid var(--accent)", borderRadius: "var(--radius)", padding: "12px 16px", marginBottom: 14 },
   arrowBtn: { border: "1px solid var(--border)", background: "var(--card)", borderRadius: 5, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--text)" },
