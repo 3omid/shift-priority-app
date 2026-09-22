@@ -2203,6 +2203,23 @@ const PERSON_PALETTE = [
   { bg: "#FFF3E0", border: "#FFCC80", text: "#E65100" },
 ];
 
+// ---------- Export colours (PDF/print + Excel) ----------
+// Each report takes the hue of its section in the app: results = coral
+// (Shift Prioritizer), compare = violet/pink (Compare tile), daily log = blue.
+const EXPORT_THEMES = {
+  results: { main: "#D12F48", sub: "#C2410C", head: "#FDE7EB", headText: "#8A1C2E", soft: "#FFF6F3", zebra: "#FFFAF8" },
+  compare: { main: "#6D5CE0", sub: "#C0266D", head: "#EFECFD", headText: "#3F2FB0", soft: "#F8F7FE", zebra: "#FBFAFF" },
+  dailyLog: { main: "#2463EB", sub: "#0B7D61", head: "#E6EEFD", headText: "#173E9C", soft: "#F5F8FE", zebra: "#FAFCFF" },
+};
+const EXPORT_RAINBOW = "linear-gradient(90deg, #E8435A, #F59F00, #19B97A, #2463EB, #6D5CE0)";
+function exportCss(th) {
+  return `
+    body { font-family: Tahoma, 'Vazirmatn', sans-serif; margin: 24px; color:#1B2230; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .hdr h1 { color:${th.main}; }
+    .rainbow { height:5px; border-radius:3px; background:${EXPORT_RAINBOW}; margin:-6px 0 14px; }
+    .toolbar .print-btn { background:${th.main} !important; border-color:${th.main} !important; }`;
+}
+
 function buildCompareHtml(matched, lang, timestamp) {
   const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
   const dir = lang === "fa" ? "rtl" : "ltr";
@@ -2231,15 +2248,15 @@ function buildCompareHtml(matched, lang, timestamp) {
         </div>
       </td>`;
     }).join("");
-    return `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:700;background:#faf8f3;white-space:nowrap;">${wd}</td>${cells}</tr>`;
+    return `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:700;background:${EXPORT_THEMES.compare.soft};white-space:nowrap;">${wd}</td>${cells}</tr>`;
   }).join("");
 
-  const totalsRow = `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:800;background:#faf8f3;">${t("hours", lang)}</td>${matched.map((m) => `<td style="border:1px solid #ddd;padding:8px;text-align:center;font-weight:800;">${m.totalHours}</td>`).join("")}</tr>`;
+  const totalsRow = `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:800;background:${EXPORT_THEMES.compare.soft};">${t("hours", lang)}</td>${matched.map((m) => `<td style="border:1px solid #ddd;padding:8px;text-align:center;font-weight:800;">${m.totalHours}</td>`).join("")}</tr>`;
   const metaRows = [
     [t("type", lang), matched.map((m) => m.type)],
     [t("shift", lang), matched.map((m) => m.shiftRaw)],
     [t("daysColumn", lang), matched.map((m) => m.workedCount)],
-  ].map(([label, vals]) => `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:600;background:#faf8f3;">${label}</td>${vals.map((v) => `<td style="border:1px solid #ddd;padding:8px;text-align:center;">${v}</td>`).join("")}</tr>`).join("");
+  ].map(([label, vals]) => `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:600;background:${EXPORT_THEMES.compare.soft};">${label}</td>${vals.map((v) => `<td style="border:1px solid #ddd;padding:8px;text-align:center;">${v}</td>`).join("")}</tr>`).join("");
 
   return `<!doctype html><html lang="${lang}" dir="${dir}"><head><meta charset="UTF-8" />
   <title>${t("compare2Title", lang)}</title>
@@ -2252,7 +2269,8 @@ function buildCompareHtml(matched, lang, timestamp) {
     .toolbar { position: sticky; top: 0; background: #fff; padding: 10px 0 16px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; margin-bottom: 16px; z-index: 10; }
     .toolbar button { font-size:14px; padding:10px 16px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
     .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
-    .toolbar .print-btn { background:#2F5D62; color:#fff; border-color:#2F5D62; font-weight:700; }
+    .toolbar .print-btn { color:#fff; font-weight:700; }
+    ${exportCss(EXPORT_THEMES.compare)}
     @media print { .toolbar { display: none !important; } }
   </style></head>
   <body>
@@ -2264,6 +2282,7 @@ function buildCompareHtml(matched, lang, timestamp) {
       <div><h1>${t("compare2Title", lang)}</h1></div>
       <div class="ts">${timestamp}</div>
     </div>
+    <div class="rainbow"></div>
     <table>
       <thead><tr><th style="border:1px solid #ddd;padding:10px;"></th>${headerCells}</tr></thead>
       <tbody>${rows}${totalsRow}${metaRows}</tbody>
@@ -2275,12 +2294,12 @@ function buildResultsHtml(results, priorityList, lang, timestamp) {
   const dir = lang === "fa" ? "rtl" : "ltr";
   const critLabels = priorityList.map((id, i) => `${i + 1}. ${results[0]?.fingerprint?.[i]?.label?.[lang] || CRITERIA_CATALOG.find((c) => c.id === id)?.label[lang]}`);
   const headers = [t("rank", lang), t("crewWord", lang), t("type", lang), t("shift", lang), t("daysColumn", lang), t("hours", lang), t("region", lang), ...critLabels];
-  const headCells = headers.map((h) => `<th style="border:1px solid #ddd;padding:8px;background:#EAF1EF;">${h}</th>`).join("");
+  const headCells = headers.map((h) => `<th style="border:1px solid #ddd;padding:8px;background:${EXPORT_THEMES.results.head};color:${EXPORT_THEMES.results.headText};">${h}</th>`).join("");
   const medalBg = { 0: "#FBF1DA", 1: "#F2F2F2", 2: "#F6E9DC" };
   const rows = results.map((r, idx) => {
     const regionText = Object.entries(r.regionSummary).map(([k, arr]) => `${arr.length} ${regionLabel(k, lang)} (${arr.join(", ")} ${t("hoursWord", lang)})`).join("; ");
     const cells = [idx + 1, r.crew, r.type, r.shiftRaw, r.workedCount, r.totalHours, regionText, ...r.fingerprint.map((f) => `${f.score}%`)];
-    const bg = medalBg[idx] || (idx % 2 ? "#FAFAF8" : "#FFFFFF");
+    const bg = medalBg[idx] || (idx % 2 ? EXPORT_THEMES.results.zebra : "#FFFFFF");
     return `<tr>${cells.map((c) => `<td style="border:1px solid #ddd;padding:7px;background:${bg};">${c}</td>`).join("")}</tr>`;
   }).join("");
 
@@ -2295,7 +2314,8 @@ function buildResultsHtml(results, priorityList, lang, timestamp) {
     .toolbar { position: sticky; top: 0; background: #fff; padding: 10px 0 16px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; margin-bottom: 16px; z-index: 10; }
     .toolbar button { font-size:14px; padding:10px 16px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
     .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
-    .toolbar .print-btn { background:#2F5D62; color:#fff; border-color:#2F5D62; font-weight:700; }
+    .toolbar .print-btn { color:#fff; font-weight:700; }
+    ${exportCss(EXPORT_THEMES.results)}
     @media print { .toolbar { display: none !important; } }
   </style></head>
   <body>
@@ -2307,6 +2327,7 @@ function buildResultsHtml(results, priorityList, lang, timestamp) {
       <div><h1>${t("resultsTitle", lang)}</h1></div>
       <div class="ts">${timestamp}</div>
     </div>
+    <div class="rainbow"></div>
     <table><thead><tr>${headCells}</tr></thead><tbody>${rows}</tbody></table>
   </body></html>`;
 }
@@ -2347,15 +2368,15 @@ function buildDailyLogHtml(entries, lang, timestamp) {
     t("dailyLogEndTimeLabel", lang), t("dailyLogStartYardLabel", lang), t("dailyLogEndYardLabel", lang),
     t("dailyLogDescriptionLabel", lang), t("dailyLogTotalHoursLabel", lang),
   ];
-  const headCells = headers.map((h) => `<th style="border:1px solid #ddd;padding:8px;background:#EAF1EF;">${h}</th>`).join("");
+  const headCells = headers.map((h) => `<th style="border:1px solid #ddd;padding:8px;background:${EXPORT_THEMES.dailyLog.head};color:${EXPORT_THEMES.dailyLog.headText};">${h}</th>`).join("");
   const rows = entries.map((e, idx) => {
     const wd = weekdayNames[new Date(e.date + "T00:00:00").getDay()];
-    const bg = idx % 2 ? "#FAFAF8" : "#FFFFFF";
+    const bg = idx % 2 ? EXPORT_THEMES.dailyLog.zebra : "#FFFFFF";
     const cells = [wd, e.date, e.startTime, e.endTime, e.startYard || "-", e.endYard || "-", e.description || "-", formatDuration(e.totalHours, lang)];
     return `<tr>${cells.map((c) => `<td style="border:1px solid #ddd;padding:7px;background:${bg};">${c}</td>`).join("")}</tr>`;
   }).join("");
   const totalHours = entries.reduce((sum, e) => sum + (e.totalHours || 0), 0);
-  const totalRow = `<tr><td colspan="7" style="border:1px solid #ddd;padding:8px;font-weight:800;background:#faf8f3;text-align:${dir === "rtl" ? "left" : "right"};">${t("dailyLogTotalRowLabel", lang)}</td><td style="border:1px solid #ddd;padding:8px;font-weight:800;background:#faf8f3;">${formatDuration(totalHours, lang)}</td></tr>`;
+  const totalRow = `<tr><td colspan="7" style="border:1px solid #ddd;padding:8px;font-weight:800;background:${EXPORT_THEMES.dailyLog.soft};text-align:${dir === "rtl" ? "left" : "right"};">${t("dailyLogTotalRowLabel", lang)}</td><td style="border:1px solid #ddd;padding:8px;font-weight:800;background:${EXPORT_THEMES.dailyLog.soft};">${formatDuration(totalHours, lang)}</td></tr>`;
   const body = entries.length
     ? `<table><thead><tr>${headCells}</tr></thead><tbody>${rows}${totalRow}</tbody></table>`
     : `<p>${t("dailyLogNoEntriesInRange", lang)}</p>`;
@@ -2371,7 +2392,8 @@ function buildDailyLogHtml(entries, lang, timestamp) {
     .toolbar { position: sticky; top: 0; background: #fff; padding: 10px 0 16px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; margin-bottom: 16px; z-index: 10; }
     .toolbar button { font-size:14px; padding:10px 16px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
     .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
-    .toolbar .print-btn { background:#2F5D62; color:#fff; border-color:#2F5D62; font-weight:700; }
+    .toolbar .print-btn { color:#fff; font-weight:700; }
+    ${exportCss(EXPORT_THEMES.dailyLog)}
     @media print { .toolbar { display: none !important; } }
   </style></head>
   <body>
@@ -2383,6 +2405,7 @@ function buildDailyLogHtml(entries, lang, timestamp) {
       <div><h1>${t("dailyLogReportTitle", lang)}</h1></div>
       <div class="ts">${timestamp}</div>
     </div>
+    <div class="rainbow"></div>
     ${body}
   </body></html>`;
 }
@@ -2473,11 +2496,11 @@ function compareToExcel(matched, lang) {
     ws[ref].s = { ...(ws[ref].s || {}), ...style, alignment: { horizontal: "center", vertical: "center", ...(style.alignment || {}) } };
   };
 
-  setStyle(0, 0, { fill: { fgColor: { rgb: "2F5D62" } }, font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } } });
-  setStyle(1, 0, { fill: { fgColor: { rgb: "3E7C82" } }, font: { italic: true, sz: 10, color: { rgb: "FFFFFF" } } });
-  setStyle(headerRow1Idx, 0, { fill: { fgColor: { rgb: "EAF1EF" } }, font: { bold: true, color: { rgb: "20242B" } } });
-  weekdayNames.forEach((wd, di) => setStyle(headerRow2Idx + 1 + di, 0, { fill: { fgColor: { rgb: "FAF8F3" } }, font: { bold: true, color: { rgb: "20242B" } } }));
-  setStyle(totalsRowIdx, 0, { fill: { fgColor: { rgb: "EAF1EF" } }, font: { bold: true, color: { rgb: "20242B" } } });
+  setStyle(0, 0, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.compare.main) } }, font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } } });
+  setStyle(1, 0, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.compare.sub) } }, font: { italic: true, sz: 10, color: { rgb: "FFFFFF" } } });
+  setStyle(headerRow1Idx, 0, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.compare.head) } }, font: { bold: true, color: { rgb: hexNoHash(EXPORT_THEMES.compare.headText) } } });
+  weekdayNames.forEach((wd, di) => setStyle(headerRow2Idx + 1 + di, 0, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.compare.soft) } }, font: { bold: true, color: { rgb: "20242B" } } }));
+  setStyle(totalsRowIdx, 0, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.compare.head) } }, font: { bold: true, color: { rgb: hexNoHash(EXPORT_THEMES.compare.headText) } } });
 
   matched.forEach((m, i) => {
     const pal = PERSON_PALETTE[i % 5];
@@ -2921,9 +2944,9 @@ export default function ShiftPriorityRanker() {
       if (!ws[ref]) ws[ref] = { t: "s", v: "" };
       ws[ref].s = { ...(ws[ref].s || {}), ...style };
     };
-    setStyle(0, 0, { fill: { fgColor: { rgb: "2F5D62" } }, font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } } });
-    setStyle(1, 0, { fill: { fgColor: { rgb: "3E7C82" } }, font: { italic: true, sz: 10, color: { rgb: "FFFFFF" } } });
-    headers.forEach((_, c) => setStyle(2, c, { fill: { fgColor: { rgb: "EAF1EF" } }, font: { bold: true, color: { rgb: "20242B" } } }));
+    setStyle(0, 0, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.results.main) } }, font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } } });
+    setStyle(1, 0, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.results.sub) } }, font: { italic: true, sz: 10, color: { rgb: "FFFFFF" } } });
+    headers.forEach((_, c) => setStyle(2, c, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.results.head) } }, font: { bold: true, color: { rgb: hexNoHash(EXPORT_THEMES.results.headText) } } }));
 
     const medalFill = { 0: "FBF1DA", 1: "F2F2F2", 2: "F6E9DC" };
     dataRows.forEach((_, i) => {
