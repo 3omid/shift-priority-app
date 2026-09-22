@@ -393,6 +393,12 @@ function scorePercent(ds) {
   return Math.floor(Number(ds) * 100 + 1e-9);
 }
 
+// UI-only colour for the overall priority %: >=75 gold, 40-74 green, <40 grey.
+// The actual shades come from CSS vars set per light/dark mode (see rootVars).
+function scoreColor(pct) {
+  return pct >= 75 ? "var(--score-high)" : pct >= 40 ? "var(--score-mid)" : "var(--score-low)";
+}
+
 // ---------- i18n ----------
 
 const REGION_LABELS = {
@@ -670,10 +676,10 @@ const THEME_PALETTES = {
     dark: { bg: "#1E1E1E", card: "#2C2C2E", border: "#3A3A3C", text: "#F5F5F7", muted: "#98989D", accent: "#0A84FF", accent2: "#D8A94A", radius: "14px" },
   },
   universal: {
-    // Indigo/violet to match the hub tiles, hero banner and app icon
-    // (was a muted teal on cream from the original design).
-    light: { bg: "#F3F2FA", card: "#FFFFFF", border: "#E2E0F0", text: "#1D1B33", muted: "#6C6A86", accent: "#4C3FD9", accent2: "#E08A1E", radius: "10px" },
-    dark: { bg: "#121120", card: "#1C1B2E", border: "#2D2B45", text: "#EEEDF8", muted: "#A3A0BF", accent: "#8E82FF", accent2: "#F6B93B", radius: "10px" },
+    // Neutral surfaces + a vivid emerald accent; each section (hero/priority
+    // flow, My Shift, hub tiles) carries its own hue so the app isn't one colour.
+    light: { bg: "#F5F6F8", card: "#FFFFFF", border: "#E4E7EC", text: "#1B2230", muted: "#667085", accent: "#0B7D61", accent2: "#F59F00", radius: "10px" },
+    dark: { bg: "#111418", card: "#1A1F26", border: "#2A313B", text: "#ECEFF3", muted: "#9AA4B2", accent: "#34D3A0", accent2: "#FBBF24", radius: "10px" },
   },
 };
 
@@ -1026,7 +1032,7 @@ function MyScheduleModal({ crew, name, lang, themeMode, onClose, onBack }) {
   // orange instead, same treatment (border + glow + badge), different hue.
   const todayTheme = themeMode === "dark" ? { accent: "#CCFF00", ring: "rgba(204,255,0,0.22)", glow: "rgba(204,255,0,0.6)", badgeGlow: "rgba(204,255,0,0.7)", badgeText: "#111" } : { accent: "#FF6A00", ring: "rgba(255,106,0,0.22)", glow: "rgba(255,106,0,0.5)", badgeGlow: "rgba(255,106,0,0.55)", badgeText: "#fff" };
   return (
-        <Modal title={`${t("myScheduleTitle", lang)} — ${t("crewWord", lang)} ${String(crew.crew)}${name ? " · " + name : ""}`} onClose={onClose} onBack={onBack} headerGradient="linear-gradient(135deg, #4C3FD9, #6D5CE0)" accent="#4C3FD9">
+        <Modal title={`${t("myScheduleTitle", lang)} — ${t("crewWord", lang)} ${String(crew.crew)}${name ? " · " + name : ""}`} onClose={onClose} onBack={onBack} headerGradient="linear-gradient(135deg, #0B8F87, #19B97A)" accent="#0B8F87">
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {weekdayNames.map((wd, i) => {
           const d = dayCell(i);
@@ -2649,7 +2655,7 @@ function TopCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
           {t("crewWord", lang)} {String(r.crew)}
           {isMine && <span style={styles.mineBadge}><Star size={10} /> {t("myShiftBadge", lang)}</span>}
         </div>
-        <div style={{ ...styles.scoreBadge, color: fpColor(scorePercent(ds)) }}>{scorePercent(ds)}%</div>
+        <div style={{ ...styles.scoreBadge, color: scoreColor(scorePercent(ds)) }}>{scorePercent(ds)}%</div>
       </div>
       <div style={styles.heroMeta}>{r.type} · {r.shiftRaw} · {r.workedCount} {t("days", lang)} · {r.totalHours} {t("hours", lang)}</div>
       <FingerprintList fingerprint={r.fingerprint} lang={lang} />
@@ -2673,7 +2679,7 @@ function ResultCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
           <span style={styles.resultCrew}>{t("crewWord", lang)} {String(r.crew)}</span>
           {isMine && <span style={styles.mineBadge}><Star size={10} /> {t("myShiftBadge", lang)}</span>}
         </div>
-        <span style={{ ...styles.scoreBadgeSm, color: fpColor(scorePercent(ds)) }}>{scorePercent(ds)}%</span>
+        <span style={{ ...styles.scoreBadgeSm, color: scoreColor(scorePercent(ds)) }}>{scorePercent(ds)}%</span>
       </div>
       <div style={styles.resultMeta}>{r.type} · {r.shiftRaw} · {r.workedCount} {t("days", lang)} · {r.totalHours} {t("hours", lang)}</div>
       <FingerprintStrip fingerprint={r.fingerprint} />
@@ -2938,6 +2944,9 @@ export default function ShiftPriorityRanker() {
   const rootVars = {
     "--bg": palette.bg, "--card": palette.card, "--border": palette.border, "--text": palette.text,
     "--muted": palette.muted, "--accent": palette.accent, "--accent2": palette.accent2, "--radius": palette.radius,
+    ...(themeMode === "dark"
+      ? { "--score-high": "#FACC15", "--score-mid": "#4ADE80", "--score-low": "#7D8796" }
+      : { "--score-high": "#A16207", "--score-mid": "#15803D", "--score-low": "#7B8494" }),
   };
 
   return (
@@ -3122,7 +3131,7 @@ export default function ShiftPriorityRanker() {
                   : !myCrew ? t("crewNumberNotInFile", lang)
                   : null;
                 return (
-                  <button onClick={onClick} style={{ direction: dir, marginTop: 12, flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 104, padding: "8px 8px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", color: "#fff", background: "linear-gradient(135deg, #4C3FD9, #0EA37E)", boxShadow: "0 6px 14px rgba(76,63,217,0.28)", fontFamily: "inherit" }}>
+                  <button onClick={onClick} style={{ direction: dir, marginTop: 12, flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 104, padding: "8px 8px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", color: "#fff", background: "linear-gradient(135deg, #0B8F87, #19B97A)", boxShadow: "0 6px 14px rgba(11,143,135,0.28)", fontFamily: "inherit" }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 4, fontWeight: 800, fontSize: 13.5, whiteSpace: "nowrap" }}><Star size={13} color="#fff" /> {t("myShiftHomeTitle", lang)}</span>
                     {myCrew && <span style={{ fontSize: 11.5, opacity: 0.9 }}>{t("crewWord", lang)} {String(myCrew.crew)}</span>}
                     {myCrew && (today ? (
@@ -3199,7 +3208,7 @@ export default function ShiftPriorityRanker() {
         )}
 
         {showPriorityFlow && (
-        <div style={{ "--accent": "#4C3FD9" }}>
+        <div style={{ "--accent": "#D12F48" }}>
         {profile?.crewNumber && parsed && (() => {
           const myCrew = parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber));
           return (
@@ -3512,7 +3521,7 @@ const styles = {
   menuBtn: { display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", cursor: "pointer", color: "var(--text)" },
   menuDropdown: { position: "absolute", top: 36, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 6px 20px rgba(0,0,0,0.12)", padding: 6, display: "flex", flexDirection: "column", gap: 2, width: "max-content", minWidth: 220, maxWidth: "min(280px, calc(100vw - 24px))", zIndex: 200 },
   menuItem: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "8px 10px", borderRadius: 7, border: "none", background: "transparent", color: "var(--text)", cursor: "pointer", textAlign: "start", whiteSpace: "nowrap" },
-  heroTile: { display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "start", border: "none", borderRadius: "var(--radius)", padding: 16, marginBottom: 18, background: "linear-gradient(135deg, #4C3FD9, #6D5CE0)", cursor: "pointer", boxShadow: "0 6px 16px rgba(0,0,0,0.18)" },
+  heroTile: { display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "start", border: "none", borderRadius: "var(--radius)", padding: 16, marginBottom: 18, background: "linear-gradient(135deg, #E8435A, #F7934C)", cursor: "pointer", boxShadow: "0 6px 16px rgba(232,67,90,0.25)" },
   heroTileIcon: { width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   heroTileTitle: { fontSize: 15, fontWeight: 800, color: "#fff" },
   heroTileSubtitle: { fontSize: 11.5, color: "rgba(255,255,255,0.85)", marginTop: 2 },
