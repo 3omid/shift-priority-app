@@ -524,6 +524,10 @@ const STRINGS = {
   swapBefore: { fa: "قبل:", en: "before:", hi: "पहले:" },
   swapAfter: { fa: "بعد:", en: "after:", hi: "बाद:" },
   swapViewSchedule: { fa: "برنامهٔ هفتگی", en: "Weekly schedule", hi: "साप्ताहिक शेड्यूल" },
+  swapMatch: { fa: "تطابق با برنامهٔ تو", en: "match with your schedule", hi: "आपके शेड्यूल से मेल" },
+  myShiftHomeTitle: { fa: "شیفت من", en: "My Shift", hi: "मेरी शिफ्ट" },
+  myShiftHomeNoCrew: { fa: "شمارهٔ گروهت رو توی پروفایل وارد کن", en: "Add your crew # in Profile", hi: "प्रोफ़ाइल में क्रू # जोड़ें" },
+  myShiftHomeNoFile: { fa: "اول فایل برنامه رو بارگذاری کن", en: "Load the schedule file first", hi: "पहले शेड्यूल फ़ाइल लोड करें" },
   swapShowMore: { fa: "نمایش بیشتر", en: "Show more", hi: "और दिखाएं" },
   crewLookupSearch: { fa: "جستجوی شماره یا اسم...", en: "Search number or name…", hi: "नंबर या नाम खोजें…" },
 
@@ -1649,6 +1653,43 @@ function usualStart(crew) {
   return starts[Math.floor(starts.length / 2)];
 }
 
+// Longest run of consecutive working days in a weekly pattern (wraps the week).
+function maxConsecutiveDays(dayIdxs) {
+  const set = new Set(dayIdxs);
+  if (set.size === 7) return 7;
+  let best = 0;
+  for (let start = 0; start < 7; start++) {
+    if (set.has((start + 6) % 7) || !set.has(start)) continue;
+    let n = 0;
+    while (set.has((start + n) % 7) && n < 7) n++;
+    best = Math.max(best, n);
+  }
+  return best;
+}
+
+// How well one trade day fits MY schedule (0-100): the shift I'd take on my
+// rest day vs the hours I'm giving up, same region, enough rest around it,
+// and not stretching my week into a long run of days without a break.
+function tradeMatchScore(o, { span, targetRegion, myCrew, weekday }) {
+  const s = shiftSpan(timeToMinutes(o.start), timeToMinutes(o.end));
+  let score = 0;
+  if (s) {
+    const circ = (a, b) => Math.min(Math.abs(a - b), 1440 - Math.abs(a - b));
+    const diffH = (circ(s[0], span[0]) + circ(s[1] % 1440, span[1] % 1440)) / 2 / 60;
+    score += Math.max(0, 50 - diffH * 8); // start/end times (max 50)
+    const lenDiffH = Math.abs((s[1] - s[0]) - (span[1] - span[0])) / 60;
+    score += Math.max(0, 10 - lenDiffH * 3); // similar shift length (max 10)
+  }
+  if (!targetRegion || o.regionKey === targetRegion) score += 10; // same region (max 10)
+  if (o.myRest.ok) score += 20; // >= 8h rest for me around it (max 20)
+  if (myCrew) {
+    const newDays = myCrew.days.map((d) => d.dayIdx).filter((d) => d !== weekday).concat(o.dayIdx);
+    const streak = maxConsecutiveDays(newDays);
+    score += streak <= 5 ? 10 : Math.max(0, 10 - (streak - 5) * 5); // keeps a break in my week (max 10)
+  }
+  return Math.round(Math.min(100, score));
+}
+
 function findLeaveReplacements(crews, { weekday, startMin, endMin, myCrew, targetRegion }) {
   const span = shiftSpan(startMin, endMin);
   if (!span) return [];
@@ -1671,7 +1712,9 @@ function findLeaveReplacements(crews, { weekday, startMin, endMin, myCrew, targe
         const dist = (d.dayIdx - weekday + 7) % 7;
         return { ...d, myRest, dist };
       })
-      .sort((a, b) => (b.myRest.ok - a.myRest.ok) || (a.dist - b.dist));
+      .map((o) => ({ ...o, match: tradeMatchScore(o, { span, targetRegion, myCrew, weekday }) }))
+      // Best fit with my own schedule first; ties -> the sooner "pay back" day.
+      .sort((a, b) => (b.match - a.match) || (b.myRest.ok - a.myRest.ok) || (a.dist - b.dist));
 
     const us = usualStart(c);
     const diffH = us === null ? 6 : Math.min(Math.abs(us - startMin), 1440 - Math.abs(us - startMin)) / 60;
@@ -1789,9 +1832,16 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose 
                   <span style={{ color: "#0EA37E", fontWeight: 700 }}>✓ {t("swapOffThatDay", lang)} {weekdayNames[weekday]}</span>
                   {r.usualStart !== null && <span style={{ color: "var(--muted)" }}>{t("swapUsualStart", lang)} {minutesToHHMM(r.usualStart)} · {r.crew.type} {r.crew.shiftRaw}</span>}
                   {r.canSwap ? (
-                    <span style={{ fontWeight: 700 }}>
-                      ⇄ {t("swapTradeFor", lang)} {r.swapOptions.map((o, k) => (
-                        <span key={o.dayIdx}>{k > 0 ? (DAY_LIST_SEP[lang] || ", ") : ""}{weekdayNames[o.dayIdx]} <bdi dir="ltr">{formatExcelTime(o.start)}–{formatExcelTime(o.end)}</bdi>{o.myRest.ok ? "" : " ⚠"}</span>
+                    <span style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                      <span style={{ fontWeight: 700 }}>⇄ {t("swapTradeFor", lang)}:</span>
+                      {r.swapOptions.map((o, k) => (
+                        <span key={o.dayIdx} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", background: k === 0 ? "rgba(14,163,126,0.10)" : "var(--bg)", border: `1px solid ${k === 0 ? "#0EA37E" : "var(--border)"}`, borderRadius: 7, padding: "4px 8px" }}>
+                          <b style={{ color: k === 0 ? "#0EA37E" : "var(--muted)" }}>{k + 1}</b>
+                          <b>{weekdayNames[o.dayIdx]}</b>
+                          <bdi dir="ltr">{formatExcelTime(o.start)}–{formatExcelTime(o.end)}</bdi>
+                          {o.myRest.ok ? null : <span style={{ color: "#B3432A" }}>⚠</span>}
+                          <span style={{ marginInlineStart: "auto", fontSize: 11, color: "var(--muted)" }}>{t("swapMatch", lang)} {o.match}%</span>
+                        </span>
                       ))}
                     </span>
                   ) : (
@@ -3039,7 +3089,41 @@ export default function ShiftPriorityRanker() {
           {profile?.firstName && (
             <p style={styles.welcomeLine}>{t("welcomeBack", lang)} <b>{profile.firstName}</b></p>
           )}
-          <DateTimeWidget lang={lang} />
+          {showPriorityFlow ? (
+            <DateTimeWidget lang={lang} />
+          ) : (
+            // Home only: "My Shift" block physically LEFT of the clock in every
+            // language (the row is forced LTR; each block keeps the page direction).
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "stretch", gap: 8, flexWrap: "nowrap", direction: "ltr" }}>
+              {(() => {
+                const myCrew = parsed && profile?.crewNumber ? parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber)) : null;
+                const today = myCrew ? myCrew.days.find((d) => d.dayIdx === new Date().getDay()) : null;
+                const onClick = () => {
+                  if (!profile?.crewNumber) setActivePanel("profile");
+                  else if (!parsed) setShowPriorityFlow(true);
+                  else if (myCrew) setShowMySchedule(true);
+                  else setActivePanel("profile");
+                };
+                const sub = !profile?.crewNumber ? t("myShiftHomeNoCrew", lang)
+                  : !parsed ? t("myShiftHomeNoFile", lang)
+                  : !myCrew ? t("crewNumberNotInFile", lang)
+                  : null;
+                return (
+                  <button onClick={onClick} style={{ direction: dir, marginTop: 12, flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 104, padding: "8px 8px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", color: "#fff", background: "linear-gradient(135deg, #4C3FD9, #0EA37E)", boxShadow: "0 6px 14px rgba(76,63,217,0.28)", fontFamily: "inherit" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontWeight: 800, fontSize: 13.5, whiteSpace: "nowrap" }}><Star size={13} color="#fff" /> {t("myShiftHomeTitle", lang)}</span>
+                    {myCrew && <span style={{ fontSize: 11.5, opacity: 0.9 }}>{t("crewWord", lang)} {String(myCrew.crew)}</span>}
+                    {myCrew && (today ? (
+                      <><span style={{ fontSize: 11, opacity: 0.9 }}>{t("todayLabel", lang)}</span><bdi dir="ltr" style={{ fontSize: 12.5, fontWeight: 800, whiteSpace: "nowrap" }}>{formatExcelTime(today.start)}–{formatExcelTime(today.end)}</bdi></>
+                    ) : (
+                      <span style={{ fontSize: 12.5, fontWeight: 700, textAlign: "center" }}>{t("todayLabel", lang)}: {t("off", lang)}</span>
+                    ))}
+                    {sub && <span style={{ fontSize: 10.5, opacity: 0.9, lineHeight: 1.35, textAlign: "center" }}>{sub}</span>}
+                  </button>
+                );
+              })()}
+              <div style={{ direction: dir, display: "flex", flex: "0 1 auto", minWidth: 0 }}><DateTimeWidget lang={lang} /></div>
+            </div>
+          )}
         </header>
 
         {!showPriorityFlow && (
