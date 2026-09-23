@@ -733,7 +733,7 @@ function FingerprintList({ fingerprint, lang }) {
           <span style={styles.fpRank}>{i + 1}</span>
           <span style={styles.fpLabel}>{f.label[lang]}</span>
           <div style={styles.fpBarBg}>
-            <div style={{ ...styles.fpBarFill, width: `${f.score}%`, background: fpColor(f.score) }} />
+            <div className="sp-bar" style={{ ...styles.fpBarFill, width: `${f.score}%`, background: fpColor(f.score) }} />
           </div>
           <span style={styles.fpPct}>{f.score}%</span>
         </div>
@@ -844,8 +844,8 @@ function Modal({ title, onClose, onBack, children, headerGradient, accent }) {
   const closeBtnStyle = headerGradient ? { ...styles.modalCloseBtn, color: "#fff", background: "rgba(255,255,255,0.18)", borderRadius: 8, width: 28, height: 28, alignItems: "center", justifyContent: "center" } : styles.modalCloseBtn;
   const boxVars = accent ? { "--accent": accent } : {};
   return (
-    <div className="no-print" style={styles.modalOverlay} onClick={onClose}>
-      <div style={{ ...styles.modalBox, ...boxVars }} onClick={(e) => e.stopPropagation()}>
+    <div className="no-print sp-overlay" style={styles.modalOverlay} onClick={onClose}>
+      <div className="sp-modal" style={{ ...styles.modalBox, ...boxVars }} onClick={(e) => e.stopPropagation()}>
         <div style={headerStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             {onBack && (
@@ -1849,7 +1849,7 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose 
             const name = resolveCrewName(r.crew.crew, crews, crewNames);
             const best = r.swapOptions[0];
             return (
-              <div key={r.crew.crew} style={{ border: "1px solid var(--border)", borderInlineStart: `4px solid ${r.canSwap ? "#0EA37E" : "#C9A227"}`, borderRadius: 10, padding: "9px 11px", background: "var(--card)" }}>
+              <div key={r.crew.crew} className="sp-card" style={{ animationDelay: `${i * 60}ms`, border: "1px solid var(--border)", borderInlineStart: `4px solid ${r.canSwap ? "#0EA37E" : "#C9A227"}`, borderRadius: 10, padding: "9px 11px", background: "var(--card)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontWeight: 900, fontSize: 15, color: "var(--accent)" }}>{i + 1}</span>
                   <span style={{ fontWeight: 800, fontSize: 13.5 }}>{t("crewWord", lang)} {String(r.crew.crew)}{name ? ` · ${name}` : ""}</span>
@@ -2681,7 +2681,7 @@ function TopCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
   const ds = displayScore(r.fingerprint);
   const isMine = profile?.crewNumber && String(r.crew) === String(profile.crewNumber);
   return (
-    <div style={{ ...styles.topCard, borderColor: isMine ? "var(--accent)" : medal ? medal.border : "var(--border)", ...(isMine ? { borderWidth: 2 } : {}) }}>
+    <div className="sp-card" style={{ animationDelay: `${Math.min(rank, 12) * 55}ms`, ...styles.topCard, borderColor: isMine ? "var(--accent)" : medal ? medal.border : "var(--border)", ...(isMine ? { borderWidth: 2 } : {}) }}>
       <div style={{ ...styles.topBadge, background: medal ? medal.color : "var(--accent)" }}>
         {Icon ? <Icon size={13} /> : rank}
         {Icon && <span>#{rank}</span>}
@@ -2708,7 +2708,7 @@ function ResultCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
   const ds = displayScore(r.fingerprint);
   const isMine = profile?.crewNumber && String(r.crew) === String(profile.crewNumber);
   return (
-    <div style={{ ...styles.resultCard, ...(isMine ? { borderColor: "var(--accent)", borderWidth: 2 } : {}) }}>
+    <div className="sp-card" style={{ animationDelay: `${Math.min(rank, 12) * 45}ms`, ...styles.resultCard, ...(isMine ? { borderColor: "var(--accent)", borderWidth: 2 } : {}) }}>
       <div style={styles.resultCardTop}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={styles.rankBadge}>{rank}</span>
@@ -3003,6 +3003,32 @@ export default function ShiftPriorityRanker() {
           animation: spp-spin 0.85s linear infinite;
         }
         @keyframes spp-spin { to { transform: rotate(360deg); } }
+
+        /* ---- light UI motion: transform/opacity only, runs once on mount ---- */
+        @keyframes sp-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        @keyframes sp-pop { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
+        @keyframes sp-fade { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes sp-shine { 0%, 72% { transform: translateX(-160%) skewX(-20deg); } 100% { transform: translateX(420%) skewX(-20deg); } }
+        @keyframes sp-glow { 0%, 100% { box-shadow: 0 6px 14px rgba(11,143,135,0.28); } 50% { box-shadow: 0 6px 22px rgba(25,185,122,0.55); } }
+        @keyframes sp-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+        @keyframes sp-bob { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.45); } }
+        .sp-hero, .sp-tile, .sp-myshift { animation: sp-fade-up 0.45s ease backwards; transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease; }
+        .sp-hero:hover, .sp-tile:hover { transform: translateY(-3px); filter: brightness(1.05); box-shadow: 0 10px 22px rgba(0,0,0,0.18) !important; }
+        .sp-hero:active, .sp-tile:active, .sp-myshift:active { transform: scale(0.97); }
+        .sp-hero { position: relative; overflow: hidden; }
+        .sp-hero::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 30%; pointer-events: none;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.28), transparent); animation: sp-shine 7s ease-in-out 1.5s infinite; }
+        .sp-myshift { animation: sp-fade-up 0.45s ease backwards, sp-glow 3.2s ease-in-out 1s infinite; }
+        .sp-myshift:hover { transform: translateY(-2px); }
+        .sp-overlay { animation: sp-fade 0.18s ease backwards; }
+        .sp-modal { animation: sp-pop 0.24s cubic-bezier(0.2, 0.9, 0.3, 1.15) backwards; }
+        .sp-card { animation: sp-fade-up 0.4s ease backwards; }
+        .sp-bar { transform-origin: left center; animation: sp-grow 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s backwards; }
+        [dir="rtl"] .sp-bar { transform-origin: right center; }
+        .sp-dot { animation: sp-bob 2.4s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .sp-hero, .sp-tile, .sp-myshift, .sp-overlay, .sp-modal, .sp-card, .sp-bar, .sp-dot, .sp-hero::after { animation: none !important; transition: none !important; }
+        }
       `}</style>
 
       {(booting || computing) && (
@@ -3140,7 +3166,7 @@ export default function ShiftPriorityRanker() {
         <header className="no-print" style={styles.header}>
           <img src="./logo.png" alt="" style={styles.headerLogo} />
           <div style={styles.routeDots}>
-            <span style={styles.dot} /><span style={styles.routeLine} /><span style={styles.dot} /><span style={styles.routeLine} /><span style={{ ...styles.dot, background: "var(--accent2)" }} />
+            <span className="sp-dot" style={styles.dot} /><span style={styles.routeLine} /><span className="sp-dot" style={{ ...styles.dot, animationDelay: ".35s" }} /><span style={styles.routeLine} /><span className="sp-dot" style={{ ...styles.dot, background: "var(--accent2)", animationDelay: ".7s" }} />
           </div>
           <h1 style={styles.title}>{t("title", lang)}</h1>
           <p style={styles.subtitle}>{t("subtitle", lang)}</p>
@@ -3167,7 +3193,7 @@ export default function ShiftPriorityRanker() {
                   : !myCrew ? t("crewNumberNotInFile", lang)
                   : null;
                 return (
-                  <button onClick={onClick} style={{ direction: dir, marginTop: 12, flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 104, padding: "8px 8px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", color: "#fff", background: "linear-gradient(135deg, #0B8F87, #19B97A)", boxShadow: "0 6px 14px rgba(11,143,135,0.28)", fontFamily: "inherit" }}>
+                  <button className="sp-myshift" onClick={onClick} style={{ direction: dir, marginTop: 12, flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 104, padding: "8px 8px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", color: "#fff", background: "linear-gradient(135deg, #0B8F87, #19B97A)", boxShadow: "0 6px 14px rgba(11,143,135,0.28)", fontFamily: "inherit" }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 4, fontWeight: 800, fontSize: 13.5, whiteSpace: "nowrap" }}><Star size={13} color="#fff" /> {t("myShiftHomeTitle", lang)}</span>
                     {myCrew && <span style={{ fontSize: 11.5, opacity: 0.9 }}>{t("crewWord", lang)} {String(myCrew.crew)}</span>}
                     {myCrew && (today ? (
@@ -3186,7 +3212,7 @@ export default function ShiftPriorityRanker() {
 
         {!showPriorityFlow && (
           <div className="no-print">
-            <button onClick={() => setShowPriorityFlow(true)} style={styles.heroTile}>
+            <button className="sp-hero" onClick={() => setShowPriorityFlow(true)} style={styles.heroTile}>
               <span style={styles.heroTileIcon}><Star size={22} color="#fff" /></span>
               <span style={{ flex: 1 }}>
                 <div style={styles.heroTileTitle}>{t("title", lang)}</div>
@@ -3197,15 +3223,15 @@ export default function ShiftPriorityRanker() {
 
             <div style={styles.hubGroupLabel}>{t("hubGroupCrews", lang)}</div>
             <div style={styles.hubGrid}>
-              <button onClick={() => setActivePanel("compare2")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #6D5CE0, #9C8CFB)" }}>
+              <button className="sp-tile" onClick={() => setActivePanel("compare2")} style={{ animationDelay: "80ms", ...styles.hubTile, background: "linear-gradient(135deg, #6D5CE0, #9C8CFB)" }}>
                 <GitCompare size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("compare2Title", lang)}</span>
               </button>
-              <button onClick={() => setActivePanel("crewLookup")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #0EA37E, #3DDC97)" }}>
+              <button className="sp-tile" onClick={() => setActivePanel("crewLookup")} style={{ animationDelay: "135ms", ...styles.hubTile, background: "linear-gradient(135deg, #0EA37E, #3DDC97)" }}>
                 <Search size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("crewLookupTitle", lang)}</span>
               </button>
-              <button onClick={() => setActivePanel("swapFinder")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #D9480F, #F59F00)" }}>
+              <button className="sp-tile" onClick={() => setActivePanel("swapFinder")} style={{ animationDelay: "190ms", ...styles.hubTile, background: "linear-gradient(135deg, #D9480F, #F59F00)" }}>
                 <CalendarOff size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("hubSwapFinder", lang)}</span>
               </button>
@@ -3213,17 +3239,17 @@ export default function ShiftPriorityRanker() {
 
             <div style={styles.hubGroupLabel}>{t("hubGroupMe", lang)}</div>
             <div style={styles.hubGrid}>
-              <button onClick={() => setActivePanel("profile")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #E0447F, #F17CA6)" }}>
+              <button className="sp-tile" onClick={() => setActivePanel("profile")} style={{ animationDelay: "245ms", ...styles.hubTile, background: "linear-gradient(135deg, #E0447F, #F17CA6)" }}>
                 <User size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("profileTitle", lang)}</span>
               </button>
               {dailyLogVisible && (
-                <button onClick={() => setActivePanel("dailyLog")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #2463EB, #4F8CFB)" }}>
+                <button className="sp-tile" onClick={() => setActivePanel("dailyLog")} style={{ animationDelay: "300ms", ...styles.hubTile, background: "linear-gradient(135deg, #2463EB, #4F8CFB)" }}>
                   <ClipboardList size={18} color="#fff" />
                   <span style={styles.hubTileLabel}>{t("dailyLogMenuLabel", lang)}</span>
                 </button>
               )}
-              <button onClick={() => setActivePanel("settings")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #E08A1E, #F6B93B)" }}>
+              <button className="sp-tile" onClick={() => setActivePanel("settings")} style={{ animationDelay: "355ms", ...styles.hubTile, background: "linear-gradient(135deg, #E08A1E, #F6B93B)" }}>
                 <Sun size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("settingsTitle", lang)}</span>
               </button>
