@@ -945,7 +945,7 @@ function computeLogHours(startTime, endTime) {
 // (a plain select beats free text: no typos, easy to scan on the printed
 // report). A legacy/free-typed value that isn't one of these three is
 // still kept as an extra option so older entries never lose their data.
-const DAILY_LOG_YARDS = ["Newmarket", "Richmond Hill", "Caldari"];
+const DAILY_LOG_YARDS = ["Newmarket", "Richmond Hill", "Caldari", "Stouffville", "Maple"];
 
 // Gregorian month names for the Daily Log's month-group headers. Entries
 // are stored and shown with Gregorian dates (matching the <input type="date">
@@ -1075,8 +1075,8 @@ function DailyLogPanel({ lang, onClose }) {
   const [date, setDate] = useState(todayStr());
   const [startTime, setStartTime] = useState(lastEntry?.startTime || "");
   const [endTime, setEndTime] = useState(lastEntry?.endTime || "");
-  const [startYard, setStartYard] = useState(lastEntry?.startYard || "");
-  const [endYard, setEndYard] = useState(lastEntry?.endYard || "");
+  const [startYard, setStartYard] = useState(DAILY_LOG_YARDS.includes(lastEntry?.startYard) ? lastEntry.startYard : "");
+  const [endYard, setEndYard] = useState(DAILY_LOG_YARDS.includes(lastEntry?.endYard) ? lastEntry.endYard : "");
   const [description, setDescription] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -1156,8 +1156,8 @@ function DailyLogPanel({ lang, onClose }) {
     setDate(entry.date);
     setStartTime(entry.startTime);
     setEndTime(entry.endTime);
-    setStartYard(entry.startYard);
-    setEndYard(entry.endYard);
+    setStartYard(DAILY_LOG_YARDS.includes(entry.startYard) ? entry.startYard : "");
+    setEndYard(DAILY_LOG_YARDS.includes(entry.endYard) ? entry.endYard : "");
     setDescription(entry.description);
   };
 
@@ -1275,7 +1275,6 @@ function DailyLogPanel({ lang, onClose }) {
           <select value={startYard} onChange={(e) => setStartYard(e.target.value)} style={styles.numInputWide}>
             <option value="">{t("dailyLogSelectYardPlaceholder", lang)}</option>
             {DAILY_LOG_YARDS.map((y) => <option key={y} value={y}>{y}</option>)}
-            {startYard && !DAILY_LOG_YARDS.includes(startYard) && <option value={startYard}>{startYard}</option>}
           </select>
         </div>
         <div style={{ flex: 1 }}>
@@ -1283,7 +1282,6 @@ function DailyLogPanel({ lang, onClose }) {
           <select value={endYard} onChange={(e) => setEndYard(e.target.value)} style={styles.numInputWide}>
             <option value="">{t("dailyLogSelectYardPlaceholder", lang)}</option>
             {DAILY_LOG_YARDS.map((y) => <option key={y} value={y}>{y}</option>)}
-            {endYard && !DAILY_LOG_YARDS.includes(endYard) && <option value={endYard}>{endYard}</option>}
           </select>
         </div>
       </div>
@@ -1476,16 +1474,31 @@ function DailyLogPanel({ lang, onClose }) {
 
 const HELP_CONTENT = {
   fa: [
-    ["فایل اکسل رو آپلود کن", "شیت مربوطه رو انتخاب کن (اگه چند شیت داشت). برنامه خودش ستون‌های گروه، نوع، شیفت، روزها و ساعت رو پیدا می‌کنه."],
-    ["اولویت‌هاتو بچین", "از فهرست معیارها (شیفت، روز کاری، منطقه، آماده‌باش) به ترتیب اهمیت کلیک کن. رتبه‌بندی دقیقاً طبق همین ترتیبه: اول معیار ۱، تساوی رو معیار ۲ می‌شکنه، و همین‌طور."],
-    ["نتیجه رو ببین", "پنج گزینه برتر با مدال طلا/نقره/برنز نشون داده می‌شن. عدد سمت چپ هر کارت، درصد تطابق کلی اون گروه با اولویت‌های توئه."],
-    ["مقایسه و خروجی", "چند گروه رو برای مقایسه انتخاب کن، یا از منو، دو گروه رو برای مقایسه کامل هفتگی انتخاب کن. گزارش رو می‌تونی پرینت/PDF یا اکسل بگیری."],
+    ["صفحهٔ اصلی و «شیفت من»", "بلاک «شیفت من» کنار ساعت، شیفت امروزت رو نشون می‌ده و با کلیک روش برنامهٔ هفتگیت باز می‌شه. برای اینکه کار کنه، اول توی «پروفایل من» اسم و شمارهٔ گروهت رو وارد کن و فایل اکسل رو یک بار بارگذاری کن."],
+    ["اولویت‌بندی شیفت", "روی بنر «اولویت‌بندی شیفت» بزن، فایل اکسل رو آپلود کن (اگه چند شیت داره، شیت درست رو انتخاب کن). بعد معیارها (شیفت AM/PM، تعداد روز کاری، روزهای تعطیل دلخواه، منطقه، آماده‌باش) رو به ترتیب اهمیت انتخاب کن و «محاسبه و رتبه‌بندی» رو بزن. رتبه‌بندی دقیقاً طبق همین ترتیبه: اول معیار ۱، تساوی رو معیار ۲ می‌شکنه و همین‌طور."],
+    ["خوندن نتیجه‌ها", "سه گروه اول مدال طلا/نقره/برنز دارن. عدد درصد روی هر کارت، میزان تطابق کلی اون گروه با اولویت‌هات از ۱۰۰ است: ۷۵٪ و بالاتر طلایی، ۴۰ تا ۷۴٪ سبز، زیر ۴۰٪ خاکستری. نوار هر معیار هم نشون می‌ده اون گروه چقدر با همون معیار جوره."],
+    ["مقایسه و مشاهدهٔ گروه‌ها", "«مقایسه گروه‌ها در کل هفته»: تا ۵ گروه رو روز‌به‌روز کنار هم ببین. «مشاهدهٔ گروه‌ها»: با شماره یا اسم، برنامهٔ هفتگی هر گروه رو باز کن. از نتایج هم می‌تونی چند گروه رو برای مقایسه علامت بزنی."],
+    ["جایگزین برای مرخصی", "شمارهٔ گروهت، تاریخ و ساعت شیفتی که می‌خوای مرخصی بگیری رو بده و «پیدا کن» رو بزن. فقط کسایی نشون داده می‌شن که اون روز شیفت ندارن. اونایی که روزهای استراحت تو سر کارن اول میان، با گزینه‌های جابه‌جایی (Trade) که بر اساس تطابق با برنامهٔ تو مرتب شدن. علامت ⚠ یعنی استراحت بین دو شیفت کمتر از ۸ ساعت می‌شه."],
+    ["دفترچه شیفت روزانه", "هر روز تاریخ، ساعت شروع/پایان و یارد شروع/پایان (Newmarket، Richmond Hill، Caldari، Stouffville، Maple) رو ثبت کن تا با فیش حقوقی مقایسه کنی. داده‌ها فقط روی همین دستگاه ذخیره می‌شن؛ متن پشتیبان رو کپی کن و جای امن نگه دار."],
+    ["خروجی و ظاهر", "نتایج، مقایسه و دفترچه شیفت روزانه رو می‌تونی پرینت/PDF یا اکسل بگیری. زبان (فارسی/English/हिंदी) رو از بالای صفحه و حالت روشن/تیره و سبک ظاهر رو از «ظاهر برنامه» عوض کن."],
   ],
   en: [
-    ["Upload the Excel file", "Pick the right sheet if there are several. The app auto-detects the crew, type, shift, weekday and hours columns."],
-    ["Build your priorities", "Click criteria (shift, working days, region, standby) in order of importance. Ranking follows that exact order: criterion 1 first, ties broken by criterion 2, and so on."],
-    ["Read the results", "The top five matches get gold/silver/bronze cards. The number on the left of each card is that crew's overall match score."],
-    ["Compare & export", "Select crews to compare, or use the menu to compare two crews for the full week. Export the report to print/PDF or Excel."],
+    ["Home & My Shift", "The \u201cMy Shift\u201d block next to the clock shows today's shift; tap it to open your weekly schedule. For it to work, add your name and crew # in My Profile and load the Excel file once."],
+    ["Shift Prioritizer", "Tap the Shift Prioritizer banner and upload the Excel file (pick the right sheet if there are several). Then choose criteria (AM/PM shift, working days, custom days off, region, standby) in order of importance and tap Calculate & Rank. Ranking follows that exact order: criterion 1 first, ties broken by criterion 2, and so on."],
+    ["Reading the results", "The top three get gold/silver/bronze medals. The percentage on each card is that crew's overall match with your priorities, out of 100: 75% and up is gold, 40\u201374% green, under 40% grey. Each criterion bar shows how well that crew fits that one criterion."],
+    ["Compare & browse crews", "Compare crews for the whole week: see up to 5 crews side by side, day by day. Browse crews: open any crew's weekly schedule by number or name. You can also tick crews in the results to compare them."],
+    ["Find a leave replacement", "Enter your crew #, the date and the hours of the shift you want off, then tap Find replacements. Only crews who are off that day are listed. Crews who work on YOUR rest days come first, with Trade options ranked by how well they match your schedule. A \u26a0 means someone would get less than 8h rest between shifts."],
+    ["Daily Shift Log", "Log each day's date, start/end time and start/end yard (Newmarket, Richmond Hill, Caldari, Stouffville, Maple) to check against your paystub. Data stays on this device only \u2014 copy the backup text and keep it somewhere safe."],
+    ["Export & appearance", "Results, comparisons and the daily log can be printed/saved as PDF or exported to Excel. Switch language (\u0641\u0627 / EN / \u0939\u093f) at the top, and light/dark mode and style in Appearance."],
+  ],
+  hi: [
+    ["होम और My Shift", "घड़ी के पास \u201cMy Shift\u201d ब्लॉक आज की शिफ्ट दिखाता है; साप्ताहिक शेड्यूल खोलने के लिए उस पर टैप करें। इसके लिए My Profile में नाम और क्रू # डालें और एक बार Excel फ़ाइल लोड करें।"],
+    ["शिफ्ट प्राथमिकता", "Shift Prioritizer बैनर पर टैप करें और Excel फ़ाइल अपलोड करें। फिर मानदंड (AM/PM शिफ्ट, कार्य दिवस, छुट्टी के दिन, क्षेत्र, स्टैंडबाय) महत्व के क्रम में चुनें और Calculate & Rank दबाएँ। रैंकिंग ठीक इसी क्रम से होती है।"],
+    ["परिणाम पढ़ना", "शीर्ष तीन को सोना/चाँदी/कांस्य पदक मिलते हैं। हर कार्ड पर प्रतिशत आपकी प्राथमिकताओं से कुल मेल (100 में से) है: 75% और ऊपर सुनहरा, 40\u201374% हरा, 40% से कम धूसर।"],
+    ["क्रू तुलना और ब्राउज़", "पूरे सप्ताह की तुलना: 5 तक क्रू को दिन-ब-दिन साथ देखें। क्रू ब्राउज़ करें: नंबर या नाम से किसी भी क्रू का शेड्यूल खोलें।"],
+    ["छुट्टी बदली खोजें", "अपना क्रू #, तारीख और छुट्टी वाली शिफ्ट का समय डालें और Find दबाएँ। केवल उस दिन फ्री क्रू दिखते हैं; जो आपके आराम के दिनों में काम करते हैं वे पहले आते हैं, Trade विकल्प आपके शेड्यूल से मेल के अनुसार क्रम में। \u26a0 का मतलब 8 घंटे से कम आराम।"],
+    ["दैनिक शिफ्ट लॉग", "हर दिन की तारीख, शुरू/समाप्ति समय और यार्ड (Newmarket, Richmond Hill, Caldari, Stouffville, Maple) दर्ज करें। डेटा केवल इसी डिवाइस पर रहता है \u2014 बैकअप टेक्स्ट कॉपी करके सुरक्षित रखें।"],
+    ["एक्सपोर्ट और रूप", "परिणाम, तुलना और दैनिक लॉग को प्रिंट/PDF या Excel में निकाल सकते हैं। भाषा ऊपर से, और लाइट/डार्क मोड Appearance से बदलें।"],
   ],
 };
 
