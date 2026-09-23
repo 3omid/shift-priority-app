@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import pkg from "../package.json";
 import {
@@ -725,7 +725,52 @@ function FingerprintStrip({ fingerprint }) {
   );
 }
 
-function FingerprintList({ fingerprint, lang }) {
+// ---------- Motion helpers (presentation only) ----------
+// Entrance animations must start when the element is actually VISIBLE: result
+// cards usually mount below the fold (or behind the loading splash), so a
+// plain on-mount CSS animation has already finished before the user sees it.
+// useInView flips once when the element scrolls into view; CSS keys off .sp-in.
+const PREFERS_REDUCED_MOTION = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function useInView() {
+  const ref = React.useRef(null);
+  const [inView, setInView] = useState(PREFERS_REDUCED_MOTION || typeof IntersectionObserver === "undefined");
+  useEffect(() => {
+    if (inView || !ref.current) return undefined;
+    const io = new IntersectionObserver((ents) => {
+      if (ents.some((e) => e.isIntersecting)) { setInView(true); io.disconnect(); }
+    }, { threshold: 0.15 });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, [inView]);
+  return [ref, inView];
+}
+
+function Reveal({ className = "", style, children }) {
+  const [ref, inView] = useInView();
+  return <div ref={ref} className={`${className} sp-reveal${inView ? " sp-in" : ""}`} style={style}>{children}</div>;
+}
+
+// Counts 0 -> value once `run` turns true (same timing as the bar fill).
+function CountUp({ value, run, delay = 0, duration = 900 }) {
+  const [shown, setShown] = useState(PREFERS_REDUCED_MOTION ? value : 0);
+  useEffect(() => {
+    if (PREFERS_REDUCED_MOTION) { setShown(value); return undefined; }
+    if (!run) { setShown(0); return undefined; }
+    let raf; let start;
+    const tick = (ts) => {
+      if (start === undefined) start = ts + delay;
+      const p = Math.min(1, Math.max(0, (ts - start) / duration));
+      setShown(Math.round(value * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, run, delay, duration]);
+  return <>{shown}</>;
+}
+
+function FingerprintList({ fingerprint, lang, run = true }) {
   return (
     <div style={{ marginBottom: 10 }}>
       {fingerprint.map((f, i) => (
@@ -733,9 +778,10 @@ function FingerprintList({ fingerprint, lang }) {
           <span style={styles.fpRank}>{i + 1}</span>
           <span style={styles.fpLabel}>{f.label[lang]}</span>
           <div style={styles.fpBarBg}>
-            <div className="sp-bar" style={{ ...styles.fpBarFill, width: `${f.score}%`, background: fpColor(f.score) }} />
+            {/* width animates 0% -> score% (CSS transition) once the card is in view */}
+            <div className="sp-bar" style={{ ...styles.fpBarFill, width: run ? `${f.score}%` : "0%", transitionDelay: `${250 + i * 120}ms`, background: fpColor(f.score) }} />
           </div>
-          <span style={styles.fpPct}>{f.score}%</span>
+          <span style={styles.fpPct}><CountUp value={f.score} run={run} delay={250 + i * 120} />%</span>
         </div>
       ))}
     </div>
@@ -1849,7 +1895,7 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose 
             const name = resolveCrewName(r.crew.crew, crews, crewNames);
             const best = r.swapOptions[0];
             return (
-              <div key={r.crew.crew} className="sp-card" style={{ animationDelay: `${i * 60}ms`, border: "1px solid var(--border)", borderInlineStart: `4px solid ${r.canSwap ? "#0EA37E" : "#C9A227"}`, borderRadius: 10, padding: "9px 11px", background: "var(--card)" }}>
+              <Reveal key={r.crew.crew} className="sp-card" style={{ animationDelay: `${i * 90}ms`, border: "1px solid var(--border)", borderInlineStart: `4px solid ${r.canSwap ? "#0EA37E" : "#C9A227"}`, borderRadius: 10, padding: "9px 11px", background: "var(--card)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontWeight: 900, fontSize: 15, color: "var(--accent)" }}>{i + 1}</span>
                   <span style={{ fontWeight: 800, fontSize: 13.5 }}>{t("crewWord", lang)} {String(r.crew.crew)}{name ? ` · ${name}` : ""}</span>
@@ -1886,7 +1932,7 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose 
                 <button onClick={() => onViewCrew(r.crew)} style={{ ...styles.smallActionBtn, marginTop: 7, padding: "5px 9px", fontSize: 11.5 }}>
                   <CalendarOff size={13} /> {t("swapViewSchedule", lang)}
                 </button>
-              </div>
+              </Reveal>
             );
           })}
           {results.length > 5 && !showAll && (
@@ -2680,8 +2726,10 @@ function TopCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
   const Icon = medal ? medal.icon : null;
   const ds = displayScore(r.fingerprint);
   const isMine = profile?.crewNumber && String(r.crew) === String(profile.crewNumber);
+  const [cardRef, inView] = useInView();
+  const pct = scorePercent(ds);
   return (
-    <div className="sp-card" style={{ animationDelay: `${Math.min(rank, 12) * 55}ms`, ...styles.topCard, borderColor: isMine ? "var(--accent)" : medal ? medal.border : "var(--border)", ...(isMine ? { borderWidth: 2 } : {}) }}>
+    <div ref={cardRef} className={`sp-card sp-reveal sp-shine sp-shine-soft${inView ? " sp-in" : ""}`} style={{ animationDelay: `${((rank - 1) % 4) * 90}ms`, "--sp-shine-delay": `${1.6 + rank * 0.7}s`, "--sp-skew": rank % 2 ? "-22deg" : "18deg", "--sp-shine-dir": rank % 3 === 0 ? "reverse" : "normal", ...styles.topCard, borderColor: isMine ? "var(--accent)" : medal ? medal.border : "var(--border)", ...(isMine ? { borderWidth: 2 } : {}) }}>
       <div style={{ ...styles.topBadge, background: medal ? medal.color : "var(--accent)" }}>
         {Icon ? <Icon size={13} /> : rank}
         {Icon && <span>#{rank}</span>}
@@ -2691,14 +2739,15 @@ function TopCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
           {t("crewWord", lang)} {String(r.crew)}
           {isMine && <span style={styles.mineBadge}><Star size={10} /> {t("myShiftBadge", lang)}</span>}
         </div>
-        <div style={{ ...styles.scoreBadge, color: scoreColor(scorePercent(ds)) }}>{scorePercent(ds)}%</div>
+        <div style={{ ...styles.scoreBadge, color: scoreColor(pct) }}><CountUp value={pct} run={inView} delay={200} />%</div>
       </div>
       <div style={styles.heroMeta}>{r.type} · {r.shiftRaw} · {r.workedCount} {t("days", lang)} · {r.totalHours} {t("hours", lang)}</div>
-      <FingerprintList fingerprint={r.fingerprint} lang={lang} />
+      <FingerprintList fingerprint={r.fingerprint} lang={lang} run={inView} />
       <RegionChips regionSummary={r.regionSummary} lang={lang} />
       <button onClick={() => toggleCompare(r.crew)} style={{ ...styles.compareToggle, ...(inCompare ? styles.compareToggleActive : {}) }}>
         {inCompare && <Check size={12} />} {t("addCompare", lang)}
       </button>
+      <span className="sp-shine-layer" aria-hidden="true" />
     </div>
   );
 }
@@ -2707,15 +2756,17 @@ function ResultCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
   const inCompare = compareSet.includes(r.crew);
   const ds = displayScore(r.fingerprint);
   const isMine = profile?.crewNumber && String(r.crew) === String(profile.crewNumber);
+  const [cardRef, inView] = useInView();
+  const pct = scorePercent(ds);
   return (
-    <div className="sp-card" style={{ animationDelay: `${Math.min(rank, 12) * 45}ms`, ...styles.resultCard, ...(isMine ? { borderColor: "var(--accent)", borderWidth: 2 } : {}) }}>
+    <div ref={cardRef} className={`sp-card sp-reveal${inView ? " sp-in" : ""}`} style={{ animationDelay: `${(rank % 3) * 80}ms`, ...styles.resultCard, ...(isMine ? { borderColor: "var(--accent)", borderWidth: 2 } : {}) }}>
       <div style={styles.resultCardTop}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={styles.rankBadge}>{rank}</span>
           <span style={styles.resultCrew}>{t("crewWord", lang)} {String(r.crew)}</span>
           {isMine && <span style={styles.mineBadge}><Star size={10} /> {t("myShiftBadge", lang)}</span>}
         </div>
-        <span style={{ ...styles.scoreBadgeSm, color: scoreColor(scorePercent(ds)) }}>{scorePercent(ds)}%</span>
+        <span style={{ ...styles.scoreBadgeSm, color: scoreColor(pct) }}><CountUp value={pct} run={inView} delay={150} />%</span>
       </div>
       <div style={styles.resultMeta}>{r.type} · {r.shiftRaw} · {r.workedCount} {t("days", lang)} · {r.totalHours} {t("hours", lang)}</div>
       <FingerprintStrip fingerprint={r.fingerprint} />
@@ -2986,7 +3037,7 @@ export default function ShiftPriorityRanker() {
   };
 
   return (
-    <div dir={dir} style={{ ...styles.page, ...rootVars }}>
+    <div dir={dir} className={booting ? "sp-booting" : "sp-ready"} style={{ ...styles.page, ...rootVars }}>
       <style>{`
         .print-report { display: none; }
         @media print {
@@ -3004,30 +3055,51 @@ export default function ShiftPriorityRanker() {
         }
         @keyframes spp-spin { to { transform: rotate(360deg); } }
 
-        /* ---- light UI motion: transform/opacity only, runs once on mount ---- */
-        @keyframes sp-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-        @keyframes sp-pop { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
+        /* ---- light UI motion (CSS only; transform/opacity/width) ----
+           Home entrance is keyed on .sp-ready (set when the boot splash
+           closes) and cards/bars on .sp-in (set when scrolled into view),
+           so every animation plays while it can actually be seen. */
+        @keyframes sp-fade-up { from { opacity: 0; transform: translateY(18px) scale(0.98); } to { opacity: 1; transform: none; } }
+        @keyframes sp-pop { from { opacity: 0; transform: translateY(26px) scale(0.93); } to { opacity: 1; transform: none; } }
         @keyframes sp-fade { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes sp-shine { 0%, 72% { transform: translateX(-160%) skewX(-20deg); } 100% { transform: translateX(420%) skewX(-20deg); } }
-        @keyframes sp-glow { 0%, 100% { box-shadow: 0 6px 14px rgba(11,143,135,0.28); } 50% { box-shadow: 0 6px 22px rgba(25,185,122,0.55); } }
-        @keyframes sp-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-        @keyframes sp-bob { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.45); } }
-        .sp-hero, .sp-tile, .sp-myshift { animation: sp-fade-up 0.45s ease backwards; transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease; }
-        .sp-hero:hover, .sp-tile:hover { transform: translateY(-3px); filter: brightness(1.05); box-shadow: 0 10px 22px rgba(0,0,0,0.18) !important; }
+        @keyframes sp-shine { 0%, 76% { transform: translateX(-260%) skewX(var(--sp-skew, -20deg)); } 100% { transform: translateX(560%) skewX(var(--sp-skew, -20deg)); } }
+        @keyframes sp-glow { 0%, 100% { box-shadow: 0 6px 14px rgba(11,143,135,0.28), 0 0 0 0 rgba(25,185,122,0); } 50% { box-shadow: 0 8px 24px rgba(25,185,122,0.55), 0 0 0 5px rgba(25,185,122,0.22); } }
+        @keyframes sp-bob { 0%, 100% { transform: scale(1); opacity: 0.75; } 40% { transform: scale(1.8); opacity: 1; } 70% { transform: scale(1); } }
+
+        .sp-hero, .sp-tile, .sp-myshift { transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease; }
+        .sp-booting .sp-hero, .sp-booting .sp-tile, .sp-booting .sp-myshift { opacity: 0; }
+        .sp-ready .sp-hero { animation: sp-fade-up 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) 0.05s backwards; }
+        .sp-ready .sp-myshift { animation: sp-fade-up 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) backwards, sp-glow 2.8s ease-in-out 0.8s infinite; }
+        .sp-ready .sp-tile { animation: sp-fade-up 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+        .sp-hero:hover, .sp-tile:hover { transform: translateY(-3px); filter: brightness(1.06); box-shadow: 0 10px 22px rgba(0,0,0,0.18) !important; }
+        .sp-myshift:hover { transform: translateY(-2px); filter: brightness(1.06); }
         .sp-hero:active, .sp-tile:active, .sp-myshift:active { transform: scale(0.97); }
-        .sp-hero { position: relative; overflow: hidden; }
-        .sp-hero::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 30%; pointer-events: none;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.28), transparent); animation: sp-shine 7s ease-in-out 1.5s infinite; }
-        .sp-myshift { animation: sp-fade-up 0.45s ease backwards, sp-glow 3.2s ease-in-out 1s infinite; }
-        .sp-myshift:hover { transform: translateY(-2px); }
-        .sp-overlay { animation: sp-fade 0.18s ease backwards; }
-        .sp-modal { animation: sp-pop 0.24s cubic-bezier(0.2, 0.9, 0.3, 1.15) backwards; }
-        .sp-card { animation: sp-fade-up 0.4s ease backwards; }
-        .sp-bar { transform-origin: left center; animation: sp-grow 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s backwards; }
-        [dir="rtl"] .sp-bar { transform-origin: right center; }
-        .sp-dot { animation: sp-bob 2.4s ease-in-out infinite; }
+
+        /* shine: an inner clipped layer, so cards whose badges sit outside
+           their box (medal cards) are not cut off; per-card delay/angle/direction */
+        .sp-shine { position: relative; }
+        .sp-shine-layer { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; z-index: 1; }
+        .sp-shine-layer::after { content: ""; position: absolute; top: -30%; bottom: -30%; left: 0; width: 30%;
+          background: linear-gradient(90deg, transparent 0%, var(--sp-shine-c2, rgba(255,255,255,0.16)) 30%, var(--sp-shine-c, rgba(255,255,255,0.55)) 50%, var(--sp-shine-c2, rgba(255,255,255,0.16)) 70%, transparent 100%);
+          transform: translateX(-260%) skewX(var(--sp-skew, -20deg));
+          animation: sp-shine var(--sp-shine-dur, 4.6s) ease-in-out var(--sp-shine-delay, 1.5s) infinite var(--sp-shine-dir, normal); }
+        .sp-shine-soft { --sp-shine-c: rgba(245, 190, 60, 0.30); --sp-shine-c2: rgba(245, 190, 60, 0.08); --sp-shine-dur: 5.4s; }
+
+        .sp-overlay { animation: sp-fade 0.22s ease backwards; }
+        .sp-modal { animation: sp-pop 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards; }
+
+        .sp-reveal { opacity: 0; transform: translateY(18px); }
+        .sp-reveal.sp-in { opacity: 1; transform: none; animation: sp-fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+        .sp-bar { transition: width 0.9s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+        .sp-dot { animation: sp-bob 1.8s ease-in-out infinite; }
+
         @media (prefers-reduced-motion: reduce) {
-          .sp-hero, .sp-tile, .sp-myshift, .sp-overlay, .sp-modal, .sp-card, .sp-bar, .sp-dot, .sp-hero::after { animation: none !important; transition: none !important; }
+          .sp-hero, .sp-tile, .sp-myshift, .sp-overlay, .sp-modal, .sp-reveal, .sp-dot, .sp-shine-layer::after,
+          .sp-ready .sp-hero, .sp-ready .sp-tile, .sp-ready .sp-myshift, .sp-reveal.sp-in { animation: none !important; transition: none !important; }
+          .sp-reveal, .sp-booting .sp-hero, .sp-booting .sp-tile, .sp-booting .sp-myshift { opacity: 1 !important; transform: none !important; }
+          .sp-shine-layer { display: none; }
+          .sp-bar { transition: none !important; }
         }
       `}</style>
 
@@ -3193,7 +3265,7 @@ export default function ShiftPriorityRanker() {
                   : !myCrew ? t("crewNumberNotInFile", lang)
                   : null;
                 return (
-                  <button className="sp-myshift" onClick={onClick} style={{ direction: dir, marginTop: 12, flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 104, padding: "8px 8px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", color: "#fff", background: "linear-gradient(135deg, #0B8F87, #19B97A)", boxShadow: "0 6px 14px rgba(11,143,135,0.28)", fontFamily: "inherit" }}>
+                  <button className="sp-myshift sp-shine" onClick={onClick} style={{ "--sp-shine-delay": "1.9s", "--sp-skew": "22deg", "--sp-shine-dir": "reverse", direction: dir, marginTop: 12, flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 104, padding: "8px 8px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", color: "#fff", background: "linear-gradient(135deg, #0B8F87, #19B97A)", boxShadow: "0 6px 14px rgba(11,143,135,0.28)", fontFamily: "inherit" }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 4, fontWeight: 800, fontSize: 13.5, whiteSpace: "nowrap" }}><Star size={13} color="#fff" /> {t("myShiftHomeTitle", lang)}</span>
                     {myCrew && <span style={{ fontSize: 11.5, opacity: 0.9 }}>{t("crewWord", lang)} {String(myCrew.crew)}</span>}
                     {myCrew && (today ? (
@@ -3202,6 +3274,7 @@ export default function ShiftPriorityRanker() {
                       <span style={{ fontSize: 12.5, fontWeight: 700, textAlign: "center" }}>{t("todayLabel", lang)}: {t("off", lang)}</span>
                     ))}
                     {sub && <span style={{ fontSize: 10.5, opacity: 0.9, lineHeight: 1.35, textAlign: "center" }}>{sub}</span>}
+                    <span className="sp-shine-layer" aria-hidden="true" />
                   </button>
                 );
               })()}
@@ -3212,46 +3285,53 @@ export default function ShiftPriorityRanker() {
 
         {!showPriorityFlow && (
           <div className="no-print">
-            <button className="sp-hero" onClick={() => setShowPriorityFlow(true)} style={styles.heroTile}>
+            <button className="sp-hero sp-shine" onClick={() => setShowPriorityFlow(true)} style={{ ...styles.heroTile, "--sp-shine-delay": "1.4s", "--sp-skew": "-20deg" }}>
               <span style={styles.heroTileIcon}><Star size={22} color="#fff" /></span>
               <span style={{ flex: 1 }}>
                 <div style={styles.heroTileTitle}>{t("title", lang)}</div>
                 <div style={styles.heroTileSubtitle}>{t("subtitle", lang)}</div>
               </span>
               <ArrowLeft size={16} color="#fff" />
+              <span className="sp-shine-layer" aria-hidden="true" />
             </button>
 
             <div style={styles.hubGroupLabel}>{t("hubGroupCrews", lang)}</div>
             <div style={styles.hubGrid}>
-              <button className="sp-tile" onClick={() => setActivePanel("compare2")} style={{ animationDelay: "80ms", ...styles.hubTile, background: "linear-gradient(135deg, #6D5CE0, #9C8CFB)" }}>
+              <button className="sp-tile sp-shine" onClick={() => setActivePanel("compare2")} style={{ "--sp-shine-delay": "2.1s", "--sp-skew": "-24deg", "--sp-shine-dir": "normal", animationDelay: "80ms", ...styles.hubTile, background: "linear-gradient(135deg, #6D5CE0, #9C8CFB)" }}>
                 <GitCompare size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("compare2Title", lang)}</span>
+                <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile" onClick={() => setActivePanel("crewLookup")} style={{ animationDelay: "135ms", ...styles.hubTile, background: "linear-gradient(135deg, #0EA37E, #3DDC97)" }}>
+              <button className="sp-tile sp-shine" onClick={() => setActivePanel("crewLookup")} style={{ "--sp-shine-delay": "2.9s", "--sp-skew": "16deg", "--sp-shine-dir": "reverse", animationDelay: "135ms", ...styles.hubTile, background: "linear-gradient(135deg, #0EA37E, #3DDC97)" }}>
                 <Search size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("crewLookupTitle", lang)}</span>
+                <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile" onClick={() => setActivePanel("swapFinder")} style={{ animationDelay: "190ms", ...styles.hubTile, background: "linear-gradient(135deg, #D9480F, #F59F00)" }}>
+              <button className="sp-tile sp-shine" onClick={() => setActivePanel("swapFinder")} style={{ "--sp-shine-delay": "3.6s", "--sp-skew": "-18deg", "--sp-shine-dir": "normal", animationDelay: "190ms", ...styles.hubTile, background: "linear-gradient(135deg, #D9480F, #F59F00)" }}>
                 <CalendarOff size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("hubSwapFinder", lang)}</span>
+                <span className="sp-shine-layer" aria-hidden="true" />
               </button>
             </div>
 
             <div style={styles.hubGroupLabel}>{t("hubGroupMe", lang)}</div>
             <div style={styles.hubGrid}>
-              <button className="sp-tile" onClick={() => setActivePanel("profile")} style={{ animationDelay: "245ms", ...styles.hubTile, background: "linear-gradient(135deg, #E0447F, #F17CA6)" }}>
+              <button className="sp-tile sp-shine" onClick={() => setActivePanel("profile")} style={{ "--sp-shine-delay": "2.5s", "--sp-skew": "20deg", "--sp-shine-dir": "reverse", animationDelay: "245ms", ...styles.hubTile, background: "linear-gradient(135deg, #E0447F, #F17CA6)" }}>
                 <User size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("profileTitle", lang)}</span>
+                <span className="sp-shine-layer" aria-hidden="true" />
               </button>
               {dailyLogVisible && (
-                <button className="sp-tile" onClick={() => setActivePanel("dailyLog")} style={{ animationDelay: "300ms", ...styles.hubTile, background: "linear-gradient(135deg, #2463EB, #4F8CFB)" }}>
+                <button className="sp-tile sp-shine" onClick={() => setActivePanel("dailyLog")} style={{ "--sp-shine-delay": "3.2s", "--sp-skew": "-26deg", "--sp-shine-dir": "normal", animationDelay: "300ms", ...styles.hubTile, background: "linear-gradient(135deg, #2463EB, #4F8CFB)" }}>
                   <ClipboardList size={18} color="#fff" />
                   <span style={styles.hubTileLabel}>{t("dailyLogMenuLabel", lang)}</span>
+                  <span className="sp-shine-layer" aria-hidden="true" />
                 </button>
               )}
-              <button className="sp-tile" onClick={() => setActivePanel("settings")} style={{ animationDelay: "355ms", ...styles.hubTile, background: "linear-gradient(135deg, #E08A1E, #F6B93B)" }}>
+              <button className="sp-tile sp-shine" onClick={() => setActivePanel("settings")} style={{ "--sp-shine-delay": "4.0s", "--sp-skew": "14deg", "--sp-shine-dir": "reverse", animationDelay: "355ms", ...styles.hubTile, background: "linear-gradient(135deg, #E08A1E, #F6B93B)" }}>
                 <Sun size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("settingsTitle", lang)}</span>
+                <span className="sp-shine-layer" aria-hidden="true" />
               </button>
             </div>
 
