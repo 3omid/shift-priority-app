@@ -1,11 +1,11 @@
-import React, { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import pkg from "../package.json";
 import {
   Upload, RotateCcw, ListChecks, AlertCircle, Check, Printer,
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, ArrowLeft, Plus,
   Menu, Sun, Moon, HelpCircle, Trash2, Users, Info, Mail, LogOut,
-  User, Star, CalendarOff, Shield, Lock, Search, ClipboardList, Pencil,
+  User, Star, CalendarOff, Shield, Lock, Search, ClipboardList, Pencil, MapPin,
 } from "lucide-react";
 
 const APP_VERSION = pkg.version;
@@ -387,18 +387,6 @@ function displayScore(fingerprint) {
   return pct;
 }
 
-// UI-only: show the priority score (0..1) as a whole-number percent of 100.
-// Floor, not round, so only a perfect match can ever read "100%".
-function scorePercent(ds) {
-  return Math.floor(Number(ds) * 100 + 1e-9);
-}
-
-// UI-only colour for the overall priority %: >=75 gold, 40-74 green, <40 grey.
-// The actual shades come from CSS vars set per light/dark mode (see rootVars).
-function scoreColor(pct) {
-  return pct >= 75 ? "var(--score-high)" : pct >= 40 ? "var(--score-mid)" : "var(--score-low)";
-}
-
 // ---------- i18n ----------
 
 const REGION_LABELS = {
@@ -513,34 +501,6 @@ const STRINGS = {
   hubGroupMe: { fa: "من", en: "Me", hi: "मेरा" },
   hubComingSoon: { fa: "به‌زودی", en: "Coming soon", hi: "जल्द आ रहा है" },
   hubSwapFinder: { fa: "جایگزین برای مرخصی", en: "Find a leave replacement", hi: "छुट्टी बदली खोजें" },
-  swapIntro: { fa: "روز و ساعت شیفتی که می‌خوای مرخصی بگیری رو بده. اول کسایی میان که اون روز شیفت ندارن و روزهای استراحت تو سر کارن — یعنی می‌تونی باهاشون جابه‌جا کنی.", en: "Enter the day and hours you want off. Crews who are off that day come up first if they work one of YOUR rest days — so you can offer a straight trade.", hi: "जिस दिन और समय की छुट्टी चाहिए, दर्ज करें। जो क्रू उस दिन फ्री हैं और आपकी छुट्टी वाले दिन काम करते हैं, वे पहले आएंगे — ताकि आप अदला-बदली कर सकें।" },
-  swapMyCrew: { fa: "شمارهٔ گروه من", en: "My crew #", hi: "मेरा क्रू #" },
-  swapDate: { fa: "تاریخ", en: "Date", hi: "तारीख" },
-  swapStart: { fa: "شروع شیفت", en: "Shift start", hi: "शिफ्ट शुरू" },
-  swapEnd: { fa: "پایان شیفت", en: "Shift end", hi: "शिफ्ट समाप्त" },
-  swapFindBtn: { fa: "پیدا کن", en: "Find replacements", hi: "बदली खोजें" },
-  swapNeedInputs: { fa: "تاریخ و ساعت شروع و پایان رو وارد کن.", en: "Enter the date, start and end time.", hi: "तारीख, शुरू और समाप्ति समय दर्ज करें।" },
-  swapNoCrewHint: { fa: "بدون شمارهٔ گروهت فقط کسایی که اون روز آزادن نشون داده می‌شن (پیشنهاد جابه‌جایی نه).", en: "Without your crew #, only crews free that day are shown — no trade suggestions.", hi: "क्रू # के बिना केवल उस दिन फ्री क्रू दिखेंगे — अदला-बदली सुझाव नहीं।" },
-  swapAlreadyOff: { fa: "طبق برنامه، تو این روز خودت شیفت نداری.", en: "Per the schedule, you're already off on this day.", hi: "शेड्यूल के अनुसार, इस दिन आप पहले से छुट्टी पर हैं।" },
-  swapMyRestDays: { fa: "روزهای استراحت من", en: "My rest days", hi: "मेरे आराम के दिन" },
-  swapResultsTitle: { fa: "بهترین گزینه‌ها", en: "Best options", hi: "सबसे अच्छे विकल्प" },
-  swapCandidatesWord: { fa: "نفر", en: "candidates", hi: "उम्मीदवार" },
-  swapNoResults: { fa: "هیچ گروهی اون روز آزاد نیست.", en: "No crew is off on that day.", hi: "उस दिन कोई क्रू फ्री नहीं है।" },
-  swapFit: { fa: "تناسب", en: "Fit", hi: "मेल" },
-  swapOffThatDay: { fa: "آزاد در روز", en: "Off on", hi: "छुट्टी:" },
-  swapUsualStart: { fa: "شروع معمول:", en: "Usually starts", hi: "आमतौर पर शुरू:" },
-  swapTradeFor: { fa: "جابه‌جایی: تو شیفتش رو بری در", en: "Trade: you take their shift on", hi: "अदला-बदली: आप उनकी शिफ्ट लें" },
-  swapNoTrade: { fa: "روزهای استراحت تو سر کار نیست — فقط کاور بدون جابه‌جایی", en: "Doesn't work on your rest days — cover only, no trade", hi: "आपके आराम के दिनों में काम नहीं — केवल कवर" },
-  swapMyRestWarn: { fa: "برای تو استراحت کمتر از ۸ ساعت بین شیفت‌ها می‌شه", en: "Would leave YOU under 8h rest between shifts", hi: "आपको शिफ्टों के बीच 8 घंटे से कम आराम मिलेगा" },
-  swapTheirRestWarn: { fa: "استراحت اون کمتر از ۸ ساعت می‌شه", en: "Would leave them under 8h rest", hi: "उन्हें 8 घंटे से कम आराम मिलेगा" },
-  swapBefore: { fa: "قبل:", en: "before:", hi: "पहले:" },
-  swapAfter: { fa: "بعد:", en: "after:", hi: "बाद:" },
-  swapViewSchedule: { fa: "برنامهٔ هفتگی", en: "Weekly schedule", hi: "साप्ताहिक शेड्यूल" },
-  swapMatch: { fa: "تطابق با برنامهٔ تو", en: "match with your schedule", hi: "आपके शेड्यूल से मेल" },
-  myShiftHomeTitle: { fa: "شیفت من", en: "My Shift", hi: "मेरी शिफ्ट" },
-  myShiftHomeNoCrew: { fa: "شمارهٔ گروهت رو توی پروفایل وارد کن", en: "Add your crew # in Profile", hi: "प्रोफ़ाइल में क्रू # जोड़ें" },
-  myShiftHomeNoFile: { fa: "اول فایل برنامه رو بارگذاری کن", en: "Load the schedule file first", hi: "पहले शेड्यूल फ़ाइल लोड करें" },
-  swapShowMore: { fa: "نمایش بیشتر", en: "Show more", hi: "और दिखाएं" },
   crewLookupSearch: { fa: "جستجوی شماره یا اسم...", en: "Search number or name…", hi: "नंबर या नाम खोजें…" },
 
   // ---- admin ----
@@ -582,7 +542,20 @@ const STRINGS = {
   dailyLogChipShuttleBus: { fa: "شاتل‌باس", en: "Shuttle bus", hi: "शटल बस" },
   dailyLogChipHoliday: { fa: "تعطیلی رسمی", en: "Official holiday", hi: "आधिकारिक अवकाश" },
   dailyLogTotalHoursLabel: { fa: "جمع ساعت", en: "Total hours", hi: "कुल घंटे" },
-  dailyLogSaveBtn: { fa: "ذخیره", en: "Save", hi: "सहेजें" },
+  dailyLogSaveBtn: { fa: "افزودن", en: "Add", hi: "जोड़ें" },
+  dailyLogAdded: { fa: "رکورد اضافه شد ✓", en: "Entry added ✓", hi: "प्रविष्टि जोड़ी गई ✓" },
+  dailyLogUpdated: { fa: "رکورد بروزرسانی شد ✓", en: "Entry updated ✓", hi: "प्रविष्टि अपडेट हुई ✓" },
+  dailyLogDuplicate: {
+    fa: "برای این تاریخ قبلاً یک رکورد ثبت شده و دوباره اضافه نشد. اگه می‌خوای تغییرش بدی، ویرایشش کن.",
+    en: "There's already an entry for this date, so it wasn't added again. Edit that entry if you need to change it.",
+    hi: "इस तारीख़ के लिए पहले से एक प्रविष्टि है, इसलिए दोबारा नहीं जोड़ी गई। बदलने के लिए उसे संपादित करें।",
+  },
+  dailyLogEditExisting: { fa: "ویرایش همون رکورد", en: "Edit that entry", hi: "उसे संपादित करें" },
+  dailyLogLocateBtn: { fa: "تشخیص یارد از موقعیت من", en: "Detect yard from my location", hi: "मेरे स्थान से यार्ड पहचानें" },
+  dailyLogLocating: { fa: "در حال پیدا کردن موقعیت…", en: "Finding your location…", hi: "स्थान ढूँढा जा रहा है…" },
+  dailyLogLocatedAt: { fa: "یارد تشخیص داده‌شده:", en: "Detected yard:", hi: "पहचाना गया यार्ड:" },
+  dailyLogNoYardNearby: { fa: "نزدیک هیچ یاردی نیستی؛ یارد رو دستی انتخاب کن.", en: "You're not near any yard — pick it manually.", hi: "आप किसी यार्ड के पास नहीं हैं — हाथ से चुनें।" },
+  dailyLogLocationDenied: { fa: "دسترسی به موقعیت داده نشد؛ یارد رو دستی انتخاب کن.", en: "Location access wasn't allowed — pick the yard manually.", hi: "स्थान की अनुमति नहीं मिली — यार्ड हाथ से चुनें।" },
   dailyLogUpdateBtn: { fa: "بروزرسانی", en: "Update", hi: "अपडेट करें" },
   cancelBtn: { fa: "انصراف", en: "Cancel", hi: "रद्द करें" },
   dailyLogEntriesTitle: { fa: "رکوردهای ثبت‌شده", en: "Saved entries", hi: "सहेजी गई प्रविष्टियाँ" },
@@ -666,653 +639,24 @@ const WEEKDAY_LABELS = {
 
 // ---------- Theme palettes ----------
 
-// Seven complete palettes. Each theme sets the page surfaces (light + dark),
-// the primary/secondary colours, and every coloured section of the app:
-// hero banner + priority flow, My Shift, the six hub tiles (and their
-// modals), the clock, priority score colours, and the PDF/Excel exports.
 const THEME_PALETTES = {
-  "universal": {
-    "name": {
-      "fa": "رنگارنگ",
-      "en": "Vibrant",
-      "hi": "रंगीन"
-    },
-    "light": {
-      "bg": "#F5F6F8",
-      "card": "#FFFFFF",
-      "border": "#E4E7EC",
-      "text": "#1B2230",
-      "muted": "#667085",
-      "accent": "#0B7D61",
-      "accent2": "#F59F00",
-      "radius": "10px"
-    },
-    "dark": {
-      "bg": "#111418",
-      "card": "#1A1F26",
-      "border": "#2A313B",
-      "text": "#ECEFF3",
-      "muted": "#9AA4B2",
-      "accent": "#0E9F7E",
-      "accent2": "#FBBF24",
-      "radius": "10px"
-    },
-    "hero": [
-      "#E8435A",
-      "#F7934C"
-    ],
-    "flow": [
-      "#D12F48",
-      "#E5485F"
-    ],
-    "my": [
-      "#0B8F87",
-      "#19B97A"
-    ],
-    "tiles": {
-      "compare": [
-        "#6D5CE0",
-        "#9C8CFB"
-      ],
-      "browse": [
-        "#0B8F6E",
-        "#22C08A"
-      ],
-      "swap": [
-        "#D9480F",
-        "#E68A00"
-      ],
-      "profile": [
-        "#E0447F",
-        "#F17CA6"
-      ],
-      "log": [
-        "#2463EB",
-        "#4F8CFB"
-      ],
-      "settings": [
-        "#C9700F",
-        "#E8A020"
-      ]
-    },
-    "clock": [
-      "#6D5CE0",
-      "#B15CE0",
-      "#E0447F",
-      "#E08A1E",
-      "#0EA37E"
-    ],
-    "score": {
-      "light": [
-        "#A16207",
-        "#15803D",
-        "#7B8494"
-      ],
-      "dark": [
-        "#FACC15",
-        "#4ADE80",
-        "#7D8796"
-      ]
-    }
+  win11: {
+    light: { bg: "#F3F3F3", card: "#FFFFFF", border: "#E1E1E1", text: "#1B1B1B", muted: "#5F6368", accent: "#0067C0", accent2: "#B98A2E", radius: "8px" },
+    dark: { bg: "#202020", card: "#2C2C2C", border: "#3A3A3A", text: "#F3F3F3", muted: "#B0B0B0", accent: "#4CC2FF", accent2: "#D8A94A", radius: "8px" },
   },
-  "sunset": {
-    "name": {
-      "fa": "غروب",
-      "en": "Sunset",
-      "hi": "सूर्यास्त"
-    },
-    "light": {
-      "bg": "#FFF5EE",
-      "card": "#FFFFFF",
-      "border": "#F5D9C8",
-      "text": "#2B1B14",
-      "muted": "#8A5F4E",
-      "accent": "#C2410C",
-      "accent2": "#E11D48",
-      "radius": "10px"
-    },
-    "dark": {
-      "bg": "#1A110D",
-      "card": "#281A14",
-      "border": "#46302A",
-      "text": "#FBEDE5",
-      "muted": "#C9A596",
-      "accent": "#E0620F",
-      "accent2": "#FB7185",
-      "radius": "10px"
-    },
-    "hero": [
-      "#E11D48",
-      "#F97316"
-    ],
-    "flow": [
-      "#C2410C",
-      "#EA6A1F"
-    ],
-    "my": [
-      "#D9480F",
-      "#EA8A0C"
-    ],
-    "tiles": {
-      "compare": [
-        "#BE185D",
-        "#F43F5E"
-      ],
-      "browse": [
-        "#C2410C",
-        "#FB923C"
-      ],
-      "swap": [
-        "#B91C1C",
-        "#F97316"
-      ],
-      "profile": [
-        "#DB2777",
-        "#FB7185"
-      ],
-      "log": [
-        "#9A3412",
-        "#EA580C"
-      ],
-      "settings": [
-        "#B45309",
-        "#E08A0B"
-      ]
-    },
-    "clock": [
-      "#E11D48",
-      "#F97316",
-      "#F59E0B",
-      "#DB2777"
-    ],
-    "score": {
-      "light": [
-        "#A16207",
-        "#15803D",
-        "#7B8494"
-      ],
-      "dark": [
-        "#FCD34D",
-        "#4ADE80",
-        "#8A8F98"
-      ]
-    }
+  macos: {
+    light: { bg: "#F5F5F7", card: "#FFFFFF", border: "#E5E5EA", text: "#1D1D1F", muted: "#6E6E73", accent: "#007AFF", accent2: "#C79A3B", radius: "14px" },
+    dark: { bg: "#1E1E1E", card: "#2C2C2E", border: "#3A3A3C", text: "#F5F5F7", muted: "#98989D", accent: "#0A84FF", accent2: "#D8A94A", radius: "14px" },
   },
-  "ocean": {
-    "name": {
-      "fa": "اقیانوس",
-      "en": "Ocean",
-      "hi": "सागर"
-    },
-    "light": {
-      "bg": "#EEF6F9",
-      "card": "#FFFFFF",
-      "border": "#CDE3EA",
-      "text": "#0F2A33",
-      "muted": "#52707A",
-      "accent": "#0E7490",
-      "accent2": "#2563EB",
-      "radius": "10px"
-    },
-    "dark": {
-      "bg": "#08171D",
-      "card": "#0F242C",
-      "border": "#1D3B46",
-      "text": "#E4F3F7",
-      "muted": "#8DB0BA",
-      "accent": "#0891B2",
-      "accent2": "#60A5FA",
-      "radius": "10px"
-    },
-    "hero": [
-      "#0E7490",
-      "#06B6D4"
-    ],
-    "flow": [
-      "#0E7490",
-      "#0E93B5"
-    ],
-    "my": [
-      "#0369A1",
-      "#0EA5E9"
-    ],
-    "tiles": {
-      "compare": [
-        "#1D4ED8",
-        "#3B82F6"
-      ],
-      "browse": [
-        "#0F766E",
-        "#14B8A6"
-      ],
-      "swap": [
-        "#0369A1",
-        "#0EA5E9"
-      ],
-      "profile": [
-        "#155E75",
-        "#0891B2"
-      ],
-      "log": [
-        "#3730A3",
-        "#6366F1"
-      ],
-      "settings": [
-        "#115E59",
-        "#0D9488"
-      ]
-    },
-    "clock": [
-      "#1D4ED8",
-      "#0EA5E9",
-      "#06B6D4",
-      "#14B8A6"
-    ],
-    "score": {
-      "light": [
-        "#A16207",
-        "#15803D",
-        "#7B8494"
-      ],
-      "dark": [
-        "#FACC15",
-        "#4ADE80",
-        "#7D8796"
-      ]
-    }
+  universal: {
+    light: { bg: "#EFEDE6", card: "#FBFAF6", border: "#DDD8C9", text: "#20242B", muted: "#7A7F85", accent: "#2F5D62", accent2: "#B98A2E", radius: "10px" },
+    dark: { bg: "#15191C", card: "#1F252A", border: "#2C333A", text: "#EDEFF1", muted: "#9AA3AA", accent: "#4C9AA0", accent2: "#D8A94A", radius: "10px" },
   },
-  "forest": {
-    "name": {
-      "fa": "جنگل",
-      "en": "Forest",
-      "hi": "वन"
-    },
-    "light": {
-      "bg": "#F0F5EC",
-      "card": "#FFFFFF",
-      "border": "#D3E2CB",
-      "text": "#17251A",
-      "muted": "#5A6F5C",
-      "accent": "#2F7D32",
-      "accent2": "#A16207",
-      "radius": "10px"
-    },
-    "dark": {
-      "bg": "#0D160E",
-      "card": "#162218",
-      "border": "#2A3D2C",
-      "text": "#E8F2E6",
-      "muted": "#9BB39D",
-      "accent": "#3E9B45",
-      "accent2": "#E3B341",
-      "radius": "10px"
-    },
-    "hero": [
-      "#166534",
-      "#65A30D"
-    ],
-    "flow": [
-      "#2F7D32",
-      "#3E9B45"
-    ],
-    "my": [
-      "#15803D",
-      "#65A30D"
-    ],
-    "tiles": {
-      "compare": [
-        "#3F6212",
-        "#65A30D"
-      ],
-      "browse": [
-        "#047857",
-        "#10B981"
-      ],
-      "swap": [
-        "#854D0E",
-        "#CA8A04"
-      ],
-      "profile": [
-        "#166534",
-        "#22C55E"
-      ],
-      "log": [
-        "#115E59",
-        "#0D9488"
-      ],
-      "settings": [
-        "#4D7C0F",
-        "#6B9A1A"
-      ]
-    },
-    "clock": [
-      "#166534",
-      "#65A30D",
-      "#CA8A04",
-      "#0D9488"
-    ],
-    "score": {
-      "light": [
-        "#A16207",
-        "#C2410C",
-        "#7B8494"
-      ],
-      "dark": [
-        "#FACC15",
-        "#FB923C",
-        "#7D8796"
-      ]
-    }
-  },
-  "royal": {
-    "name": {
-      "fa": "سلطنتی",
-      "en": "Royal",
-      "hi": "राजसी"
-    },
-    "light": {
-      "bg": "#F4F2FE",
-      "card": "#FFFFFF",
-      "border": "#E0DAF8",
-      "text": "#1E1538",
-      "muted": "#675E8E",
-      "accent": "#6D28D9",
-      "accent2": "#DB2777",
-      "radius": "10px"
-    },
-    "dark": {
-      "bg": "#120D22",
-      "card": "#1C1532",
-      "border": "#33294F",
-      "text": "#EEE9FF",
-      "muted": "#A79DCA",
-      "accent": "#7C3AED",
-      "accent2": "#F472B6",
-      "radius": "10px"
-    },
-    "hero": [
-      "#5B21B6",
-      "#8B5CF6"
-    ],
-    "flow": [
-      "#6D28D9",
-      "#8B5CF6"
-    ],
-    "my": [
-      "#4338CA",
-      "#8B5CF6"
-    ],
-    "tiles": {
-      "compare": [
-        "#6D28D9",
-        "#A78BFA"
-      ],
-      "browse": [
-        "#4338CA",
-        "#818CF8"
-      ],
-      "swap": [
-        "#7E22CE",
-        "#C084FC"
-      ],
-      "profile": [
-        "#9D174D",
-        "#EC4899"
-      ],
-      "log": [
-        "#3730A3",
-        "#6366F1"
-      ],
-      "settings": [
-        "#86198F",
-        "#D946EF"
-      ]
-    },
-    "clock": [
-      "#4338CA",
-      "#7C3AED",
-      "#C026D3",
-      "#EC4899"
-    ],
-    "score": {
-      "light": [
-        "#A16207",
-        "#15803D",
-        "#7B8494"
-      ],
-      "dark": [
-        "#FACC15",
-        "#4ADE80",
-        "#8A84A3"
-      ]
-    }
-  },
-  "rose": {
-    "name": {
-      "fa": "گل‌رز",
-      "en": "Rose",
-      "hi": "गुलाब"
-    },
-    "light": {
-      "bg": "#FFF0F5",
-      "card": "#FFFFFF",
-      "border": "#F6D0DD",
-      "text": "#2D1320",
-      "muted": "#8A5A6D",
-      "accent": "#BE185D",
-      "accent2": "#9333EA",
-      "radius": "10px"
-    },
-    "dark": {
-      "bg": "#1C0E15",
-      "card": "#2A1620",
-      "border": "#472836",
-      "text": "#FDEAF1",
-      "muted": "#D0A0B3",
-      "accent": "#DB2777",
-      "accent2": "#C084FC",
-      "radius": "10px"
-    },
-    "hero": [
-      "#DB2777",
-      "#F472B6"
-    ],
-    "flow": [
-      "#BE185D",
-      "#DB2777"
-    ],
-    "my": [
-      "#BE123C",
-      "#FB7185"
-    ],
-    "tiles": {
-      "compare": [
-        "#A21CAF",
-        "#D946EF"
-      ],
-      "browse": [
-        "#BE185D",
-        "#F472B6"
-      ],
-      "swap": [
-        "#E11D48",
-        "#FB7185"
-      ],
-      "profile": [
-        "#9D174D",
-        "#DB2777"
-      ],
-      "log": [
-        "#7E22CE",
-        "#C084FC"
-      ],
-      "settings": [
-        "#C2410C",
-        "#FB923C"
-      ]
-    },
-    "clock": [
-      "#DB2777",
-      "#F472B6",
-      "#C084FC",
-      "#FB7185"
-    ],
-    "score": {
-      "light": [
-        "#A16207",
-        "#15803D",
-        "#7B8494"
-      ],
-      "dark": [
-        "#FACC15",
-        "#4ADE80",
-        "#8E8290"
-      ]
-    }
-  },
-  "modern": {
-    "name": {
-      "fa": "مدرن",
-      "en": "Modern",
-      "hi": "आधुनिक"
-    },
-    "light": {
-      "bg": "#F4F4F5",
-      "card": "#FFFFFF",
-      "border": "#E4E4E7",
-      "text": "#18181B",
-      "muted": "#63636B",
-      "accent": "#3F3F46",
-      "accent2": "#2563EB",
-      "radius": "10px"
-    },
-    "dark": {
-      "bg": "#0B0B0D",
-      "card": "#18181B",
-      "border": "#2E2E33",
-      "text": "#F4F4F5",
-      "muted": "#A1A1AA",
-      "accent": "#71717A",
-      "accent2": "#60A5FA",
-      "radius": "10px"
-    },
-    "hero": [
-      "#27272A",
-      "#52525B"
-    ],
-    "flow": [
-      "#2563EB",
-      "#3B82F6"
-    ],
-    "my": [
-      "#1D4ED8",
-      "#3B82F6"
-    ],
-    "tiles": {
-      "compare": [
-        "#334155",
-        "#64748B"
-      ],
-      "browse": [
-        "#3F3F46",
-        "#71717A"
-      ],
-      "swap": [
-        "#1E3A8A",
-        "#3B82F6"
-      ],
-      "profile": [
-        "#44403C",
-        "#78716C"
-      ],
-      "log": [
-        "#374151",
-        "#6B7280"
-      ],
-      "settings": [
-        "#52525B",
-        "#71717A"
-      ]
-    },
-    "clock": [
-      "#27272A",
-      "#52525B",
-      "#2563EB",
-      "#71717A"
-    ],
-    "score": {
-      "light": [
-        "#A16207",
-        "#15803D",
-        "#7B8494"
-      ],
-      "dark": [
-        "#FACC15",
-        "#4ADE80",
-        "#8A8A93"
-      ]
-    }
-  }
 };
-const THEME_ORDER = Object.keys(THEME_PALETTES);
-const THEME_KEY = "shiftPriorityTheme";
 
-function getTheme(style) {
-  return THEME_PALETTES[style] || THEME_PALETTES.universal;
-}
 function getPalette(style, mode) {
-  return getTheme(style)[mode === "dark" ? "dark" : "light"];
-}
-function hexToRgba(hex, a) {
-  const h = hex.replace("#", "");
-  return `rgba(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}, ${a})`;
-}
-function mixHex(a, b, t) {
-  const pa = a.replace("#", ""), pb = b.replace("#", "");
-  const c = [0, 2, 4].map((i) => Math.round(parseInt(pa.slice(i, i + 2), 16) * (1 - t) + parseInt(pb.slice(i, i + 2), 16) * t));
-  return "#" + c.map((x) => x.toString(16).padStart(2, "0")).join("").toUpperCase();
-}
-// CSS variables for the coloured sections of the active theme.
-function themeVars(style, mode) {
-  const th = getTheme(style);
-  const dark = mode === "dark";
-  const g = (pair) => `linear-gradient(135deg, ${pair[0]}, ${pair[1]})`;
-  const sc = th.score[dark ? "dark" : "light"];
-  const vars = {
-    "--hero-g": g(th.hero),
-    "--flow": th.flow[dark ? 1 : 0],
-    "--my-g": g(th.my), "--my": th.my[0],
-    "--my-glow": hexToRgba(th.my[1], 0.55), "--my-glow-soft": hexToRgba(th.my[0], 0.28), "--my-ring": hexToRgba(th.my[1], 0.22),
-    "--clock-g": `linear-gradient(120deg, ${th.clock.join(", ")})`,
-    "--score-high": sc[0], "--score-mid": sc[1], "--score-low": sc[2],
-  };
-  Object.entries(th.tiles).forEach(([k, pair]) => { vars[`--t-${k}-g`] = g(pair); vars[`--t-${k}`] = pair[0]; });
-  return vars;
-}
-function loadThemePrefs() {
-  try {
-    const v = JSON.parse(localStorage.getItem(THEME_KEY) || "null");
-    return { style: v && THEME_PALETTES[v.style] ? v.style : "universal", mode: v && v.mode === "dark" ? "dark" : "light" };
-  } catch { return { style: "universal", mode: "light" }; }
-}
-function saveThemePrefs(style, mode) {
-  try { localStorage.setItem(THEME_KEY, JSON.stringify({ style, mode })); } catch { /* ignore storage errors */ }
-}
-
-// Exports (PDF/print + Excel) follow the active theme too. The report
-// builders are plain functions, so the app records the active style here.
-const ACTIVE_THEME = { style: "universal" };
-function exportTheme(kind) {
-  const th = getTheme(ACTIVE_THEME.style);
-  const main = kind === "results" ? th.flow[0] : kind === "compare" ? th.tiles.compare[0] : th.tiles.log[0];
-  return {
-    main, sub: th.light.accent2,
-    head: mixHex(main, "#FFFFFF", 0.86), headText: mixHex(main, "#000000", 0.35),
-    soft: mixHex(main, "#FFFFFF", 0.94), zebra: mixHex(main, "#FFFFFF", 0.975),
-  };
-}
-function exportRainbow() {
-  return `linear-gradient(90deg, ${getTheme(ACTIVE_THEME.style).clock.join(", ")})`;
+  const s = THEME_PALETTES[style] ? style : "universal";
+  return THEME_PALETTES[s][mode === "dark" ? "dark" : "light"];
 }
 
 // ---------- Small components ----------
@@ -1352,52 +696,7 @@ function FingerprintStrip({ fingerprint }) {
   );
 }
 
-// ---------- Motion helpers (presentation only) ----------
-// Entrance animations must start when the element is actually VISIBLE: result
-// cards usually mount below the fold (or behind the loading splash), so a
-// plain on-mount CSS animation has already finished before the user sees it.
-// useInView flips once when the element scrolls into view; CSS keys off .sp-in.
-const PREFERS_REDUCED_MOTION = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-function useInView() {
-  const ref = React.useRef(null);
-  const [inView, setInView] = useState(PREFERS_REDUCED_MOTION || typeof IntersectionObserver === "undefined");
-  useEffect(() => {
-    if (inView || !ref.current) return undefined;
-    const io = new IntersectionObserver((ents) => {
-      if (ents.some((e) => e.isIntersecting)) { setInView(true); io.disconnect(); }
-    }, { threshold: 0.15 });
-    io.observe(ref.current);
-    return () => io.disconnect();
-  }, [inView]);
-  return [ref, inView];
-}
-
-function Reveal({ className = "", style, children }) {
-  const [ref, inView] = useInView();
-  return <div ref={ref} className={`${className} sp-reveal${inView ? " sp-in" : ""}`} style={style}>{children}</div>;
-}
-
-// Counts 0 -> value once `run` turns true (same timing as the bar fill).
-function CountUp({ value, run, delay = 0, duration = 900 }) {
-  const [shown, setShown] = useState(PREFERS_REDUCED_MOTION ? value : 0);
-  useEffect(() => {
-    if (PREFERS_REDUCED_MOTION) { setShown(value); return undefined; }
-    if (!run) { setShown(0); return undefined; }
-    let raf; let start;
-    const tick = (ts) => {
-      if (start === undefined) start = ts + delay;
-      const p = Math.min(1, Math.max(0, (ts - start) / duration));
-      setShown(Math.round(value * (1 - Math.pow(1 - p, 3))));
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [value, run, delay, duration]);
-  return <>{shown}</>;
-}
-
-function FingerprintList({ fingerprint, lang, run = true }) {
+function FingerprintList({ fingerprint, lang }) {
   return (
     <div style={{ marginBottom: 10 }}>
       {fingerprint.map((f, i) => (
@@ -1405,10 +704,9 @@ function FingerprintList({ fingerprint, lang, run = true }) {
           <span style={styles.fpRank}>{i + 1}</span>
           <span style={styles.fpLabel}>{f.label[lang]}</span>
           <div style={styles.fpBarBg}>
-            {/* width animates 0% -> score% (CSS transition) once the card is in view */}
-            <div className="sp-bar" style={{ ...styles.fpBarFill, width: run ? `${f.score}%` : "0%", transitionDelay: `${250 + i * 120}ms`, background: fpColor(f.score) }} />
+            <div style={{ ...styles.fpBarFill, width: `${f.score}%`, background: fpColor(f.score) }} />
           </div>
-          <span style={styles.fpPct}><CountUp value={f.score} run={run} delay={250 + i * 120} />%</span>
+          <span style={styles.fpPct}>{f.score}%</span>
         </div>
       ))}
     </div>
@@ -1498,7 +796,7 @@ function DateTimeWidget({ lang }) {
   const secondAngle = seconds * 6;
 
   return (
-    <div style={{ ...styles.dtWidget, background: "var(--clock-g)", border: "none", boxShadow: "0 6px 14px rgba(0,0,0,0.18)", "--card": "rgba(255,255,255,0.16)", "--border": "rgba(255,255,255,0.55)", "--text": "#fff", "--muted": "rgba(255,255,255,0.85)", "--accent": "#fff", "--accent2": "#FFE9A8" }}>
+    <div style={{ ...styles.dtWidget, background: "linear-gradient(120deg, #6D5CE0 0%, #B15CE0 26%, #E0447F 52%, #E08A1E 76%, #0EA37E 100%)", border: "none", boxShadow: "0 6px 14px rgba(96,60,180,0.28)", "--card": "rgba(255,255,255,0.16)", "--border": "rgba(255,255,255,0.55)", "--text": "#fff", "--muted": "rgba(255,255,255,0.85)", "--accent": "#fff", "--accent2": "#FFE9A8" }}>
       <AnalogClock hourAngle={hourAngle} minuteAngle={minuteAngle} secondAngle={secondAngle} />
       <div style={styles.dtTextCol}>
         <div style={styles.dtDigital}>{digital}</div>
@@ -1517,8 +815,8 @@ function Modal({ title, onClose, onBack, children, headerGradient, accent }) {
   const closeBtnStyle = headerGradient ? { ...styles.modalCloseBtn, color: "#fff", background: "rgba(255,255,255,0.18)", borderRadius: 8, width: 28, height: 28, alignItems: "center", justifyContent: "center" } : styles.modalCloseBtn;
   const boxVars = accent ? { "--accent": accent } : {};
   return (
-    <div className="no-print sp-overlay" style={styles.modalOverlay} onClick={onClose}>
-      <div className="sp-modal" style={{ ...styles.modalBox, ...boxVars }} onClick={(e) => e.stopPropagation()}>
+    <div className="no-print" style={styles.modalOverlay} onClick={onClose}>
+      <div style={{ ...styles.modalBox, ...boxVars }} onClick={(e) => e.stopPropagation()}>
         <div style={headerStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             {onBack && (
@@ -1618,7 +916,62 @@ function computeLogHours(startTime, endTime) {
 // (a plain select beats free text: no typos, easy to scan on the printed
 // report). A legacy/free-typed value that isn't one of these three is
 // still kept as an extra option so older entries never lose their data.
-const DAILY_LOG_YARDS = ["Newmarket", "Richmond Hill", "Caldari", "Stouffville", "Maple"];
+const DAILY_LOG_YARDS = ["Newmarket", "Richmond Hill", "Caldari"];
+
+// Approximate coordinates of each yard, used only on-device to pre-select
+// the nearest yard from the phone's GPS (nothing is sent anywhere).
+//   Newmarket     -- 18106/18110 Yonge St, Newmarket
+//   Richmond Hill -- 55 Orlando Ave, Richmond Hill
+//   Caldari       -- 221 Caldari Rd, Vaughan
+// If a pin is off, adjust it here. Only a yard within
+// DAILY_LOG_YARD_RADIUS_KM counts as "at the yard".
+const DAILY_LOG_YARD_COORDS = {
+  "Newmarket": { lat: 44.0745, lng: -79.4600 },
+  "Richmond Hill": { lat: 43.8490, lng: -79.3890 },
+  "Caldari": { lat: 43.8180, lng: -79.5000 },
+};
+const DAILY_LOG_YARD_RADIUS_KM = 3;
+
+function distanceKm(aLat, aLng, bLat, bLng) {
+  const R = 6371;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function nearestDailyLogYard(lat, lng) {
+  let best = null;
+  Object.entries(DAILY_LOG_YARD_COORDS).forEach(([yard, c]) => {
+    const km = distanceKm(lat, lng, c.lat, c.lng);
+    if (!best || km < best.km) best = { yard, km };
+  });
+  return best && best.km <= DAILY_LOG_YARD_RADIUS_KM ? best : null;
+}
+
+// Local-time date/time strings. (toISOString() is UTC, which in Ontario
+// rolls the date over to "tomorrow" every evening after 8 PM.)
+function localDateStr(d = new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function localTimeStr(d = new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// One entry per date: keep the first entry for each date and drop any
+// later ones. Cleans up the duplicates earlier versions allowed when
+// Save was tapped more than once.
+function dedupeDailyLogEntries(list) {
+  const seen = new Set();
+  return list.filter((e) => {
+    if (!e || !e.date || seen.has(e.date)) return false;
+    seen.add(e.date);
+    return true;
+  });
+}
 
 // Gregorian month names for the Daily Log's month-group headers. Entries
 // are stored and shown with Gregorian dates (matching the <input type="date">
@@ -1660,7 +1013,7 @@ function ProfilePanel({ lang, profile, onSave, onClear, onClose }) {
   };
 
   return (
-    <Modal title={t("profileTitle", lang)} onClose={onClose} headerGradient="var(--t-profile-g)" accent="var(--t-profile)">
+    <Modal title={t("profileTitle", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #E0447F, #F17CA6)" accent="#E0447F">
       <div style={styles.smallLabel}>{t("firstNameLabel", lang)}</div>
       <input
         type="text"
@@ -1705,7 +1058,7 @@ function MyScheduleModal({ crew, name, lang, themeMode, onClose, onBack }) {
   // orange instead, same treatment (border + glow + badge), different hue.
   const todayTheme = themeMode === "dark" ? { accent: "#CCFF00", ring: "rgba(204,255,0,0.22)", glow: "rgba(204,255,0,0.6)", badgeGlow: "rgba(204,255,0,0.7)", badgeText: "#111" } : { accent: "#FF6A00", ring: "rgba(255,106,0,0.22)", glow: "rgba(255,106,0,0.5)", badgeGlow: "rgba(255,106,0,0.55)", badgeText: "#fff" };
   return (
-        <Modal title={`${t("myScheduleTitle", lang)} — ${t("crewWord", lang)} ${String(crew.crew)}${name ? " · " + name : ""}`} onClose={onClose} onBack={onBack} headerGradient="var(--my-g)" accent="var(--my)">
+        <Modal title={`${t("myScheduleTitle", lang)} — ${t("crewWord", lang)} ${String(crew.crew)}${name ? " · " + name : ""}`} onClose={onClose} onBack={onBack} headerGradient="linear-gradient(135deg, #4C3FD9, #6D5CE0)" accent="#4C3FD9">
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {weekdayNames.map((wd, i) => {
           const d = dayCell(i);
@@ -1741,21 +1094,80 @@ function MyScheduleModal({ crew, name, lang, themeMode, onClose, onBack }) {
 
 function DailyLogPanel({ lang, onClose }) {
   const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
-  const todayStr = () => new Date().toISOString().slice(0, 10);
-  const [entries, setEntries] = useState(() => loadDailyLogEntries());
+  const todayStr = () => localDateStr();
+  const [entries, setEntries] = useState(() => {
+    const loaded = loadDailyLogEntries();
+    const clean = dedupeDailyLogEntries(loaded);
+    if (clean.length !== loaded.length) saveDailyLogEntries(clean);
+    return clean;
+  });
+  // Mirrors `entries` synchronously, so a rapid double-tap on Add sees the
+  // first tap's entry before React re-renders.
+  const entriesRef = useRef(entries);
   const [editingId, setEditingId] = useState(null);
   const lastEntry = entries.length ? entries[entries.length - 1] : null;
   const [date, setDate] = useState(todayStr());
-  const [startTime, setStartTime] = useState(lastEntry?.startTime || "");
-  const [endTime, setEndTime] = useState(lastEntry?.endTime || "");
-  const [startYard, setStartYard] = useState(DAILY_LOG_YARDS.includes(lastEntry?.startYard) ? lastEntry.startYard : "");
-  const [endYard, setEndYard] = useState(DAILY_LOG_YARDS.includes(lastEntry?.endYard) ? lastEntry.endYard : "");
+  const [startTime, setStartTime] = useState(localTimeStr());
+  const [endTime, setEndTime] = useState("");
+  const [startYard, setStartYard] = useState(lastEntry?.startYard || "");
+  const [endYard, setEndYard] = useState(lastEntry?.endYard || "");
   const [description, setDescription] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [importText, setImportText] = useState("");
   const [importResult, setImportResult] = useState(null);
   const [backupCopied, setBackupCopied] = useState(false);
+  const [saveMsg, setSaveMsg] = useState(null); // { kind: "ok"|"dup", text, dupId? }
+  const [highlightId, setHighlightId] = useState(null);
+  const [locStatus, setLocStatus] = useState(null); // { kind, yard?, km? }
+  const endYardTouched = useRef(false);
+
+  const commitEntries = (next) => {
+    entriesRef.current = next;
+    setEntries(next);
+    saveDailyLogEntries(next);
+  };
+
+  // Scroll the just-added/updated row into view and flash it, so it's
+  // obvious it landed in the table (new rows often go into a week further
+  // down than what's on screen).
+  useEffect(() => {
+    if (!highlightId) return;
+    const row = document.querySelector(`[data-log-id="${highlightId}"]`);
+    if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = setTimeout(() => setHighlightId(null), 2500);
+    return () => clearTimeout(timer);
+  }, [highlightId]);
+
+  const detectYard = () => {
+    if (!navigator.geolocation) { setLocStatus({ kind: "denied" }); return; }
+    setLocStatus({ kind: "locating" });
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const hit = nearestDailyLogYard(pos.coords.latitude, pos.coords.longitude);
+        if (!hit) { setLocStatus({ kind: "none" }); return; }
+        setStartYard(hit.yard);
+        if (!endYardTouched.current) setEndYard(hit.yard);
+        setLocStatus({ kind: "ok", yard: hit.yard, km: hit.km });
+      },
+      () => setLocStatus({ kind: "denied" }),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
+
+  // Auto-detect only when location permission is already granted, so
+  // opening the log never pops a permission prompt by itself. Otherwise
+  // the "Detect yard" button asks.
+  useEffect(() => {
+    let cancelled = false;
+    try {
+      navigator.permissions?.query({ name: "geolocation" })
+        .then((res) => { if (!cancelled && res.state === "granted") detectYard(); })
+        .catch(() => {});
+    } catch { /* Permissions API unavailable */ }
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const dayIdx = useMemo(() => {
     const d = new Date(date + "T00:00:00");
@@ -1802,12 +1214,21 @@ function DailyLogPanel({ lang, onClose }) {
 
   const resetFormAfterSave = () => {
     setDate(todayStr());
+    setStartTime(localTimeStr());
+    setEndTime("");
     setDescription("");
     setEditingId(null);
   };
 
   const handleSave = () => {
     if (!date || !startTime || !endTime) return;
+    const current = entriesRef.current;
+    const clash = current.find((e) => e.date === date && e.id !== editingId);
+    if (clash) {
+      setSaveMsg({ kind: "dup", text: t("dailyLogDuplicate", lang), dupId: clash.id });
+      setHighlightId(clash.id);
+      return;
+    }
     const entry = {
       id: editingId || String(Date.now()),
       date, startTime, endTime,
@@ -1816,28 +1237,30 @@ function DailyLogPanel({ lang, onClose }) {
       totalHours,
     };
     const next = editingId
-      ? entries.map((e) => (e.id === editingId ? entry : e))
-      : [...entries, entry];
+      ? current.map((e) => (e.id === editingId ? entry : e))
+      : [...current, entry];
     next.sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
-    setEntries(next);
-    saveDailyLogEntries(next);
+    commitEntries(next);
+    setSaveMsg({ kind: "ok", text: t(editingId ? "dailyLogUpdated" : "dailyLogAdded", lang) });
+    setHighlightId(entry.id);
     resetFormAfterSave();
   };
 
   const handleEdit = (entry) => {
+    setSaveMsg(null);
+    endYardTouched.current = true;
     setEditingId(entry.id);
     setDate(entry.date);
     setStartTime(entry.startTime);
     setEndTime(entry.endTime);
-    setStartYard(DAILY_LOG_YARDS.includes(entry.startYard) ? entry.startYard : "");
-    setEndYard(DAILY_LOG_YARDS.includes(entry.endYard) ? entry.endYard : "");
+    setStartYard(entry.startYard);
+    setEndYard(entry.endYard);
     setDescription(entry.description);
   };
 
   const handleCancelEdit = () => {
-    setEditingId(null);
-    setDate(todayStr());
-    setDescription("");
+    setSaveMsg(null);
+    resetFormAfterSave();
   };
 
   // Bulk-import: one shift per pasted line, Tab-separated (matches what a
@@ -1846,7 +1269,8 @@ function DailyLogPanel({ lang, onClose }) {
   // still the way to fix or replace one day.
   const handleImport = () => {
     const lines = importText.split("\n").map((l) => l.trim()).filter(Boolean);
-    const existingDates = new Set(entries.map((e) => e.date));
+    const current = entriesRef.current;
+    const existingDates = new Set(current.map((e) => e.date));
     const imported = [];
     let skipped = 0;
     lines.forEach((line, i) => {
@@ -1863,18 +1287,17 @@ function DailyLogPanel({ lang, onClose }) {
       existingDates.add(rDate);
     });
     if (imported.length) {
-      const next = [...entries, ...imported].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
-      setEntries(next);
-      saveDailyLogEntries(next);
+      const next = [...current, ...imported].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+      commitEntries(next);
     }
     setImportText("");
     setImportResult({ added: imported.length, skipped });
   };
 
   const handleDelete = (id) => {
-    const next = entries.filter((e) => e.id !== id);
-    setEntries(next);
-    saveDailyLogEntries(next);
+    const next = entriesRef.current.filter((e) => e.id !== id);
+    commitEntries(next);
+    if (saveMsg?.dupId === id) setSaveMsg(null);
     if (editingId === id) handleCancelEdit();
   };
 
@@ -1892,8 +1315,8 @@ function DailyLogPanel({ lang, onClose }) {
     const now = new Date();
     const first = new Date(now.getFullYear(), now.getMonth(), 1);
     const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    setFromDate(first.toISOString().slice(0, 10));
-    setToDate(last.toISOString().slice(0, 10));
+    setFromDate(localDateStr(first));
+    setToDate(localDateStr(last));
   };
 
   const handleExport = () => {
@@ -1924,13 +1347,13 @@ function DailyLogPanel({ lang, onClose }) {
   };
 
   return (
-    <Modal title={t("dailyLogTitle", lang)} onClose={onClose} headerGradient="var(--t-log-g)" accent="var(--t-log)">
+    <Modal title={t("dailyLogTitle", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #2463EB, #4F8CFB)" accent="#2463EB">
       <p style={styles.hint}>{t("dailyLogHint", lang)}</p>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 140px" }}>
           <div style={styles.smallLabel}>{t("dailyLogDateLabel", lang)}{dayIdx !== null ? ` · ${weekdayNames[dayIdx]}` : ""}</div>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={styles.numInputWide} />
+          <input type="date" value={date} onChange={(e) => { setSaveMsg(null); setDate(e.target.value); }} style={styles.numInputWide} />
         </div>
         <div style={{ flex: "1 1 100px" }}>
           <div style={styles.smallLabel}>{t("dailyLogStartTimeLabel", lang)}</div>
@@ -1948,15 +1371,31 @@ function DailyLogPanel({ lang, onClose }) {
           <select value={startYard} onChange={(e) => setStartYard(e.target.value)} style={styles.numInputWide}>
             <option value="">{t("dailyLogSelectYardPlaceholder", lang)}</option>
             {DAILY_LOG_YARDS.map((y) => <option key={y} value={y}>{y}</option>)}
+            {startYard && !DAILY_LOG_YARDS.includes(startYard) && <option value={startYard}>{startYard}</option>}
           </select>
         </div>
         <div style={{ flex: 1 }}>
           <div style={styles.smallLabel}>{t("dailyLogEndYardLabel", lang)}</div>
-          <select value={endYard} onChange={(e) => setEndYard(e.target.value)} style={styles.numInputWide}>
+          <select value={endYard} onChange={(e) => { endYardTouched.current = true; setEndYard(e.target.value); }} style={styles.numInputWide}>
             <option value="">{t("dailyLogSelectYardPlaceholder", lang)}</option>
             {DAILY_LOG_YARDS.map((y) => <option key={y} value={y}>{y}</option>)}
+            {endYard && !DAILY_LOG_YARDS.includes(endYard) && <option value={endYard}>{endYard}</option>}
           </select>
         </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button type="button" onClick={detectYard} disabled={locStatus?.kind === "locating"} style={{ ...styles.smallActionBtn, opacity: locStatus?.kind === "locating" ? 0.6 : 1 }}>
+          <MapPin size={14} /> {t("dailyLogLocateBtn", lang)}
+        </button>
+        {locStatus && (
+          <span style={{ fontSize: 11.5, color: locStatus.kind === "ok" ? "#1E7A45" : "var(--muted)" }}>
+            {locStatus.kind === "locating" && t("dailyLogLocating", lang)}
+            {locStatus.kind === "ok" && `${t("dailyLogLocatedAt", lang)} ${locStatus.yard}`}
+            {locStatus.kind === "none" && t("dailyLogNoYardNearby", lang)}
+            {locStatus.kind === "denied" && t("dailyLogLocationDenied", lang)}
+          </span>
+        )}
       </div>
 
       <div style={{ ...styles.smallLabel, marginTop: 10 }}>{t("dailyLogDescriptionLabel", lang)}</div>
@@ -2001,6 +1440,20 @@ function DailyLogPanel({ lang, onClose }) {
           </button>
         )}
       </div>
+      {saveMsg && (
+        <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, fontSize: 12, background: saveMsg.kind === "ok" ? "#E6F4EA" : "#FDECEA", color: saveMsg.kind === "ok" ? "#1E7A45" : "#B3432A", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ flex: 1 }}>{saveMsg.text}</span>
+          {saveMsg.kind === "dup" && (
+            <button
+              type="button"
+              onClick={() => { const e = entriesRef.current.find((x) => x.id === saveMsg.dupId); if (e) handleEdit(e); }}
+              style={{ ...styles.smallActionBtn, padding: "4px 8px" }}
+            >
+              <Pencil size={12} /> {t("dailyLogEditExisting", lang)}
+            </button>
+          )}
+        </div>
+      )}
 
       <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
         <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 4 }}>{t("dailyLogBackupTitle", lang)}</div>
@@ -2085,7 +1538,7 @@ function DailyLogPanel({ lang, onClose }) {
                         {wk.entries.map((e) => {
                           rowNo += 1;
                           return (
-                            <tr key={e.id}>
+                            <tr key={e.id} data-log-id={e.id} style={{ background: highlightId === e.id ? "rgba(36, 99, 235, 0.18)" : undefined, transition: "background 0.6s" }}>
                               <td style={styles.dailyLogTd}>{lang === "fa" ? toFaDigits(rowNo) : rowNo}</td>
                               <td style={styles.dailyLogTd}>{weekdayNames[new Date(e.date + "T00:00:00").getDay()]}</td>
                               <td style={styles.dailyLogTd}>{e.date}</td>
@@ -2147,31 +1600,16 @@ function DailyLogPanel({ lang, onClose }) {
 
 const HELP_CONTENT = {
   fa: [
-    ["صفحهٔ اصلی و «شیفت من»", "بلاک «شیفت من» کنار ساعت، شیفت امروزت رو نشون می‌ده و با کلیک روش برنامهٔ هفتگیت باز می‌شه. برای اینکه کار کنه، اول توی «پروفایل من» اسم و شمارهٔ گروهت رو وارد کن و فایل اکسل رو یک بار بارگذاری کن."],
-    ["اولویت‌بندی شیفت", "روی بنر «اولویت‌بندی شیفت» بزن، فایل اکسل رو آپلود کن (اگه چند شیت داره، شیت درست رو انتخاب کن). بعد معیارها (شیفت AM/PM، تعداد روز کاری، روزهای تعطیل دلخواه، منطقه، آماده‌باش) رو به ترتیب اهمیت انتخاب کن و «محاسبه و رتبه‌بندی» رو بزن. رتبه‌بندی دقیقاً طبق همین ترتیبه: اول معیار ۱، تساوی رو معیار ۲ می‌شکنه و همین‌طور."],
-    ["خوندن نتیجه‌ها", "سه گروه اول مدال طلا/نقره/برنز دارن. عدد درصد روی هر کارت، میزان تطابق کلی اون گروه با اولویت‌هات از ۱۰۰ است: ۷۵٪ و بالاتر طلایی، ۴۰ تا ۷۴٪ سبز، زیر ۴۰٪ خاکستری. نوار هر معیار هم نشون می‌ده اون گروه چقدر با همون معیار جوره."],
-    ["مقایسه و مشاهدهٔ گروه‌ها", "«مقایسه گروه‌ها در کل هفته»: تا ۵ گروه رو روز‌به‌روز کنار هم ببین. «مشاهدهٔ گروه‌ها»: با شماره یا اسم، برنامهٔ هفتگی هر گروه رو باز کن. از نتایج هم می‌تونی چند گروه رو برای مقایسه علامت بزنی."],
-    ["جایگزین برای مرخصی", "شمارهٔ گروهت، تاریخ و ساعت شیفتی که می‌خوای مرخصی بگیری رو بده و «پیدا کن» رو بزن. فقط کسایی نشون داده می‌شن که اون روز شیفت ندارن. اونایی که روزهای استراحت تو سر کارن اول میان، با گزینه‌های جابه‌جایی (Trade) که بر اساس تطابق با برنامهٔ تو مرتب شدن. علامت ⚠ یعنی استراحت بین دو شیفت کمتر از ۸ ساعت می‌شه."],
-    ["دفترچه شیفت روزانه", "هر روز تاریخ، ساعت شروع/پایان و یارد شروع/پایان (Newmarket، Richmond Hill، Caldari، Stouffville، Maple) رو ثبت کن تا با فیش حقوقی مقایسه کنی. داده‌ها فقط روی همین دستگاه ذخیره می‌شن؛ متن پشتیبان رو کپی کن و جای امن نگه دار."],
-    ["خروجی و ظاهر", "نتایج، مقایسه و دفترچه شیفت روزانه رو می‌تونی پرینت/PDF یا اکسل بگیری. زبان (فارسی/English/हिंदी) رو از بالای صفحه و حالت روشن/تیره و سبک ظاهر رو از «ظاهر برنامه» عوض کن."],
+    ["فایل اکسل رو آپلود کن", "شیت مربوطه رو انتخاب کن (اگه چند شیت داشت). برنامه خودش ستون‌های گروه، نوع، شیفت، روزها و ساعت رو پیدا می‌کنه."],
+    ["اولویت‌هاتو بچین", "از فهرست معیارها (شیفت، روز کاری، منطقه، آماده‌باش) به ترتیب اهمیت کلیک کن. رتبه‌بندی دقیقاً طبق همین ترتیبه: اول معیار ۱، تساوی رو معیار ۲ می‌شکنه، و همین‌طور."],
+    ["نتیجه رو ببین", "پنج گزینه برتر با مدال طلا/نقره/برنز نشون داده می‌شن. عدد سمت چپ هر کارت، درصد تطابق کلی اون گروه با اولویت‌های توئه."],
+    ["مقایسه و خروجی", "چند گروه رو برای مقایسه انتخاب کن، یا از منو، دو گروه رو برای مقایسه کامل هفتگی انتخاب کن. گزارش رو می‌تونی پرینت/PDF یا اکسل بگیری."],
   ],
   en: [
-    ["Home & My Shift", "The \u201cMy Shift\u201d block next to the clock shows today's shift; tap it to open your weekly schedule. For it to work, add your name and crew # in My Profile and load the Excel file once."],
-    ["Shift Prioritizer", "Tap the Shift Prioritizer banner and upload the Excel file (pick the right sheet if there are several). Then choose criteria (AM/PM shift, working days, custom days off, region, standby) in order of importance and tap Calculate & Rank. Ranking follows that exact order: criterion 1 first, ties broken by criterion 2, and so on."],
-    ["Reading the results", "The top three get gold/silver/bronze medals. The percentage on each card is that crew's overall match with your priorities, out of 100: 75% and up is gold, 40\u201374% green, under 40% grey. Each criterion bar shows how well that crew fits that one criterion."],
-    ["Compare & browse crews", "Compare crews for the whole week: see up to 5 crews side by side, day by day. Browse crews: open any crew's weekly schedule by number or name. You can also tick crews in the results to compare them."],
-    ["Find a leave replacement", "Enter your crew #, the date and the hours of the shift you want off, then tap Find replacements. Only crews who are off that day are listed. Crews who work on YOUR rest days come first, with Trade options ranked by how well they match your schedule. A \u26a0 means someone would get less than 8h rest between shifts."],
-    ["Daily Shift Log", "Log each day's date, start/end time and start/end yard (Newmarket, Richmond Hill, Caldari, Stouffville, Maple) to check against your paystub. Data stays on this device only \u2014 copy the backup text and keep it somewhere safe."],
-    ["Export & appearance", "Results, comparisons and the daily log can be printed/saved as PDF or exported to Excel. Switch language (\u0641\u0627 / EN / \u0939\u093f) at the top, and light/dark mode and style in Appearance."],
-  ],
-  hi: [
-    ["होम और My Shift", "घड़ी के पास \u201cMy Shift\u201d ब्लॉक आज की शिफ्ट दिखाता है; साप्ताहिक शेड्यूल खोलने के लिए उस पर टैप करें। इसके लिए My Profile में नाम और क्रू # डालें और एक बार Excel फ़ाइल लोड करें।"],
-    ["शिफ्ट प्राथमिकता", "Shift Prioritizer बैनर पर टैप करें और Excel फ़ाइल अपलोड करें। फिर मानदंड (AM/PM शिफ्ट, कार्य दिवस, छुट्टी के दिन, क्षेत्र, स्टैंडबाय) महत्व के क्रम में चुनें और Calculate & Rank दबाएँ। रैंकिंग ठीक इसी क्रम से होती है।"],
-    ["परिणाम पढ़ना", "शीर्ष तीन को सोना/चाँदी/कांस्य पदक मिलते हैं। हर कार्ड पर प्रतिशत आपकी प्राथमिकताओं से कुल मेल (100 में से) है: 75% और ऊपर सुनहरा, 40\u201374% हरा, 40% से कम धूसर।"],
-    ["क्रू तुलना और ब्राउज़", "पूरे सप्ताह की तुलना: 5 तक क्रू को दिन-ब-दिन साथ देखें। क्रू ब्राउज़ करें: नंबर या नाम से किसी भी क्रू का शेड्यूल खोलें।"],
-    ["छुट्टी बदली खोजें", "अपना क्रू #, तारीख और छुट्टी वाली शिफ्ट का समय डालें और Find दबाएँ। केवल उस दिन फ्री क्रू दिखते हैं; जो आपके आराम के दिनों में काम करते हैं वे पहले आते हैं, Trade विकल्प आपके शेड्यूल से मेल के अनुसार क्रम में। \u26a0 का मतलब 8 घंटे से कम आराम।"],
-    ["दैनिक शिफ्ट लॉग", "हर दिन की तारीख, शुरू/समाप्ति समय और यार्ड (Newmarket, Richmond Hill, Caldari, Stouffville, Maple) दर्ज करें। डेटा केवल इसी डिवाइस पर रहता है \u2014 बैकअप टेक्स्ट कॉपी करके सुरक्षित रखें।"],
-    ["एक्सपोर्ट और रूप", "परिणाम, तुलना और दैनिक लॉग को प्रिंट/PDF या Excel में निकाल सकते हैं। भाषा ऊपर से, और लाइट/डार्क मोड Appearance से बदलें।"],
+    ["Upload the Excel file", "Pick the right sheet if there are several. The app auto-detects the crew, type, shift, weekday and hours columns."],
+    ["Build your priorities", "Click criteria (shift, working days, region, standby) in order of importance. Ranking follows that exact order: criterion 1 first, ties broken by criterion 2, and so on."],
+    ["Read the results", "The top five matches get gold/silver/bronze cards. The number on the left of each card is that crew's overall match score."],
+    ["Compare & export", "Select crews to compare, or use the menu to compare two crews for the full week. Export the report to print/PDF or Excel."],
   ],
 };
 
@@ -2259,7 +1697,7 @@ function CrewLookupPanel({ lang, crews, crewNames, onPick, onClose }) {
   }, [crews, crewNames, query]);
 
   return (
-    <Modal title={t("crewLookupTitle", lang)} onClose={onClose} headerGradient="var(--t-browse-g)" accent="var(--t-browse)">
+    <Modal title={t("crewLookupTitle", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #0EA37E, #3DDC97)" accent="#0EA37E">
       <div style={{ position: "relative", marginBottom: 10 }}>
         <Search size={14} style={{ position: "absolute", insetInlineStart: 10, top: 10, color: "var(--muted)" }} />
         <input
@@ -2283,290 +1721,6 @@ function CrewLookupPanel({ lang, crews, crewNames, onPick, onClose }) {
         ))}
         {list.length === 0 && <p style={styles.hint}>{t("crewNotFound", lang)}</p>}
       </div>
-    </Modal>
-  );
-}
-
-// ---------- Leave replacement finder ----------
-// Given a day the user wants off (date + shift hours), rank the crews that
-// could cover it. Hard rule: the candidate must have NO shift on that
-// weekday. Then, because the easiest ask is a straight trade, crews that
-// WORK on one of the user's own rest days rank first — the user can offer
-// to take that shift back in return. Ties break on rest gaps around the
-// shift (a candidate finishing late the night before is a harder ask) and
-// on how close the shift is to the candidate's usual hours and region.
-
-const SWAP_MIN_REST_MIN = 8 * 60;
-
-function timeToMinutes(v) {
-  if (v === null || v === undefined || v === "") return null;
-  if (typeof v === "number") {
-    const m = Math.round((v % 1) * 1440);
-    return ((m % 1440) + 1440) % 1440;
-  }
-  const s = String(v).trim().toLowerCase();
-  const m = s.match(/^(\d{1,2})(?::|\.|h)?(\d{2})?\s*(am|pm|a|p)?$/);
-  if (!m) return null;
-  let h = Number(m[1]);
-  const mm = Number(m[2] || 0);
-  const ap = m[3];
-  if (ap && ap.startsWith("p") && h < 12) h += 12;
-  if (ap && ap.startsWith("a") && h === 12) h = 0;
-  if (h > 24 || mm > 59) return null;
-  return (h * 60 + mm) % 1440;
-}
-
-function minutesToHHMM(m) {
-  const x = ((Math.round(m) % 1440) + 1440) % 1440;
-  return `${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}`;
-}
-
-// A day's shift as [start, end] in minutes relative to that day's midnight;
-// an end at or before the start means the shift runs past midnight.
-function shiftSpan(startMin, endMin) {
-  if (startMin === null) return null;
-  let end = endMin === null ? startMin : endMin;
-  if (end <= startMin) end += 1440;
-  return [startMin, end];
-}
-
-function daySpan(crew, dayIdx) {
-  const d = crew.days.find((x) => x.dayIdx === dayIdx);
-  if (!d) return null;
-  return shiftSpan(timeToMinutes(d.start), timeToMinutes(d.end));
-}
-
-// Rest (minutes) this crew would get before and after working [start,end]
-// on `dayIdx`, given its own shifts on the neighbouring days. null = that
-// neighbour day is off (plenty of rest).
-function restAround(crew, dayIdx, span) {
-  const prev = daySpan(crew, (dayIdx + 6) % 7);
-  const next = daySpan(crew, (dayIdx + 1) % 7);
-  const before = prev ? span[0] - (prev[1] - 1440) : null;
-  const after = next ? (next[0] + 1440) - span[1] : null;
-  return { before, after, ok: (before === null || before >= SWAP_MIN_REST_MIN) && (after === null || after >= SWAP_MIN_REST_MIN) };
-}
-
-function usualStart(crew) {
-  const starts = crew.days.map((d) => timeToMinutes(d.start)).filter((x) => x !== null).sort((a, b) => a - b);
-  if (!starts.length) return null;
-  return starts[Math.floor(starts.length / 2)];
-}
-
-// Longest run of consecutive working days in a weekly pattern (wraps the week).
-function maxConsecutiveDays(dayIdxs) {
-  const set = new Set(dayIdxs);
-  if (set.size === 7) return 7;
-  let best = 0;
-  for (let start = 0; start < 7; start++) {
-    if (set.has((start + 6) % 7) || !set.has(start)) continue;
-    let n = 0;
-    while (set.has((start + n) % 7) && n < 7) n++;
-    best = Math.max(best, n);
-  }
-  return best;
-}
-
-// How well one trade day fits MY schedule (0-100): the shift I'd take on my
-// rest day vs the hours I'm giving up, same region, enough rest around it,
-// and not stretching my week into a long run of days without a break.
-function tradeMatchScore(o, { span, targetRegion, myCrew, weekday }) {
-  const s = shiftSpan(timeToMinutes(o.start), timeToMinutes(o.end));
-  let score = 0;
-  if (s) {
-    const circ = (a, b) => Math.min(Math.abs(a - b), 1440 - Math.abs(a - b));
-    const diffH = (circ(s[0], span[0]) + circ(s[1] % 1440, span[1] % 1440)) / 2 / 60;
-    score += Math.max(0, 50 - diffH * 8); // start/end times (max 50)
-    const lenDiffH = Math.abs((s[1] - s[0]) - (span[1] - span[0])) / 60;
-    score += Math.max(0, 10 - lenDiffH * 3); // similar shift length (max 10)
-  }
-  if (!targetRegion || o.regionKey === targetRegion) score += 10; // same region (max 10)
-  if (o.myRest.ok) score += 20; // >= 8h rest for me around it (max 20)
-  if (myCrew) {
-    const newDays = myCrew.days.map((d) => d.dayIdx).filter((d) => d !== weekday).concat(o.dayIdx);
-    const streak = maxConsecutiveDays(newDays);
-    score += streak <= 5 ? 10 : Math.max(0, 10 - (streak - 5) * 5); // keeps a break in my week (max 10)
-  }
-  return Math.round(Math.min(100, score));
-}
-
-function findLeaveReplacements(crews, { weekday, startMin, endMin, myCrew, targetRegion }) {
-  const span = shiftSpan(startMin, endMin);
-  if (!span) return [];
-  const myOffDays = myCrew ? [0, 1, 2, 3, 4, 5, 6].filter((d) => !myCrew.days.some((x) => x.dayIdx === d)) : [];
-  const out = [];
-  for (const c of crews || []) {
-    if (myCrew && String(c.crew) === String(myCrew.crew)) continue;
-    if (c.days.some((d) => d.dayIdx === weekday)) continue; // works that day -> can't cover
-    if (!c.days.length) continue; // empty row / not an active crew
-
-    const candRest = restAround(c, weekday, span);
-
-    // Their shifts on my rest days = what I can offer to take in return.
-    const swapOptions = c.days
-      .filter((d) => myOffDays.includes(d.dayIdx))
-      .map((d) => {
-        const s = shiftSpan(timeToMinutes(d.start), timeToMinutes(d.end));
-        const myRest = s ? restAround(myCrew, d.dayIdx, s) : { ok: true, before: null, after: null };
-        // Days after the requested day first (the natural "I'll pay you back"), wrapping the week.
-        const dist = (d.dayIdx - weekday + 7) % 7;
-        return { ...d, myRest, dist };
-      })
-      .map((o) => ({ ...o, match: tradeMatchScore(o, { span, targetRegion, myCrew, weekday }) }))
-      // Best fit with my own schedule first; ties -> the sooner "pay back" day.
-      .sort((a, b) => (b.match - a.match) || (b.myRest.ok - a.myRest.ok) || (a.dist - b.dist));
-
-    const us = usualStart(c);
-    const diffH = us === null ? 6 : Math.min(Math.abs(us - startMin), 1440 - Math.abs(us - startMin)) / 60;
-    const timeFit = Math.max(0, 100 - diffH * 15);
-    const regionShare = targetRegion ? c.days.filter((d) => d.regionKey === targetRegion).length / c.days.length : null;
-    const fit = Math.round(regionShare === null ? timeFit : timeFit * 0.7 + regionShare * 100 * 0.3);
-
-    out.push({
-      crew: c,
-      swapOptions,
-      canSwap: swapOptions.length > 0,
-      swapRestOk: swapOptions.some((o) => o.myRest.ok),
-      candRest,
-      usualStart: us,
-      fit,
-    });
-  }
-  out.sort((a, b) =>
-    (b.canSwap - a.canSwap) ||
-    (b.candRest.ok - a.candRest.ok) ||
-    (b.swapRestOk - a.swapRestOk) ||
-    (b.fit - a.fit) ||
-    (a.crew.totalHours - b.crew.totalHours) ||
-    (Number(a.crew.crew) - Number(b.crew.crew))
-  );
-  return out;
-}
-
-function localDateStr(d = new Date()) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose }) {
-  const [myCrewNum, setMyCrewNum] = useState(profile?.crewNumber ? String(profile.crewNumber) : "");
-  const [date, setDate] = useState(localDateStr());
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [results, setResults] = useState(null);
-  const [showAll, setShowAll] = useState(false);
-  const [error, setError] = useState("");
-
-  const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
-  const weekday = date ? new Date(date + "T00:00:00").getDay() : null;
-  const myCrew = useMemo(() => (crews || []).find((c) => String(c.crew) === myCrewNum.trim()) || null, [crews, myCrewNum]);
-  const myShiftThatDay = myCrew && weekday !== null ? myCrew.days.find((d) => d.dayIdx === weekday) : null;
-
-  // Pre-fill the hours from my own shift on that weekday; still editable.
-  useEffect(() => {
-    if (myShiftThatDay) {
-      setStartTime(formatExcelTime(myShiftThatDay.start));
-      setEndTime(formatExcelTime(myShiftThatDay.end));
-    }
-    setResults(null);
-  }, [myCrew, weekday]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const doFind = () => {
-    const s = timeToMinutes(startTime);
-    const e = timeToMinutes(endTime);
-    if (weekday === null || s === null || e === null) { setError(t("swapNeedInputs", lang)); setResults(null); return; }
-    setError("");
-    setShowAll(false);
-    setResults(findLeaveReplacements(crews, { weekday, startMin: s, endMin: e, myCrew, targetRegion: myShiftThatDay?.regionKey || null }));
-  };
-
-  const fmtRest = (m) => formatDuration(m / 60, lang);
-  const shown = results ? results.slice(0, showAll ? 15 : 5) : [];
-
-  return (
-    <Modal title={t("hubSwapFinder", lang)} onClose={onClose} headerGradient="var(--t-swap-g)" accent="var(--t-swap)">
-      <p style={styles.hint}>{t("swapIntro", lang)}</p>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapMyCrew", lang)}
-          <input type="number" value={myCrewNum} onChange={(e) => setMyCrewNum(e.target.value)} placeholder={t("crewWord", lang)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
-        </label>
-        <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapDate", lang)}{weekday !== null ? ` · ${weekdayNames[weekday]}` : ""}
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
-        </label>
-        <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapStart", lang)}
-          <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
-        </label>
-        <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapEnd", lang)}
-          <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
-        </label>
-      </div>
-      {myCrewNum.trim() && !myCrew && <div style={styles.errorBox}><AlertCircle size={15} /><span>{t("crewNumberNotInFile", lang)}</span></div>}
-      {!myCrewNum.trim() && <p style={{ ...styles.hint, marginTop: 8 }}>{t("swapNoCrewHint", lang)}</p>}
-      {myCrew && weekday !== null && !myShiftThatDay && <p style={{ ...styles.hint, marginTop: 8, color: "#B3432A" }}>{t("swapAlreadyOff", lang)}</p>}
-      {myCrew && (
-        <p style={{ ...styles.hint, marginTop: 8 }}>
-          {t("swapMyRestDays", lang)}: <b>{[0, 1, 2, 3, 4, 5, 6].filter((d) => !myCrew.days.some((x) => x.dayIdx === d)).map((d) => weekdayNames[d]).join(DAY_LIST_SEP[lang] || ", ") || "—"}</b>
-        </p>
-      )}
-      <button onClick={doFind} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)", marginTop: 8 }}>
-        <Search size={14} /> {t("swapFindBtn", lang)}
-      </button>
-      {error && <div style={styles.errorBox}><AlertCircle size={15} /><span>{error}</span></div>}
-
-      {results && (
-        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800 }}>
-            {t("swapResultsTitle", lang)} — {weekdayNames[weekday]} <bdi dir="ltr">{startTime}–{endTime}</bdi> · {results.length} {t("swapCandidatesWord", lang)}
-          </div>
-          {results.length === 0 && <p style={styles.hint}>{t("swapNoResults", lang)}</p>}
-          {shown.map((r, i) => {
-            const name = resolveCrewName(r.crew.crew, crews, crewNames);
-            const best = r.swapOptions[0];
-            return (
-              <Reveal key={r.crew.crew} className="sp-card" style={{ animationDelay: `${i * 90}ms`, border: "1px solid var(--border)", borderInlineStart: `4px solid ${r.canSwap ? "#0EA37E" : "#C9A227"}`, borderRadius: 10, padding: "9px 11px", background: "var(--card)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontWeight: 900, fontSize: 15, color: "var(--accent)" }}>{i + 1}</span>
-                  <span style={{ fontWeight: 800, fontSize: 13.5 }}>{t("crewWord", lang)} {String(r.crew.crew)}{name ? ` · ${name}` : ""}</span>
-                  <span style={{ marginInlineStart: "auto", fontSize: 11, color: "var(--muted)" }}>{t("swapFit", lang)} {r.fit}%</span>
-                </div>
-                <div style={{ fontSize: 12, marginTop: 5, display: "flex", flexDirection: "column", gap: 3 }}>
-                  <span style={{ color: "#0EA37E", fontWeight: 700 }}>✓ {t("swapOffThatDay", lang)} {weekdayNames[weekday]}</span>
-                  {r.usualStart !== null && <span style={{ color: "var(--muted)" }}>{t("swapUsualStart", lang)} {minutesToHHMM(r.usualStart)} · {r.crew.type} {r.crew.shiftRaw}</span>}
-                  {r.canSwap ? (
-                    <span style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                      <span style={{ fontWeight: 700 }}>⇄ {t("swapTradeFor", lang)}:</span>
-                      {r.swapOptions.map((o, k) => (
-                        <span key={o.dayIdx} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", background: k === 0 ? "rgba(14,163,126,0.10)" : "var(--bg)", border: `1px solid ${k === 0 ? "#0EA37E" : "var(--border)"}`, borderRadius: 7, padding: "4px 8px" }}>
-                          <b style={{ color: k === 0 ? "#0EA37E" : "var(--muted)" }}>{k + 1}</b>
-                          <b>{weekdayNames[o.dayIdx]}</b>
-                          <bdi dir="ltr">{formatExcelTime(o.start)}–{formatExcelTime(o.end)}</bdi>
-                          {o.myRest.ok ? null : <span style={{ color: "#B3432A" }}>⚠</span>}
-                          <span style={{ marginInlineStart: "auto", fontSize: 11, color: "var(--muted)" }}>{t("swapMatch", lang)} {o.match}%</span>
-                        </span>
-                      ))}
-                    </span>
-                  ) : (
-                    <span style={{ color: "#A07C00" }}>{t("swapNoTrade", lang)}</span>
-                  )}
-                  {best && !best.myRest.ok && <span style={{ color: "#B3432A" }}>⚠ {t("swapMyRestWarn", lang)}</span>}
-                  {!r.candRest.ok && (
-                    <span style={{ color: "#B3432A" }}>
-                      ⚠ {t("swapTheirRestWarn", lang)}
-                      {r.candRest.before !== null && r.candRest.before < SWAP_MIN_REST_MIN ? ` (${t("swapBefore", lang)} ${fmtRest(r.candRest.before)})` : ""}
-                      {r.candRest.after !== null && r.candRest.after < SWAP_MIN_REST_MIN ? ` (${t("swapAfter", lang)} ${fmtRest(r.candRest.after)})` : ""}
-                    </span>
-                  )}
-                </div>
-                <button onClick={() => onViewCrew(r.crew)} style={{ ...styles.smallActionBtn, marginTop: 7, padding: "5px 9px", fontSize: 11.5 }}>
-                  <CalendarOff size={13} /> {t("swapViewSchedule", lang)}
-                </button>
-              </Reveal>
-            );
-          })}
-          {results.length > 5 && !showAll && (
-            <button onClick={() => setShowAll(true)} style={styles.smallActionBtn}>{t("swapShowMore", lang)}</button>
-          )}
-        </div>
-      )}
     </Modal>
   );
 }
@@ -2824,16 +1978,20 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, dailyLogAccess, setD
 // ---------- Settings (theme) ----------
 
 function SettingsPanel({ lang, themeStyle, setThemeStyle, themeMode, setThemeMode, onClose }) {
-  const styleOptions = THEME_ORDER.map((v) => ({ v, l: THEME_PALETTES[v].name[lang] || THEME_PALETTES[v].name.en, th: THEME_PALETTES[v] }));
+  const styleOptions = [
+    { v: "win11", l: t("themeWin11", lang) },
+    { v: "macos", l: t("themeMac", lang) },
+    { v: "universal", l: t("themeUniversal", lang) },
+  ];
   return (
-    <Modal title={t("settingsTitle", lang)} onClose={onClose} headerGradient="var(--t-settings-g)" accent="var(--t-settings)">
+    <Modal title={t("settingsTitle", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #E08A1E, #F6B93B)" accent="#E08A1E">
       <div style={styles.prefGroup}>
         <div style={styles.prefTitle}>{t("themeMode", lang)}</div>
         <div style={styles.chipRow}>
-          <button key={themeMode === "light" ? "l-on" : "l"} onClick={() => setThemeMode("light")} style={{ ...styles.chip, ...(themeMode === "light" ? styles.chipActive : {}) }}>
+          <button onClick={() => setThemeMode("light")} style={{ ...styles.chip, ...(themeMode === "light" ? styles.chipActive : {}) }}>
             <Sun size={14} /> {t("light", lang)}
           </button>
-          <button key={themeMode === "dark" ? "d-on" : "d"} onClick={() => setThemeMode("dark")} style={{ ...styles.chip, ...(themeMode === "dark" ? styles.chipActive : {}) }}>
+          <button onClick={() => setThemeMode("dark")} style={{ ...styles.chip, ...(themeMode === "dark" ? styles.chipActive : {}) }}>
             <Moon size={14} /> {t("dark", lang)}
           </button>
         </div>
@@ -2842,11 +2000,7 @@ function SettingsPanel({ lang, themeStyle, setThemeStyle, themeMode, setThemeMod
         <div style={styles.prefTitle}>{t("themeStyle", lang)}</div>
         <div style={styles.chipRow}>
           {styleOptions.map((o) => (
-            <button key={o.v + (themeStyle === o.v ? "-on" : "")} onClick={() => setThemeStyle(o.v)} style={{ ...styles.chip, ...(themeStyle === o.v ? styles.chipActive : {}) }}>
-              {/* mini preview of the theme: hero, a tile and My Shift colours */}
-              <span aria-hidden="true" style={{ display: "inline-flex", borderRadius: 999, overflow: "hidden", border: "1px solid rgba(0,0,0,0.12)" }}>
-                {[o.th.hero[0], o.th.tiles.browse[0], o.th.my[0], o.th.light.accent2].map((c, i) => <span key={i} style={{ width: 9, height: 14, background: c }} />)}
-              </span>
+            <button key={o.v} onClick={() => setThemeStyle(o.v)} style={{ ...styles.chip, ...(themeStyle === o.v ? styles.chipActive : {}) }}>
               {themeStyle === o.v && <Check size={13} />} {o.l}
             </button>
           ))}
@@ -2889,17 +2043,6 @@ const PERSON_PALETTE = [
   { bg: "#FFF3E0", border: "#FFCC80", text: "#E65100" },
 ];
 
-// ---------- Export colours (PDF/print + Excel) ----------
-// Each report takes the hue of its section in the app: results = coral
-// (Shift Prioritizer), compare = violet/pink (Compare tile), daily log = blue.
-function exportCss(th) {
-  return `
-    body { font-family: Tahoma, 'Vazirmatn', sans-serif; margin: 24px; color:#1B2230; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .hdr h1 { color:${th.main}; }
-    .rainbow { height:5px; border-radius:3px; background:${exportRainbow()}; margin:-6px 0 14px; }
-    .toolbar .print-btn { background:${th.main} !important; border-color:${th.main} !important; }`;
-}
-
 function buildCompareHtml(matched, lang, timestamp) {
   const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
   const dir = lang === "fa" ? "rtl" : "ltr";
@@ -2928,15 +2071,15 @@ function buildCompareHtml(matched, lang, timestamp) {
         </div>
       </td>`;
     }).join("");
-    return `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:700;background:${exportTheme("compare").soft};white-space:nowrap;">${wd}</td>${cells}</tr>`;
+    return `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:700;background:#faf8f3;white-space:nowrap;">${wd}</td>${cells}</tr>`;
   }).join("");
 
-  const totalsRow = `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:800;background:${exportTheme("compare").soft};">${t("hours", lang)}</td>${matched.map((m) => `<td style="border:1px solid #ddd;padding:8px;text-align:center;font-weight:800;">${m.totalHours}</td>`).join("")}</tr>`;
+  const totalsRow = `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:800;background:#faf8f3;">${t("hours", lang)}</td>${matched.map((m) => `<td style="border:1px solid #ddd;padding:8px;text-align:center;font-weight:800;">${m.totalHours}</td>`).join("")}</tr>`;
   const metaRows = [
     [t("type", lang), matched.map((m) => m.type)],
     [t("shift", lang), matched.map((m) => m.shiftRaw)],
     [t("daysColumn", lang), matched.map((m) => m.workedCount)],
-  ].map(([label, vals]) => `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:600;background:${exportTheme("compare").soft};">${label}</td>${vals.map((v) => `<td style="border:1px solid #ddd;padding:8px;text-align:center;">${v}</td>`).join("")}</tr>`).join("");
+  ].map(([label, vals]) => `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:600;background:#faf8f3;">${label}</td>${vals.map((v) => `<td style="border:1px solid #ddd;padding:8px;text-align:center;">${v}</td>`).join("")}</tr>`).join("");
 
   return `<!doctype html><html lang="${lang}" dir="${dir}"><head><meta charset="UTF-8" />
   <title>${t("compare2Title", lang)}</title>
@@ -2949,8 +2092,7 @@ function buildCompareHtml(matched, lang, timestamp) {
     .toolbar { position: sticky; top: 0; background: #fff; padding: 10px 0 16px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; margin-bottom: 16px; z-index: 10; }
     .toolbar button { font-size:14px; padding:10px 16px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
     .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
-    .toolbar .print-btn { color:#fff; font-weight:700; }
-    ${exportCss(exportTheme("compare"))}
+    .toolbar .print-btn { background:#2F5D62; color:#fff; border-color:#2F5D62; font-weight:700; }
     @media print { .toolbar { display: none !important; } }
   </style></head>
   <body>
@@ -2962,7 +2104,6 @@ function buildCompareHtml(matched, lang, timestamp) {
       <div><h1>${t("compare2Title", lang)}</h1></div>
       <div class="ts">${timestamp}</div>
     </div>
-    <div class="rainbow"></div>
     <table>
       <thead><tr><th style="border:1px solid #ddd;padding:10px;"></th>${headerCells}</tr></thead>
       <tbody>${rows}${totalsRow}${metaRows}</tbody>
@@ -2974,12 +2115,12 @@ function buildResultsHtml(results, priorityList, lang, timestamp) {
   const dir = lang === "fa" ? "rtl" : "ltr";
   const critLabels = priorityList.map((id, i) => `${i + 1}. ${results[0]?.fingerprint?.[i]?.label?.[lang] || CRITERIA_CATALOG.find((c) => c.id === id)?.label[lang]}`);
   const headers = [t("rank", lang), t("crewWord", lang), t("type", lang), t("shift", lang), t("daysColumn", lang), t("hours", lang), t("region", lang), ...critLabels];
-  const headCells = headers.map((h) => `<th style="border:1px solid #ddd;padding:8px;background:${exportTheme("results").head};color:${exportTheme("results").headText};">${h}</th>`).join("");
+  const headCells = headers.map((h) => `<th style="border:1px solid #ddd;padding:8px;background:#EAF1EF;">${h}</th>`).join("");
   const medalBg = { 0: "#FBF1DA", 1: "#F2F2F2", 2: "#F6E9DC" };
   const rows = results.map((r, idx) => {
     const regionText = Object.entries(r.regionSummary).map(([k, arr]) => `${arr.length} ${regionLabel(k, lang)} (${arr.join(", ")} ${t("hoursWord", lang)})`).join("; ");
     const cells = [idx + 1, r.crew, r.type, r.shiftRaw, r.workedCount, r.totalHours, regionText, ...r.fingerprint.map((f) => `${f.score}%`)];
-    const bg = medalBg[idx] || (idx % 2 ? exportTheme("results").zebra : "#FFFFFF");
+    const bg = medalBg[idx] || (idx % 2 ? "#FAFAF8" : "#FFFFFF");
     return `<tr>${cells.map((c) => `<td style="border:1px solid #ddd;padding:7px;background:${bg};">${c}</td>`).join("")}</tr>`;
   }).join("");
 
@@ -2994,8 +2135,7 @@ function buildResultsHtml(results, priorityList, lang, timestamp) {
     .toolbar { position: sticky; top: 0; background: #fff; padding: 10px 0 16px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; margin-bottom: 16px; z-index: 10; }
     .toolbar button { font-size:14px; padding:10px 16px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
     .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
-    .toolbar .print-btn { color:#fff; font-weight:700; }
-    ${exportCss(exportTheme("results"))}
+    .toolbar .print-btn { background:#2F5D62; color:#fff; border-color:#2F5D62; font-weight:700; }
     @media print { .toolbar { display: none !important; } }
   </style></head>
   <body>
@@ -3007,7 +2147,6 @@ function buildResultsHtml(results, priorityList, lang, timestamp) {
       <div><h1>${t("resultsTitle", lang)}</h1></div>
       <div class="ts">${timestamp}</div>
     </div>
-    <div class="rainbow"></div>
     <table><thead><tr>${headCells}</tr></thead><tbody>${rows}</tbody></table>
   </body></html>`;
 }
@@ -3048,15 +2187,15 @@ function buildDailyLogHtml(entries, lang, timestamp) {
     t("dailyLogEndTimeLabel", lang), t("dailyLogStartYardLabel", lang), t("dailyLogEndYardLabel", lang),
     t("dailyLogDescriptionLabel", lang), t("dailyLogTotalHoursLabel", lang),
   ];
-  const headCells = headers.map((h) => `<th style="border:1px solid #ddd;padding:8px;background:${exportTheme("dailyLog").head};color:${exportTheme("dailyLog").headText};">${h}</th>`).join("");
+  const headCells = headers.map((h) => `<th style="border:1px solid #ddd;padding:8px;background:#EAF1EF;">${h}</th>`).join("");
   const rows = entries.map((e, idx) => {
     const wd = weekdayNames[new Date(e.date + "T00:00:00").getDay()];
-    const bg = idx % 2 ? exportTheme("dailyLog").zebra : "#FFFFFF";
+    const bg = idx % 2 ? "#FAFAF8" : "#FFFFFF";
     const cells = [wd, e.date, e.startTime, e.endTime, e.startYard || "-", e.endYard || "-", e.description || "-", formatDuration(e.totalHours, lang)];
     return `<tr>${cells.map((c) => `<td style="border:1px solid #ddd;padding:7px;background:${bg};">${c}</td>`).join("")}</tr>`;
   }).join("");
   const totalHours = entries.reduce((sum, e) => sum + (e.totalHours || 0), 0);
-  const totalRow = `<tr><td colspan="7" style="border:1px solid #ddd;padding:8px;font-weight:800;background:${exportTheme("dailyLog").soft};text-align:${dir === "rtl" ? "left" : "right"};">${t("dailyLogTotalRowLabel", lang)}</td><td style="border:1px solid #ddd;padding:8px;font-weight:800;background:${exportTheme("dailyLog").soft};">${formatDuration(totalHours, lang)}</td></tr>`;
+  const totalRow = `<tr><td colspan="7" style="border:1px solid #ddd;padding:8px;font-weight:800;background:#faf8f3;text-align:${dir === "rtl" ? "left" : "right"};">${t("dailyLogTotalRowLabel", lang)}</td><td style="border:1px solid #ddd;padding:8px;font-weight:800;background:#faf8f3;">${formatDuration(totalHours, lang)}</td></tr>`;
   const body = entries.length
     ? `<table><thead><tr>${headCells}</tr></thead><tbody>${rows}${totalRow}</tbody></table>`
     : `<p>${t("dailyLogNoEntriesInRange", lang)}</p>`;
@@ -3072,8 +2211,7 @@ function buildDailyLogHtml(entries, lang, timestamp) {
     .toolbar { position: sticky; top: 0; background: #fff; padding: 10px 0 16px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; margin-bottom: 16px; z-index: 10; }
     .toolbar button { font-size:14px; padding:10px 16px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
     .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
-    .toolbar .print-btn { color:#fff; font-weight:700; }
-    ${exportCss(exportTheme("dailyLog"))}
+    .toolbar .print-btn { background:#2F5D62; color:#fff; border-color:#2F5D62; font-weight:700; }
     @media print { .toolbar { display: none !important; } }
   </style></head>
   <body>
@@ -3085,7 +2223,6 @@ function buildDailyLogHtml(entries, lang, timestamp) {
       <div><h1>${t("dailyLogReportTitle", lang)}</h1></div>
       <div class="ts">${timestamp}</div>
     </div>
-    <div class="rainbow"></div>
     ${body}
   </body></html>`;
 }
@@ -3176,11 +2313,11 @@ function compareToExcel(matched, lang) {
     ws[ref].s = { ...(ws[ref].s || {}), ...style, alignment: { horizontal: "center", vertical: "center", ...(style.alignment || {}) } };
   };
 
-  setStyle(0, 0, { fill: { fgColor: { rgb: hexNoHash(exportTheme("compare").main) } }, font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } } });
-  setStyle(1, 0, { fill: { fgColor: { rgb: hexNoHash(exportTheme("compare").sub) } }, font: { italic: true, sz: 10, color: { rgb: "FFFFFF" } } });
-  setStyle(headerRow1Idx, 0, { fill: { fgColor: { rgb: hexNoHash(exportTheme("compare").head) } }, font: { bold: true, color: { rgb: hexNoHash(exportTheme("compare").headText) } } });
-  weekdayNames.forEach((wd, di) => setStyle(headerRow2Idx + 1 + di, 0, { fill: { fgColor: { rgb: hexNoHash(exportTheme("compare").soft) } }, font: { bold: true, color: { rgb: "20242B" } } }));
-  setStyle(totalsRowIdx, 0, { fill: { fgColor: { rgb: hexNoHash(exportTheme("compare").head) } }, font: { bold: true, color: { rgb: hexNoHash(exportTheme("compare").headText) } } });
+  setStyle(0, 0, { fill: { fgColor: { rgb: "2F5D62" } }, font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } } });
+  setStyle(1, 0, { fill: { fgColor: { rgb: "3E7C82" } }, font: { italic: true, sz: 10, color: { rgb: "FFFFFF" } } });
+  setStyle(headerRow1Idx, 0, { fill: { fgColor: { rgb: "EAF1EF" } }, font: { bold: true, color: { rgb: "20242B" } } });
+  weekdayNames.forEach((wd, di) => setStyle(headerRow2Idx + 1 + di, 0, { fill: { fgColor: { rgb: "FAF8F3" } }, font: { bold: true, color: { rgb: "20242B" } } }));
+  setStyle(totalsRowIdx, 0, { fill: { fgColor: { rgb: "EAF1EF" } }, font: { bold: true, color: { rgb: "20242B" } } });
 
   matched.forEach((m, i) => {
     const pal = PERSON_PALETTE[i % 5];
@@ -3234,7 +2371,7 @@ function CompareTwoPanel({ lang, crews, onClose }) {
   const dayCell = (crew, i) => crew.days.find((d) => d.dayIdx === i);
 
   return (
-    <Modal title={t("compare2Title", lang)} onClose={onClose} headerGradient="var(--t-compare-g)" accent="var(--t-compare)">
+    <Modal title={t("compare2Title", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #6D5CE0, #9C8CFB)" accent="#6D5CE0">
       <div style={styles.chipRow}>
         {crewNums.map((n, i) => (
           <div key={i} style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -3347,10 +2484,8 @@ function TopCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
   const Icon = medal ? medal.icon : null;
   const ds = displayScore(r.fingerprint);
   const isMine = profile?.crewNumber && String(r.crew) === String(profile.crewNumber);
-  const [cardRef, inView] = useInView();
-  const pct = scorePercent(ds);
   return (
-    <div ref={cardRef} className={`sp-card sp-reveal sp-shine sp-shine-soft${inView ? " sp-in" : ""}`} style={{ animationDelay: `${((rank - 1) % 4) * 90}ms`, "--sp-shine-delay": `${1.5 + (rank - 1) * 0.5}s`, ...styles.topCard, borderColor: isMine ? "var(--accent)" : medal ? medal.border : "var(--border)", ...(isMine ? { borderWidth: 2 } : {}) }}>
+    <div style={{ ...styles.topCard, borderColor: isMine ? "var(--accent)" : medal ? medal.border : "var(--border)", ...(isMine ? { borderWidth: 2 } : {}) }}>
       <div style={{ ...styles.topBadge, background: medal ? medal.color : "var(--accent)" }}>
         {Icon ? <Icon size={13} /> : rank}
         {Icon && <span>#{rank}</span>}
@@ -3360,15 +2495,14 @@ function TopCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
           {t("crewWord", lang)} {String(r.crew)}
           {isMine && <span style={styles.mineBadge}><Star size={10} /> {t("myShiftBadge", lang)}</span>}
         </div>
-        <div style={{ ...styles.scoreBadge, color: scoreColor(pct) }}><CountUp value={pct} run={inView} delay={200} />%</div>
+        <div style={{ ...styles.scoreBadge, color: fpColor(ds) }}>{ds.toFixed(4)}%</div>
       </div>
       <div style={styles.heroMeta}>{r.type} · {r.shiftRaw} · {r.workedCount} {t("days", lang)} · {r.totalHours} {t("hours", lang)}</div>
-      <FingerprintList fingerprint={r.fingerprint} lang={lang} run={inView} />
+      <FingerprintList fingerprint={r.fingerprint} lang={lang} />
       <RegionChips regionSummary={r.regionSummary} lang={lang} />
       <button onClick={() => toggleCompare(r.crew)} style={{ ...styles.compareToggle, ...(inCompare ? styles.compareToggleActive : {}) }}>
         {inCompare && <Check size={12} />} {t("addCompare", lang)}
       </button>
-      <span className="sp-shine-layer" aria-hidden="true" />
     </div>
   );
 }
@@ -3377,17 +2511,15 @@ function ResultCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
   const inCompare = compareSet.includes(r.crew);
   const ds = displayScore(r.fingerprint);
   const isMine = profile?.crewNumber && String(r.crew) === String(profile.crewNumber);
-  const [cardRef, inView] = useInView();
-  const pct = scorePercent(ds);
   return (
-    <div ref={cardRef} className={`sp-card sp-reveal${inView ? " sp-in" : ""}`} style={{ animationDelay: `${(rank % 3) * 80}ms`, ...styles.resultCard, ...(isMine ? { borderColor: "var(--accent)", borderWidth: 2 } : {}) }}>
+    <div style={{ ...styles.resultCard, ...(isMine ? { borderColor: "var(--accent)", borderWidth: 2 } : {}) }}>
       <div style={styles.resultCardTop}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={styles.rankBadge}>{rank}</span>
           <span style={styles.resultCrew}>{t("crewWord", lang)} {String(r.crew)}</span>
           {isMine && <span style={styles.mineBadge}><Star size={10} /> {t("myShiftBadge", lang)}</span>}
         </div>
-        <span style={{ ...styles.scoreBadgeSm, color: scoreColor(pct) }}><CountUp value={pct} run={inView} delay={150} />%</span>
+        <span style={{ ...styles.scoreBadgeSm, color: fpColor(ds) }}>{ds.toFixed(4)}%</span>
       </div>
       <div style={styles.resultMeta}>{r.type} · {r.shiftRaw} · {r.workedCount} {t("days", lang)} · {r.totalHours} {t("hours", lang)}</div>
       <FingerprintStrip fingerprint={r.fingerprint} />
@@ -3403,10 +2535,8 @@ function ResultCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
 
 export default function ShiftPriorityRanker() {
   const [lang, setLang] = useState("en");
-  const [themeStyle, setThemeStyle] = useState(() => loadThemePrefs().style);
-  const [themeMode, setThemeMode] = useState(() => loadThemePrefs().mode);
-  useEffect(() => { saveThemePrefs(themeStyle, themeMode); }, [themeStyle, themeMode]);
-  ACTIVE_THEME.style = themeStyle;
+  const [themeStyle, setThemeStyle] = useState("universal");
+  const [themeMode, setThemeMode] = useState("light");
   const [showPriorityFlow, setShowPriorityFlow] = useState(false);
   // 'settings' | 'help' | 'about' | 'helpMenu' | 'compare2' | 'profile'
   // | 'crewLookup' | 'adminLogin' | 'admin'
@@ -3426,7 +2556,6 @@ export default function ShiftPriorityRanker() {
   const [isAdmin, setIsAdmin] = useState(() => loadAdminSession());
   // The crew picked from the "Browse crews" lookup panel, or null.
   const [lookupCrew, setLookupCrew] = useState(null);
-  const [swapViewCrew, setSwapViewCrew] = useState(null);
 
   // Daily Log -- see loadDailyLogAccess/saveDailyLogAccess above.
   const [dailyLogAccess, setDailyLogAccess] = useState(() => loadDailyLogAccess());
@@ -3494,11 +2623,6 @@ export default function ShiftPriorityRanker() {
 
   const dir = lang === "fa" ? "rtl" : "ltr";
   const palette = getPalette(themeStyle, themeMode);
-  // Keep the installed app's window/title bar in step with the active theme.
-  useEffect(() => {
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", themeMode === "dark" ? palette.card : palette.accent);
-  }, [palette, themeMode]);
 
   const handleFile = (e) => {
     const file = e.target.files?.[0];
@@ -3631,9 +2755,9 @@ export default function ShiftPriorityRanker() {
       if (!ws[ref]) ws[ref] = { t: "s", v: "" };
       ws[ref].s = { ...(ws[ref].s || {}), ...style };
     };
-    setStyle(0, 0, { fill: { fgColor: { rgb: hexNoHash(exportTheme("results").main) } }, font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } } });
-    setStyle(1, 0, { fill: { fgColor: { rgb: hexNoHash(exportTheme("results").sub) } }, font: { italic: true, sz: 10, color: { rgb: "FFFFFF" } } });
-    headers.forEach((_, c) => setStyle(2, c, { fill: { fgColor: { rgb: hexNoHash(exportTheme("results").head) } }, font: { bold: true, color: { rgb: hexNoHash(exportTheme("results").headText) } } }));
+    setStyle(0, 0, { fill: { fgColor: { rgb: "2F5D62" } }, font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } } });
+    setStyle(1, 0, { fill: { fgColor: { rgb: "3E7C82" } }, font: { italic: true, sz: 10, color: { rgb: "FFFFFF" } } });
+    headers.forEach((_, c) => setStyle(2, c, { fill: { fgColor: { rgb: "EAF1EF" } }, font: { bold: true, color: { rgb: "20242B" } } }));
 
     const medalFill = { 0: "FBF1DA", 1: "F2F2F2", 2: "F6E9DC" };
     dataRows.forEach((_, i) => {
@@ -3654,11 +2778,10 @@ export default function ShiftPriorityRanker() {
   const rootVars = {
     "--bg": palette.bg, "--card": palette.card, "--border": palette.border, "--text": palette.text,
     "--muted": palette.muted, "--accent": palette.accent, "--accent2": palette.accent2, "--radius": palette.radius,
-    ...themeVars(themeStyle, themeMode),
   };
 
   return (
-    <div dir={dir} className={booting ? "sp-booting" : "sp-ready"} style={{ ...styles.page, ...rootVars }}>
+    <div dir={dir} style={{ ...styles.page, ...rootVars }}>
       <style>{`
         .print-report { display: none; }
         @media print {
@@ -3675,54 +2798,6 @@ export default function ShiftPriorityRanker() {
           animation: spp-spin 0.85s linear infinite;
         }
         @keyframes spp-spin { to { transform: rotate(360deg); } }
-
-        /* ---- light UI motion (CSS only; transform/opacity/width) ----
-           Home entrance is keyed on .sp-ready (set when the boot splash
-           closes) and cards/bars on .sp-in (set when scrolled into view),
-           so every animation plays while it can actually be seen. */
-        @keyframes sp-fade-up { from { opacity: 0; transform: translateY(18px) scale(0.98); } to { opacity: 1; transform: none; } }
-        @keyframes sp-pop { from { opacity: 0; transform: translateY(26px) scale(0.93); } to { opacity: 1; transform: none; } }
-        @keyframes sp-fade { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes sp-shine { 0%, 76% { transform: translateX(-260%) skewX(-18deg); } 100% { transform: translateX(560%) skewX(-18deg); } }
-        @keyframes sp-glow { 0%, 100% { box-shadow: 0 6px 14px var(--my-glow-soft), 0 0 0 0 transparent; } 50% { box-shadow: 0 8px 24px var(--my-glow), 0 0 0 5px var(--my-ring); } }
-        @keyframes sp-bob { 0%, 100% { transform: scale(1); opacity: 0.75; } 40% { transform: scale(1.8); opacity: 1; } 70% { transform: scale(1); } }
-
-        .sp-hero, .sp-tile, .sp-myshift { transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease; }
-        .sp-booting .sp-hero, .sp-booting .sp-tile, .sp-booting .sp-myshift { opacity: 0; }
-        .sp-ready .sp-hero { animation: sp-fade-up 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) 0.05s backwards; }
-        .sp-ready .sp-myshift { animation: sp-fade-up 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) backwards, sp-glow 2.8s ease-in-out 0.8s infinite; }
-        .sp-ready .sp-tile { animation: sp-fade-up 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
-        .sp-hero:hover, .sp-tile:hover { transform: translateY(-3px); filter: brightness(1.06); box-shadow: 0 10px 22px rgba(0,0,0,0.18) !important; }
-        .sp-myshift:hover { transform: translateY(-2px); filter: brightness(1.06); }
-        .sp-hero:active, .sp-tile:active, .sp-myshift:active { transform: scale(0.97); }
-
-        /* shine: an inner clipped layer, so cards whose badges sit outside
-           their box (medal cards) are not cut off; per-card delay/angle/direction */
-        .sp-shine { position: relative; }
-        .sp-shine-layer { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; z-index: 1; }
-        .sp-shine-layer::after { content: ""; position: absolute; top: -30%; bottom: -30%; left: 0; width: 34%;
-          background: linear-gradient(90deg, transparent 0%, var(--sp-shine-c2, rgba(255,255,255,0.08)) 28%, var(--sp-shine-c, rgba(255,255,255,0.30)) 50%, var(--sp-shine-c2, rgba(255,255,255,0.08)) 72%, transparent 100%);
-          transform: translateX(-260%) skewX(-18deg);
-          /* one pattern for every card: ~2.6s slow glide, then ~8s of calm */
-          animation: sp-shine 11s cubic-bezier(0.45, 0.05, 0.35, 1) var(--sp-shine-delay, 1.5s) infinite; }
-        .sp-shine-soft { --sp-shine-c: rgba(245, 190, 60, 0.22); --sp-shine-c2: rgba(245, 190, 60, 0.06); }
-
-        .sp-overlay { animation: sp-fade 0.22s ease backwards; }
-        .sp-modal { animation: sp-pop 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards; }
-
-        .sp-reveal { opacity: 0; transform: translateY(18px); }
-        .sp-reveal.sp-in { opacity: 1; transform: none; animation: sp-fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
-        .sp-bar { transition: width 0.9s cubic-bezier(0.2, 0.8, 0.2, 1); }
-
-        .sp-dot { animation: sp-bob 1.8s ease-in-out infinite; }
-
-        @media (prefers-reduced-motion: reduce) {
-          .sp-hero, .sp-tile, .sp-myshift, .sp-overlay, .sp-modal, .sp-reveal, .sp-dot, .sp-shine-layer::after,
-          .sp-ready .sp-hero, .sp-ready .sp-tile, .sp-ready .sp-myshift, .sp-reveal.sp-in { animation: none !important; transition: none !important; }
-          .sp-reveal, .sp-booting .sp-hero, .sp-booting .sp-tile, .sp-booting .sp-myshift { opacity: 1 !important; transform: none !important; }
-          .sp-shine-layer { display: none; }
-          .sp-bar { transition: none !important; }
-        }
       `}</style>
 
       {(booting || computing) && (
@@ -3778,26 +2853,6 @@ export default function ShiftPriorityRanker() {
       )}
       {activePanel === "compare2" && parsed && (
         <CompareTwoPanel lang={lang} crews={parsed.crews} onClose={() => setActivePanel(null)} />
-      )}
-      {activePanel === "swapFinder" && parsed && (
-        <SwapFinderPanel
-          lang={lang}
-          crews={parsed.crews}
-          crewNames={crewNames}
-          profile={profile}
-          onViewCrew={(c) => setSwapViewCrew(c)}
-          onClose={() => setActivePanel(null)}
-        />
-      )}
-      {swapViewCrew && (
-        <MyScheduleModal
-          crew={swapViewCrew}
-          name={resolveCrewName(swapViewCrew.crew, parsed?.crews, crewNames)}
-          lang={lang}
-          themeMode={themeMode}
-          onClose={() => setSwapViewCrew(null)}
-          onBack={() => setSwapViewCrew(null)}
-        />
       )}
       {activePanel === "crewLookup" && parsed && (
         <CrewLookupPanel
@@ -3860,100 +2915,59 @@ export default function ShiftPriorityRanker() {
         <header className="no-print" style={styles.header}>
           <img src="./logo.png" alt="" style={styles.headerLogo} />
           <div style={styles.routeDots}>
-            <span className="sp-dot" style={styles.dot} /><span style={styles.routeLine} /><span className="sp-dot" style={{ ...styles.dot, animationDelay: ".35s" }} /><span style={styles.routeLine} /><span className="sp-dot" style={{ ...styles.dot, background: "var(--accent2)", animationDelay: ".7s" }} />
+            <span style={styles.dot} /><span style={styles.routeLine} /><span style={styles.dot} /><span style={styles.routeLine} /><span style={{ ...styles.dot, background: "var(--accent2)" }} />
           </div>
           <h1 style={styles.title}>{t("title", lang)}</h1>
           <p style={styles.subtitle}>{t("subtitle", lang)}</p>
           {profile?.firstName && (
             <p style={styles.welcomeLine}>{t("welcomeBack", lang)} <b>{profile.firstName}</b></p>
           )}
-          {showPriorityFlow ? (
-            <DateTimeWidget lang={lang} />
-          ) : (
-            // Home only: "My Shift" block physically LEFT of the clock in every
-            // language (the row is forced LTR; each block keeps the page direction).
-            <div style={{ display: "flex", justifyContent: "center", alignItems: "stretch", gap: 8, flexWrap: "nowrap", direction: "ltr" }}>
-              {(() => {
-                const myCrew = parsed && profile?.crewNumber ? parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber)) : null;
-                const today = myCrew ? myCrew.days.find((d) => d.dayIdx === new Date().getDay()) : null;
-                const onClick = () => {
-                  if (!profile?.crewNumber) setActivePanel("profile");
-                  else if (!parsed) setShowPriorityFlow(true);
-                  else if (myCrew) setShowMySchedule(true);
-                  else setActivePanel("profile");
-                };
-                const sub = !profile?.crewNumber ? t("myShiftHomeNoCrew", lang)
-                  : !parsed ? t("myShiftHomeNoFile", lang)
-                  : !myCrew ? t("crewNumberNotInFile", lang)
-                  : null;
-                return (
-                  <button className="sp-myshift sp-shine" onClick={onClick} style={{ "--sp-shine-delay": "1.8s", direction: dir, marginTop: 12, flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 104, padding: "8px 8px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", color: "#fff", background: "var(--my-g)", boxShadow: "0 6px 14px var(--my-glow-soft)", fontFamily: "inherit" }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontWeight: 800, fontSize: 13.5, whiteSpace: "nowrap" }}><Star size={13} color="#fff" /> {t("myShiftHomeTitle", lang)}</span>
-                    {myCrew && <span style={{ fontSize: 11.5, opacity: 0.9 }}>{t("crewWord", lang)} {String(myCrew.crew)}</span>}
-                    {myCrew && (today ? (
-                      <><span style={{ fontSize: 11, opacity: 0.9 }}>{t("todayLabel", lang)}</span><bdi dir="ltr" style={{ fontSize: 12.5, fontWeight: 800, whiteSpace: "nowrap" }}>{formatExcelTime(today.start)}–{formatExcelTime(today.end)}</bdi></>
-                    ) : (
-                      <span style={{ fontSize: 12.5, fontWeight: 700, textAlign: "center" }}>{t("todayLabel", lang)}: {t("off", lang)}</span>
-                    ))}
-                    {sub && <span style={{ fontSize: 10.5, opacity: 0.9, lineHeight: 1.35, textAlign: "center" }}>{sub}</span>}
-                    <span className="sp-shine-layer" aria-hidden="true" />
-                  </button>
-                );
-              })()}
-              <div style={{ direction: dir, display: "flex", flex: "0 1 auto", minWidth: 0 }}><DateTimeWidget lang={lang} /></div>
-            </div>
-          )}
+          <DateTimeWidget lang={lang} />
         </header>
 
         {!showPriorityFlow && (
           <div className="no-print">
-            <button className="sp-hero sp-shine" onClick={() => setShowPriorityFlow(true)} style={{ ...styles.heroTile, "--sp-shine-delay": "1.2s" }}>
+            <button onClick={() => setShowPriorityFlow(true)} style={styles.heroTile}>
               <span style={styles.heroTileIcon}><Star size={22} color="#fff" /></span>
               <span style={{ flex: 1 }}>
                 <div style={styles.heroTileTitle}>{t("title", lang)}</div>
                 <div style={styles.heroTileSubtitle}>{t("subtitle", lang)}</div>
               </span>
               <ArrowLeft size={16} color="#fff" />
-              <span className="sp-shine-layer" aria-hidden="true" />
             </button>
 
             <div style={styles.hubGroupLabel}>{t("hubGroupCrews", lang)}</div>
             <div style={styles.hubGrid}>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("compare2")} style={{ "--sp-shine-delay": "2.4s", animationDelay: "80ms", ...styles.hubTile, background: "var(--t-compare-g)" }}>
+              <button onClick={() => setActivePanel("compare2")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #6D5CE0, #9C8CFB)" }}>
                 <GitCompare size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("compare2Title", lang)}</span>
-                <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("crewLookup")} style={{ "--sp-shine-delay": "2.9s", animationDelay: "135ms", ...styles.hubTile, background: "var(--t-browse-g)" }}>
+              <button onClick={() => setActivePanel("crewLookup")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #0EA37E, #3DDC97)" }}>
                 <Search size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("crewLookupTitle", lang)}</span>
-                <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("swapFinder")} style={{ "--sp-shine-delay": "3.4s", animationDelay: "190ms", ...styles.hubTile, background: "var(--t-swap-g)" }}>
+              <button disabled style={{ ...styles.hubTile, background: "linear-gradient(135deg, #9CA6B4, #C7CFD9)", opacity: 0.8, cursor: "not-allowed" }}>
+                <span style={styles.hubComingSoonBadge}>{t("hubComingSoon", lang)}</span>
                 <CalendarOff size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("hubSwapFinder", lang)}</span>
-                <span className="sp-shine-layer" aria-hidden="true" />
               </button>
             </div>
 
             <div style={styles.hubGroupLabel}>{t("hubGroupMe", lang)}</div>
             <div style={styles.hubGrid}>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("profile")} style={{ "--sp-shine-delay": "3.9s", animationDelay: "245ms", ...styles.hubTile, background: "var(--t-profile-g)" }}>
+              <button onClick={() => setActivePanel("profile")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #E0447F, #F17CA6)" }}>
                 <User size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("profileTitle", lang)}</span>
-                <span className="sp-shine-layer" aria-hidden="true" />
               </button>
               {dailyLogVisible && (
-                <button className="sp-tile sp-shine" onClick={() => setActivePanel("dailyLog")} style={{ "--sp-shine-delay": "4.4s", animationDelay: "300ms", ...styles.hubTile, background: "var(--t-log-g)" }}>
+                <button onClick={() => setActivePanel("dailyLog")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #2463EB, #4F8CFB)" }}>
                   <ClipboardList size={18} color="#fff" />
                   <span style={styles.hubTileLabel}>{t("dailyLogMenuLabel", lang)}</span>
-                  <span className="sp-shine-layer" aria-hidden="true" />
                 </button>
               )}
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("settings")} style={{ "--sp-shine-delay": "4.9s", animationDelay: "355ms", ...styles.hubTile, background: "var(--t-settings-g)" }}>
+              <button onClick={() => setActivePanel("settings")} style={{ ...styles.hubTile, background: "linear-gradient(135deg, #E08A1E, #F6B93B)" }}>
                 <Sun size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("settingsTitle", lang)}</span>
-                <span className="sp-shine-layer" aria-hidden="true" />
               </button>
             </div>
 
@@ -3972,7 +2986,7 @@ export default function ShiftPriorityRanker() {
         )}
 
         {showPriorityFlow && (
-        <div style={{ "--accent": "var(--flow)" }}>
+        <div style={{ "--accent": "#4C3FD9" }}>
         {profile?.crewNumber && parsed && (() => {
           const myCrew = parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber));
           return (
@@ -4285,7 +3299,7 @@ const styles = {
   menuBtn: { display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", cursor: "pointer", color: "var(--text)" },
   menuDropdown: { position: "absolute", top: 36, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 6px 20px rgba(0,0,0,0.12)", padding: 6, display: "flex", flexDirection: "column", gap: 2, width: "max-content", minWidth: 220, maxWidth: "min(280px, calc(100vw - 24px))", zIndex: 200 },
   menuItem: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "8px 10px", borderRadius: 7, border: "none", background: "transparent", color: "var(--text)", cursor: "pointer", textAlign: "start", whiteSpace: "nowrap" },
-  heroTile: { display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "start", border: "none", borderRadius: "var(--radius)", padding: 16, marginBottom: 18, background: "var(--hero-g)", cursor: "pointer", boxShadow: "0 6px 16px rgba(0,0,0,0.18)" },
+  heroTile: { display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "start", border: "none", borderRadius: "var(--radius)", padding: 16, marginBottom: 18, background: "linear-gradient(135deg, #4C3FD9, #6D5CE0)", cursor: "pointer", boxShadow: "0 6px 16px rgba(0,0,0,0.18)" },
   heroTileIcon: { width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   heroTileTitle: { fontSize: 15, fontWeight: 800, color: "#fff" },
   heroTileSubtitle: { fontSize: 11.5, color: "rgba(255,255,255,0.85)", marginTop: 2 },
