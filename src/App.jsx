@@ -666,26 +666,653 @@ const WEEKDAY_LABELS = {
 
 // ---------- Theme palettes ----------
 
+// Seven complete palettes. Each theme sets the page surfaces (light + dark),
+// the primary/secondary colours, and every coloured section of the app:
+// hero banner + priority flow, My Shift, the six hub tiles (and their
+// modals), the clock, priority score colours, and the PDF/Excel exports.
 const THEME_PALETTES = {
-  win11: {
-    light: { bg: "#F3F3F3", card: "#FFFFFF", border: "#E1E1E1", text: "#1B1B1B", muted: "#5F6368", accent: "#0067C0", accent2: "#B98A2E", radius: "8px" },
-    dark: { bg: "#202020", card: "#2C2C2C", border: "#3A3A3A", text: "#F3F3F3", muted: "#B0B0B0", accent: "#4CC2FF", accent2: "#D8A94A", radius: "8px" },
+  "universal": {
+    "name": {
+      "fa": "رنگارنگ",
+      "en": "Vibrant",
+      "hi": "रंगीन"
+    },
+    "light": {
+      "bg": "#F5F6F8",
+      "card": "#FFFFFF",
+      "border": "#E4E7EC",
+      "text": "#1B2230",
+      "muted": "#667085",
+      "accent": "#0B7D61",
+      "accent2": "#F59F00",
+      "radius": "10px"
+    },
+    "dark": {
+      "bg": "#111418",
+      "card": "#1A1F26",
+      "border": "#2A313B",
+      "text": "#ECEFF3",
+      "muted": "#9AA4B2",
+      "accent": "#0E9F7E",
+      "accent2": "#FBBF24",
+      "radius": "10px"
+    },
+    "hero": [
+      "#E8435A",
+      "#F7934C"
+    ],
+    "flow": [
+      "#D12F48",
+      "#E5485F"
+    ],
+    "my": [
+      "#0B8F87",
+      "#19B97A"
+    ],
+    "tiles": {
+      "compare": [
+        "#6D5CE0",
+        "#9C8CFB"
+      ],
+      "browse": [
+        "#0B8F6E",
+        "#22C08A"
+      ],
+      "swap": [
+        "#D9480F",
+        "#E68A00"
+      ],
+      "profile": [
+        "#E0447F",
+        "#F17CA6"
+      ],
+      "log": [
+        "#2463EB",
+        "#4F8CFB"
+      ],
+      "settings": [
+        "#C9700F",
+        "#E8A020"
+      ]
+    },
+    "clock": [
+      "#6D5CE0",
+      "#B15CE0",
+      "#E0447F",
+      "#E08A1E",
+      "#0EA37E"
+    ],
+    "score": {
+      "light": [
+        "#A16207",
+        "#15803D",
+        "#7B8494"
+      ],
+      "dark": [
+        "#FACC15",
+        "#4ADE80",
+        "#7D8796"
+      ]
+    }
   },
-  macos: {
-    light: { bg: "#F5F5F7", card: "#FFFFFF", border: "#E5E5EA", text: "#1D1D1F", muted: "#6E6E73", accent: "#007AFF", accent2: "#C79A3B", radius: "14px" },
-    dark: { bg: "#1E1E1E", card: "#2C2C2E", border: "#3A3A3C", text: "#F5F5F7", muted: "#98989D", accent: "#0A84FF", accent2: "#D8A94A", radius: "14px" },
+  "sunset": {
+    "name": {
+      "fa": "غروب",
+      "en": "Sunset",
+      "hi": "सूर्यास्त"
+    },
+    "light": {
+      "bg": "#FFF5EE",
+      "card": "#FFFFFF",
+      "border": "#F5D9C8",
+      "text": "#2B1B14",
+      "muted": "#8A5F4E",
+      "accent": "#C2410C",
+      "accent2": "#E11D48",
+      "radius": "10px"
+    },
+    "dark": {
+      "bg": "#1A110D",
+      "card": "#281A14",
+      "border": "#46302A",
+      "text": "#FBEDE5",
+      "muted": "#C9A596",
+      "accent": "#E0620F",
+      "accent2": "#FB7185",
+      "radius": "10px"
+    },
+    "hero": [
+      "#E11D48",
+      "#F97316"
+    ],
+    "flow": [
+      "#C2410C",
+      "#EA6A1F"
+    ],
+    "my": [
+      "#D9480F",
+      "#EA8A0C"
+    ],
+    "tiles": {
+      "compare": [
+        "#BE185D",
+        "#F43F5E"
+      ],
+      "browse": [
+        "#C2410C",
+        "#FB923C"
+      ],
+      "swap": [
+        "#B91C1C",
+        "#F97316"
+      ],
+      "profile": [
+        "#DB2777",
+        "#FB7185"
+      ],
+      "log": [
+        "#9A3412",
+        "#EA580C"
+      ],
+      "settings": [
+        "#B45309",
+        "#E08A0B"
+      ]
+    },
+    "clock": [
+      "#E11D48",
+      "#F97316",
+      "#F59E0B",
+      "#DB2777"
+    ],
+    "score": {
+      "light": [
+        "#A16207",
+        "#15803D",
+        "#7B8494"
+      ],
+      "dark": [
+        "#FCD34D",
+        "#4ADE80",
+        "#8A8F98"
+      ]
+    }
   },
-  universal: {
-    // Neutral surfaces + a vivid emerald accent; each section (hero/priority
-    // flow, My Shift, hub tiles) carries its own hue so the app isn't one colour.
-    light: { bg: "#F5F6F8", card: "#FFFFFF", border: "#E4E7EC", text: "#1B2230", muted: "#667085", accent: "#0B7D61", accent2: "#F59F00", radius: "10px" },
-    dark: { bg: "#111418", card: "#1A1F26", border: "#2A313B", text: "#ECEFF3", muted: "#9AA4B2", accent: "#34D3A0", accent2: "#FBBF24", radius: "10px" },
+  "ocean": {
+    "name": {
+      "fa": "اقیانوس",
+      "en": "Ocean",
+      "hi": "सागर"
+    },
+    "light": {
+      "bg": "#EEF6F9",
+      "card": "#FFFFFF",
+      "border": "#CDE3EA",
+      "text": "#0F2A33",
+      "muted": "#52707A",
+      "accent": "#0E7490",
+      "accent2": "#2563EB",
+      "radius": "10px"
+    },
+    "dark": {
+      "bg": "#08171D",
+      "card": "#0F242C",
+      "border": "#1D3B46",
+      "text": "#E4F3F7",
+      "muted": "#8DB0BA",
+      "accent": "#0891B2",
+      "accent2": "#60A5FA",
+      "radius": "10px"
+    },
+    "hero": [
+      "#0E7490",
+      "#06B6D4"
+    ],
+    "flow": [
+      "#0E7490",
+      "#0E93B5"
+    ],
+    "my": [
+      "#0369A1",
+      "#0EA5E9"
+    ],
+    "tiles": {
+      "compare": [
+        "#1D4ED8",
+        "#3B82F6"
+      ],
+      "browse": [
+        "#0F766E",
+        "#14B8A6"
+      ],
+      "swap": [
+        "#0369A1",
+        "#0EA5E9"
+      ],
+      "profile": [
+        "#155E75",
+        "#0891B2"
+      ],
+      "log": [
+        "#3730A3",
+        "#6366F1"
+      ],
+      "settings": [
+        "#115E59",
+        "#0D9488"
+      ]
+    },
+    "clock": [
+      "#1D4ED8",
+      "#0EA5E9",
+      "#06B6D4",
+      "#14B8A6"
+    ],
+    "score": {
+      "light": [
+        "#A16207",
+        "#15803D",
+        "#7B8494"
+      ],
+      "dark": [
+        "#FACC15",
+        "#4ADE80",
+        "#7D8796"
+      ]
+    }
   },
+  "forest": {
+    "name": {
+      "fa": "جنگل",
+      "en": "Forest",
+      "hi": "वन"
+    },
+    "light": {
+      "bg": "#F0F5EC",
+      "card": "#FFFFFF",
+      "border": "#D3E2CB",
+      "text": "#17251A",
+      "muted": "#5A6F5C",
+      "accent": "#2F7D32",
+      "accent2": "#A16207",
+      "radius": "10px"
+    },
+    "dark": {
+      "bg": "#0D160E",
+      "card": "#162218",
+      "border": "#2A3D2C",
+      "text": "#E8F2E6",
+      "muted": "#9BB39D",
+      "accent": "#3E9B45",
+      "accent2": "#E3B341",
+      "radius": "10px"
+    },
+    "hero": [
+      "#166534",
+      "#65A30D"
+    ],
+    "flow": [
+      "#2F7D32",
+      "#3E9B45"
+    ],
+    "my": [
+      "#15803D",
+      "#65A30D"
+    ],
+    "tiles": {
+      "compare": [
+        "#3F6212",
+        "#65A30D"
+      ],
+      "browse": [
+        "#047857",
+        "#10B981"
+      ],
+      "swap": [
+        "#854D0E",
+        "#CA8A04"
+      ],
+      "profile": [
+        "#166534",
+        "#22C55E"
+      ],
+      "log": [
+        "#115E59",
+        "#0D9488"
+      ],
+      "settings": [
+        "#4D7C0F",
+        "#6B9A1A"
+      ]
+    },
+    "clock": [
+      "#166534",
+      "#65A30D",
+      "#CA8A04",
+      "#0D9488"
+    ],
+    "score": {
+      "light": [
+        "#A16207",
+        "#C2410C",
+        "#7B8494"
+      ],
+      "dark": [
+        "#FACC15",
+        "#FB923C",
+        "#7D8796"
+      ]
+    }
+  },
+  "royal": {
+    "name": {
+      "fa": "سلطنتی",
+      "en": "Royal",
+      "hi": "राजसी"
+    },
+    "light": {
+      "bg": "#F4F2FE",
+      "card": "#FFFFFF",
+      "border": "#E0DAF8",
+      "text": "#1E1538",
+      "muted": "#675E8E",
+      "accent": "#6D28D9",
+      "accent2": "#DB2777",
+      "radius": "10px"
+    },
+    "dark": {
+      "bg": "#120D22",
+      "card": "#1C1532",
+      "border": "#33294F",
+      "text": "#EEE9FF",
+      "muted": "#A79DCA",
+      "accent": "#7C3AED",
+      "accent2": "#F472B6",
+      "radius": "10px"
+    },
+    "hero": [
+      "#5B21B6",
+      "#8B5CF6"
+    ],
+    "flow": [
+      "#6D28D9",
+      "#8B5CF6"
+    ],
+    "my": [
+      "#4338CA",
+      "#8B5CF6"
+    ],
+    "tiles": {
+      "compare": [
+        "#6D28D9",
+        "#A78BFA"
+      ],
+      "browse": [
+        "#4338CA",
+        "#818CF8"
+      ],
+      "swap": [
+        "#7E22CE",
+        "#C084FC"
+      ],
+      "profile": [
+        "#9D174D",
+        "#EC4899"
+      ],
+      "log": [
+        "#3730A3",
+        "#6366F1"
+      ],
+      "settings": [
+        "#86198F",
+        "#D946EF"
+      ]
+    },
+    "clock": [
+      "#4338CA",
+      "#7C3AED",
+      "#C026D3",
+      "#EC4899"
+    ],
+    "score": {
+      "light": [
+        "#A16207",
+        "#15803D",
+        "#7B8494"
+      ],
+      "dark": [
+        "#FACC15",
+        "#4ADE80",
+        "#8A84A3"
+      ]
+    }
+  },
+  "rose": {
+    "name": {
+      "fa": "گل‌رز",
+      "en": "Rose",
+      "hi": "गुलाब"
+    },
+    "light": {
+      "bg": "#FFF0F5",
+      "card": "#FFFFFF",
+      "border": "#F6D0DD",
+      "text": "#2D1320",
+      "muted": "#8A5A6D",
+      "accent": "#BE185D",
+      "accent2": "#9333EA",
+      "radius": "10px"
+    },
+    "dark": {
+      "bg": "#1C0E15",
+      "card": "#2A1620",
+      "border": "#472836",
+      "text": "#FDEAF1",
+      "muted": "#D0A0B3",
+      "accent": "#DB2777",
+      "accent2": "#C084FC",
+      "radius": "10px"
+    },
+    "hero": [
+      "#DB2777",
+      "#F472B6"
+    ],
+    "flow": [
+      "#BE185D",
+      "#DB2777"
+    ],
+    "my": [
+      "#BE123C",
+      "#FB7185"
+    ],
+    "tiles": {
+      "compare": [
+        "#A21CAF",
+        "#D946EF"
+      ],
+      "browse": [
+        "#BE185D",
+        "#F472B6"
+      ],
+      "swap": [
+        "#E11D48",
+        "#FB7185"
+      ],
+      "profile": [
+        "#9D174D",
+        "#DB2777"
+      ],
+      "log": [
+        "#7E22CE",
+        "#C084FC"
+      ],
+      "settings": [
+        "#C2410C",
+        "#FB923C"
+      ]
+    },
+    "clock": [
+      "#DB2777",
+      "#F472B6",
+      "#C084FC",
+      "#FB7185"
+    ],
+    "score": {
+      "light": [
+        "#A16207",
+        "#15803D",
+        "#7B8494"
+      ],
+      "dark": [
+        "#FACC15",
+        "#4ADE80",
+        "#8E8290"
+      ]
+    }
+  },
+  "modern": {
+    "name": {
+      "fa": "مدرن",
+      "en": "Modern",
+      "hi": "आधुनिक"
+    },
+    "light": {
+      "bg": "#F4F4F5",
+      "card": "#FFFFFF",
+      "border": "#E4E4E7",
+      "text": "#18181B",
+      "muted": "#63636B",
+      "accent": "#3F3F46",
+      "accent2": "#2563EB",
+      "radius": "10px"
+    },
+    "dark": {
+      "bg": "#0B0B0D",
+      "card": "#18181B",
+      "border": "#2E2E33",
+      "text": "#F4F4F5",
+      "muted": "#A1A1AA",
+      "accent": "#71717A",
+      "accent2": "#60A5FA",
+      "radius": "10px"
+    },
+    "hero": [
+      "#27272A",
+      "#52525B"
+    ],
+    "flow": [
+      "#2563EB",
+      "#3B82F6"
+    ],
+    "my": [
+      "#1D4ED8",
+      "#3B82F6"
+    ],
+    "tiles": {
+      "compare": [
+        "#334155",
+        "#64748B"
+      ],
+      "browse": [
+        "#3F3F46",
+        "#71717A"
+      ],
+      "swap": [
+        "#1E3A8A",
+        "#3B82F6"
+      ],
+      "profile": [
+        "#44403C",
+        "#78716C"
+      ],
+      "log": [
+        "#374151",
+        "#6B7280"
+      ],
+      "settings": [
+        "#52525B",
+        "#71717A"
+      ]
+    },
+    "clock": [
+      "#27272A",
+      "#52525B",
+      "#2563EB",
+      "#71717A"
+    ],
+    "score": {
+      "light": [
+        "#A16207",
+        "#15803D",
+        "#7B8494"
+      ],
+      "dark": [
+        "#FACC15",
+        "#4ADE80",
+        "#8A8A93"
+      ]
+    }
+  }
 };
+const THEME_ORDER = Object.keys(THEME_PALETTES);
+const THEME_KEY = "shiftPriorityTheme";
 
+function getTheme(style) {
+  return THEME_PALETTES[style] || THEME_PALETTES.universal;
+}
 function getPalette(style, mode) {
-  const s = THEME_PALETTES[style] ? style : "universal";
-  return THEME_PALETTES[s][mode === "dark" ? "dark" : "light"];
+  return getTheme(style)[mode === "dark" ? "dark" : "light"];
+}
+function hexToRgba(hex, a) {
+  const h = hex.replace("#", "");
+  return `rgba(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}, ${a})`;
+}
+function mixHex(a, b, t) {
+  const pa = a.replace("#", ""), pb = b.replace("#", "");
+  const c = [0, 2, 4].map((i) => Math.round(parseInt(pa.slice(i, i + 2), 16) * (1 - t) + parseInt(pb.slice(i, i + 2), 16) * t));
+  return "#" + c.map((x) => x.toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+// CSS variables for the coloured sections of the active theme.
+function themeVars(style, mode) {
+  const th = getTheme(style);
+  const dark = mode === "dark";
+  const g = (pair) => `linear-gradient(135deg, ${pair[0]}, ${pair[1]})`;
+  const sc = th.score[dark ? "dark" : "light"];
+  const vars = {
+    "--hero-g": g(th.hero),
+    "--flow": th.flow[dark ? 1 : 0],
+    "--my-g": g(th.my), "--my": th.my[0],
+    "--my-glow": hexToRgba(th.my[1], 0.55), "--my-glow-soft": hexToRgba(th.my[0], 0.28), "--my-ring": hexToRgba(th.my[1], 0.22),
+    "--clock-g": `linear-gradient(120deg, ${th.clock.join(", ")})`,
+    "--score-high": sc[0], "--score-mid": sc[1], "--score-low": sc[2],
+  };
+  Object.entries(th.tiles).forEach(([k, pair]) => { vars[`--t-${k}-g`] = g(pair); vars[`--t-${k}`] = pair[0]; });
+  return vars;
+}
+function loadThemePrefs() {
+  try {
+    const v = JSON.parse(localStorage.getItem(THEME_KEY) || "null");
+    return { style: v && THEME_PALETTES[v.style] ? v.style : "universal", mode: v && v.mode === "dark" ? "dark" : "light" };
+  } catch { return { style: "universal", mode: "light" }; }
+}
+function saveThemePrefs(style, mode) {
+  try { localStorage.setItem(THEME_KEY, JSON.stringify({ style, mode })); } catch { /* ignore storage errors */ }
+}
+
+// Exports (PDF/print + Excel) follow the active theme too. The report
+// builders are plain functions, so the app records the active style here.
+const ACTIVE_THEME = { style: "universal" };
+function exportTheme(kind) {
+  const th = getTheme(ACTIVE_THEME.style);
+  const main = kind === "results" ? th.flow[0] : kind === "compare" ? th.tiles.compare[0] : th.tiles.log[0];
+  return {
+    main, sub: th.light.accent2,
+    head: mixHex(main, "#FFFFFF", 0.86), headText: mixHex(main, "#000000", 0.35),
+    soft: mixHex(main, "#FFFFFF", 0.94), zebra: mixHex(main, "#FFFFFF", 0.975),
+  };
+}
+function exportRainbow() {
+  return `linear-gradient(90deg, ${getTheme(ACTIVE_THEME.style).clock.join(", ")})`;
 }
 
 // ---------- Small components ----------
@@ -871,7 +1498,7 @@ function DateTimeWidget({ lang }) {
   const secondAngle = seconds * 6;
 
   return (
-    <div style={{ ...styles.dtWidget, background: "linear-gradient(120deg, #6D5CE0 0%, #B15CE0 26%, #E0447F 52%, #E08A1E 76%, #0EA37E 100%)", border: "none", boxShadow: "0 6px 14px rgba(96,60,180,0.28)", "--card": "rgba(255,255,255,0.16)", "--border": "rgba(255,255,255,0.55)", "--text": "#fff", "--muted": "rgba(255,255,255,0.85)", "--accent": "#fff", "--accent2": "#FFE9A8" }}>
+    <div style={{ ...styles.dtWidget, background: "var(--clock-g)", border: "none", boxShadow: "0 6px 14px rgba(0,0,0,0.18)", "--card": "rgba(255,255,255,0.16)", "--border": "rgba(255,255,255,0.55)", "--text": "#fff", "--muted": "rgba(255,255,255,0.85)", "--accent": "#fff", "--accent2": "#FFE9A8" }}>
       <AnalogClock hourAngle={hourAngle} minuteAngle={minuteAngle} secondAngle={secondAngle} />
       <div style={styles.dtTextCol}>
         <div style={styles.dtDigital}>{digital}</div>
@@ -1033,7 +1660,7 @@ function ProfilePanel({ lang, profile, onSave, onClear, onClose }) {
   };
 
   return (
-    <Modal title={t("profileTitle", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #E0447F, #F17CA6)" accent="#E0447F">
+    <Modal title={t("profileTitle", lang)} onClose={onClose} headerGradient="var(--t-profile-g)" accent="var(--t-profile)">
       <div style={styles.smallLabel}>{t("firstNameLabel", lang)}</div>
       <input
         type="text"
@@ -1078,7 +1705,7 @@ function MyScheduleModal({ crew, name, lang, themeMode, onClose, onBack }) {
   // orange instead, same treatment (border + glow + badge), different hue.
   const todayTheme = themeMode === "dark" ? { accent: "#CCFF00", ring: "rgba(204,255,0,0.22)", glow: "rgba(204,255,0,0.6)", badgeGlow: "rgba(204,255,0,0.7)", badgeText: "#111" } : { accent: "#FF6A00", ring: "rgba(255,106,0,0.22)", glow: "rgba(255,106,0,0.5)", badgeGlow: "rgba(255,106,0,0.55)", badgeText: "#fff" };
   return (
-        <Modal title={`${t("myScheduleTitle", lang)} — ${t("crewWord", lang)} ${String(crew.crew)}${name ? " · " + name : ""}`} onClose={onClose} onBack={onBack} headerGradient="linear-gradient(135deg, #0B8F87, #19B97A)" accent="#0B8F87">
+        <Modal title={`${t("myScheduleTitle", lang)} — ${t("crewWord", lang)} ${String(crew.crew)}${name ? " · " + name : ""}`} onClose={onClose} onBack={onBack} headerGradient="var(--my-g)" accent="var(--my)">
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {weekdayNames.map((wd, i) => {
           const d = dayCell(i);
@@ -1297,7 +1924,7 @@ function DailyLogPanel({ lang, onClose }) {
   };
 
   return (
-    <Modal title={t("dailyLogTitle", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #2463EB, #4F8CFB)" accent="#2463EB">
+    <Modal title={t("dailyLogTitle", lang)} onClose={onClose} headerGradient="var(--t-log-g)" accent="var(--t-log)">
       <p style={styles.hint}>{t("dailyLogHint", lang)}</p>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1632,7 +2259,7 @@ function CrewLookupPanel({ lang, crews, crewNames, onPick, onClose }) {
   }, [crews, crewNames, query]);
 
   return (
-    <Modal title={t("crewLookupTitle", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #0EA37E, #3DDC97)" accent="#0EA37E">
+    <Modal title={t("crewLookupTitle", lang)} onClose={onClose} headerGradient="var(--t-browse-g)" accent="var(--t-browse)">
       <div style={{ position: "relative", marginBottom: 10 }}>
         <Search size={14} style={{ position: "absolute", insetInlineStart: 10, top: 10, color: "var(--muted)" }} />
         <input
@@ -1856,7 +2483,7 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose 
   const shown = results ? results.slice(0, showAll ? 15 : 5) : [];
 
   return (
-    <Modal title={t("hubSwapFinder", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #D9480F, #F59F00)" accent="#D9480F">
+    <Modal title={t("hubSwapFinder", lang)} onClose={onClose} headerGradient="var(--t-swap-g)" accent="var(--t-swap)">
       <p style={styles.hint}>{t("swapIntro", lang)}</p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapMyCrew", lang)}
@@ -2197,20 +2824,16 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, dailyLogAccess, setD
 // ---------- Settings (theme) ----------
 
 function SettingsPanel({ lang, themeStyle, setThemeStyle, themeMode, setThemeMode, onClose }) {
-  const styleOptions = [
-    { v: "win11", l: t("themeWin11", lang) },
-    { v: "macos", l: t("themeMac", lang) },
-    { v: "universal", l: t("themeUniversal", lang) },
-  ];
+  const styleOptions = THEME_ORDER.map((v) => ({ v, l: THEME_PALETTES[v].name[lang] || THEME_PALETTES[v].name.en, th: THEME_PALETTES[v] }));
   return (
-    <Modal title={t("settingsTitle", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #E08A1E, #F6B93B)" accent="#E08A1E">
+    <Modal title={t("settingsTitle", lang)} onClose={onClose} headerGradient="var(--t-settings-g)" accent="var(--t-settings)">
       <div style={styles.prefGroup}>
         <div style={styles.prefTitle}>{t("themeMode", lang)}</div>
         <div style={styles.chipRow}>
-          <button onClick={() => setThemeMode("light")} style={{ ...styles.chip, ...(themeMode === "light" ? styles.chipActive : {}) }}>
+          <button key={themeMode === "light" ? "l-on" : "l"} onClick={() => setThemeMode("light")} style={{ ...styles.chip, ...(themeMode === "light" ? styles.chipActive : {}) }}>
             <Sun size={14} /> {t("light", lang)}
           </button>
-          <button onClick={() => setThemeMode("dark")} style={{ ...styles.chip, ...(themeMode === "dark" ? styles.chipActive : {}) }}>
+          <button key={themeMode === "dark" ? "d-on" : "d"} onClick={() => setThemeMode("dark")} style={{ ...styles.chip, ...(themeMode === "dark" ? styles.chipActive : {}) }}>
             <Moon size={14} /> {t("dark", lang)}
           </button>
         </div>
@@ -2219,7 +2842,11 @@ function SettingsPanel({ lang, themeStyle, setThemeStyle, themeMode, setThemeMod
         <div style={styles.prefTitle}>{t("themeStyle", lang)}</div>
         <div style={styles.chipRow}>
           {styleOptions.map((o) => (
-            <button key={o.v} onClick={() => setThemeStyle(o.v)} style={{ ...styles.chip, ...(themeStyle === o.v ? styles.chipActive : {}) }}>
+            <button key={o.v + (themeStyle === o.v ? "-on" : "")} onClick={() => setThemeStyle(o.v)} style={{ ...styles.chip, ...(themeStyle === o.v ? styles.chipActive : {}) }}>
+              {/* mini preview of the theme: hero, a tile and My Shift colours */}
+              <span aria-hidden="true" style={{ display: "inline-flex", borderRadius: 999, overflow: "hidden", border: "1px solid rgba(0,0,0,0.12)" }}>
+                {[o.th.hero[0], o.th.tiles.browse[0], o.th.my[0], o.th.light.accent2].map((c, i) => <span key={i} style={{ width: 9, height: 14, background: c }} />)}
+              </span>
               {themeStyle === o.v && <Check size={13} />} {o.l}
             </button>
           ))}
@@ -2265,17 +2892,11 @@ const PERSON_PALETTE = [
 // ---------- Export colours (PDF/print + Excel) ----------
 // Each report takes the hue of its section in the app: results = coral
 // (Shift Prioritizer), compare = violet/pink (Compare tile), daily log = blue.
-const EXPORT_THEMES = {
-  results: { main: "#D12F48", sub: "#C2410C", head: "#FDE7EB", headText: "#8A1C2E", soft: "#FFF6F3", zebra: "#FFFAF8" },
-  compare: { main: "#6D5CE0", sub: "#C0266D", head: "#EFECFD", headText: "#3F2FB0", soft: "#F8F7FE", zebra: "#FBFAFF" },
-  dailyLog: { main: "#2463EB", sub: "#0B7D61", head: "#E6EEFD", headText: "#173E9C", soft: "#F5F8FE", zebra: "#FAFCFF" },
-};
-const EXPORT_RAINBOW = "linear-gradient(90deg, #E8435A, #F59F00, #19B97A, #2463EB, #6D5CE0)";
 function exportCss(th) {
   return `
     body { font-family: Tahoma, 'Vazirmatn', sans-serif; margin: 24px; color:#1B2230; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .hdr h1 { color:${th.main}; }
-    .rainbow { height:5px; border-radius:3px; background:${EXPORT_RAINBOW}; margin:-6px 0 14px; }
+    .rainbow { height:5px; border-radius:3px; background:${exportRainbow()}; margin:-6px 0 14px; }
     .toolbar .print-btn { background:${th.main} !important; border-color:${th.main} !important; }`;
 }
 
@@ -2307,15 +2928,15 @@ function buildCompareHtml(matched, lang, timestamp) {
         </div>
       </td>`;
     }).join("");
-    return `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:700;background:${EXPORT_THEMES.compare.soft};white-space:nowrap;">${wd}</td>${cells}</tr>`;
+    return `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:700;background:${exportTheme("compare").soft};white-space:nowrap;">${wd}</td>${cells}</tr>`;
   }).join("");
 
-  const totalsRow = `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:800;background:${EXPORT_THEMES.compare.soft};">${t("hours", lang)}</td>${matched.map((m) => `<td style="border:1px solid #ddd;padding:8px;text-align:center;font-weight:800;">${m.totalHours}</td>`).join("")}</tr>`;
+  const totalsRow = `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:800;background:${exportTheme("compare").soft};">${t("hours", lang)}</td>${matched.map((m) => `<td style="border:1px solid #ddd;padding:8px;text-align:center;font-weight:800;">${m.totalHours}</td>`).join("")}</tr>`;
   const metaRows = [
     [t("type", lang), matched.map((m) => m.type)],
     [t("shift", lang), matched.map((m) => m.shiftRaw)],
     [t("daysColumn", lang), matched.map((m) => m.workedCount)],
-  ].map(([label, vals]) => `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:600;background:${EXPORT_THEMES.compare.soft};">${label}</td>${vals.map((v) => `<td style="border:1px solid #ddd;padding:8px;text-align:center;">${v}</td>`).join("")}</tr>`).join("");
+  ].map(([label, vals]) => `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:600;background:${exportTheme("compare").soft};">${label}</td>${vals.map((v) => `<td style="border:1px solid #ddd;padding:8px;text-align:center;">${v}</td>`).join("")}</tr>`).join("");
 
   return `<!doctype html><html lang="${lang}" dir="${dir}"><head><meta charset="UTF-8" />
   <title>${t("compare2Title", lang)}</title>
@@ -2329,7 +2950,7 @@ function buildCompareHtml(matched, lang, timestamp) {
     .toolbar button { font-size:14px; padding:10px 16px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
     .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
     .toolbar .print-btn { color:#fff; font-weight:700; }
-    ${exportCss(EXPORT_THEMES.compare)}
+    ${exportCss(exportTheme("compare"))}
     @media print { .toolbar { display: none !important; } }
   </style></head>
   <body>
@@ -2353,12 +2974,12 @@ function buildResultsHtml(results, priorityList, lang, timestamp) {
   const dir = lang === "fa" ? "rtl" : "ltr";
   const critLabels = priorityList.map((id, i) => `${i + 1}. ${results[0]?.fingerprint?.[i]?.label?.[lang] || CRITERIA_CATALOG.find((c) => c.id === id)?.label[lang]}`);
   const headers = [t("rank", lang), t("crewWord", lang), t("type", lang), t("shift", lang), t("daysColumn", lang), t("hours", lang), t("region", lang), ...critLabels];
-  const headCells = headers.map((h) => `<th style="border:1px solid #ddd;padding:8px;background:${EXPORT_THEMES.results.head};color:${EXPORT_THEMES.results.headText};">${h}</th>`).join("");
+  const headCells = headers.map((h) => `<th style="border:1px solid #ddd;padding:8px;background:${exportTheme("results").head};color:${exportTheme("results").headText};">${h}</th>`).join("");
   const medalBg = { 0: "#FBF1DA", 1: "#F2F2F2", 2: "#F6E9DC" };
   const rows = results.map((r, idx) => {
     const regionText = Object.entries(r.regionSummary).map(([k, arr]) => `${arr.length} ${regionLabel(k, lang)} (${arr.join(", ")} ${t("hoursWord", lang)})`).join("; ");
     const cells = [idx + 1, r.crew, r.type, r.shiftRaw, r.workedCount, r.totalHours, regionText, ...r.fingerprint.map((f) => `${f.score}%`)];
-    const bg = medalBg[idx] || (idx % 2 ? EXPORT_THEMES.results.zebra : "#FFFFFF");
+    const bg = medalBg[idx] || (idx % 2 ? exportTheme("results").zebra : "#FFFFFF");
     return `<tr>${cells.map((c) => `<td style="border:1px solid #ddd;padding:7px;background:${bg};">${c}</td>`).join("")}</tr>`;
   }).join("");
 
@@ -2374,7 +2995,7 @@ function buildResultsHtml(results, priorityList, lang, timestamp) {
     .toolbar button { font-size:14px; padding:10px 16px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
     .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
     .toolbar .print-btn { color:#fff; font-weight:700; }
-    ${exportCss(EXPORT_THEMES.results)}
+    ${exportCss(exportTheme("results"))}
     @media print { .toolbar { display: none !important; } }
   </style></head>
   <body>
@@ -2427,15 +3048,15 @@ function buildDailyLogHtml(entries, lang, timestamp) {
     t("dailyLogEndTimeLabel", lang), t("dailyLogStartYardLabel", lang), t("dailyLogEndYardLabel", lang),
     t("dailyLogDescriptionLabel", lang), t("dailyLogTotalHoursLabel", lang),
   ];
-  const headCells = headers.map((h) => `<th style="border:1px solid #ddd;padding:8px;background:${EXPORT_THEMES.dailyLog.head};color:${EXPORT_THEMES.dailyLog.headText};">${h}</th>`).join("");
+  const headCells = headers.map((h) => `<th style="border:1px solid #ddd;padding:8px;background:${exportTheme("dailyLog").head};color:${exportTheme("dailyLog").headText};">${h}</th>`).join("");
   const rows = entries.map((e, idx) => {
     const wd = weekdayNames[new Date(e.date + "T00:00:00").getDay()];
-    const bg = idx % 2 ? EXPORT_THEMES.dailyLog.zebra : "#FFFFFF";
+    const bg = idx % 2 ? exportTheme("dailyLog").zebra : "#FFFFFF";
     const cells = [wd, e.date, e.startTime, e.endTime, e.startYard || "-", e.endYard || "-", e.description || "-", formatDuration(e.totalHours, lang)];
     return `<tr>${cells.map((c) => `<td style="border:1px solid #ddd;padding:7px;background:${bg};">${c}</td>`).join("")}</tr>`;
   }).join("");
   const totalHours = entries.reduce((sum, e) => sum + (e.totalHours || 0), 0);
-  const totalRow = `<tr><td colspan="7" style="border:1px solid #ddd;padding:8px;font-weight:800;background:${EXPORT_THEMES.dailyLog.soft};text-align:${dir === "rtl" ? "left" : "right"};">${t("dailyLogTotalRowLabel", lang)}</td><td style="border:1px solid #ddd;padding:8px;font-weight:800;background:${EXPORT_THEMES.dailyLog.soft};">${formatDuration(totalHours, lang)}</td></tr>`;
+  const totalRow = `<tr><td colspan="7" style="border:1px solid #ddd;padding:8px;font-weight:800;background:${exportTheme("dailyLog").soft};text-align:${dir === "rtl" ? "left" : "right"};">${t("dailyLogTotalRowLabel", lang)}</td><td style="border:1px solid #ddd;padding:8px;font-weight:800;background:${exportTheme("dailyLog").soft};">${formatDuration(totalHours, lang)}</td></tr>`;
   const body = entries.length
     ? `<table><thead><tr>${headCells}</tr></thead><tbody>${rows}${totalRow}</tbody></table>`
     : `<p>${t("dailyLogNoEntriesInRange", lang)}</p>`;
@@ -2452,7 +3073,7 @@ function buildDailyLogHtml(entries, lang, timestamp) {
     .toolbar button { font-size:14px; padding:10px 16px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
     .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
     .toolbar .print-btn { color:#fff; font-weight:700; }
-    ${exportCss(EXPORT_THEMES.dailyLog)}
+    ${exportCss(exportTheme("dailyLog"))}
     @media print { .toolbar { display: none !important; } }
   </style></head>
   <body>
@@ -2555,11 +3176,11 @@ function compareToExcel(matched, lang) {
     ws[ref].s = { ...(ws[ref].s || {}), ...style, alignment: { horizontal: "center", vertical: "center", ...(style.alignment || {}) } };
   };
 
-  setStyle(0, 0, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.compare.main) } }, font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } } });
-  setStyle(1, 0, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.compare.sub) } }, font: { italic: true, sz: 10, color: { rgb: "FFFFFF" } } });
-  setStyle(headerRow1Idx, 0, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.compare.head) } }, font: { bold: true, color: { rgb: hexNoHash(EXPORT_THEMES.compare.headText) } } });
-  weekdayNames.forEach((wd, di) => setStyle(headerRow2Idx + 1 + di, 0, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.compare.soft) } }, font: { bold: true, color: { rgb: "20242B" } } }));
-  setStyle(totalsRowIdx, 0, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.compare.head) } }, font: { bold: true, color: { rgb: hexNoHash(EXPORT_THEMES.compare.headText) } } });
+  setStyle(0, 0, { fill: { fgColor: { rgb: hexNoHash(exportTheme("compare").main) } }, font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } } });
+  setStyle(1, 0, { fill: { fgColor: { rgb: hexNoHash(exportTheme("compare").sub) } }, font: { italic: true, sz: 10, color: { rgb: "FFFFFF" } } });
+  setStyle(headerRow1Idx, 0, { fill: { fgColor: { rgb: hexNoHash(exportTheme("compare").head) } }, font: { bold: true, color: { rgb: hexNoHash(exportTheme("compare").headText) } } });
+  weekdayNames.forEach((wd, di) => setStyle(headerRow2Idx + 1 + di, 0, { fill: { fgColor: { rgb: hexNoHash(exportTheme("compare").soft) } }, font: { bold: true, color: { rgb: "20242B" } } }));
+  setStyle(totalsRowIdx, 0, { fill: { fgColor: { rgb: hexNoHash(exportTheme("compare").head) } }, font: { bold: true, color: { rgb: hexNoHash(exportTheme("compare").headText) } } });
 
   matched.forEach((m, i) => {
     const pal = PERSON_PALETTE[i % 5];
@@ -2613,7 +3234,7 @@ function CompareTwoPanel({ lang, crews, onClose }) {
   const dayCell = (crew, i) => crew.days.find((d) => d.dayIdx === i);
 
   return (
-    <Modal title={t("compare2Title", lang)} onClose={onClose} headerGradient="linear-gradient(135deg, #6D5CE0, #9C8CFB)" accent="#6D5CE0">
+    <Modal title={t("compare2Title", lang)} onClose={onClose} headerGradient="var(--t-compare-g)" accent="var(--t-compare)">
       <div style={styles.chipRow}>
         {crewNums.map((n, i) => (
           <div key={i} style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -2729,7 +3350,7 @@ function TopCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
   const [cardRef, inView] = useInView();
   const pct = scorePercent(ds);
   return (
-    <div ref={cardRef} className={`sp-card sp-reveal sp-shine sp-shine-soft${inView ? " sp-in" : ""}`} style={{ animationDelay: `${((rank - 1) % 4) * 90}ms`, "--sp-shine-delay": `${1.6 + rank * 0.7}s`, "--sp-skew": rank % 2 ? "-22deg" : "18deg", "--sp-shine-dir": rank % 3 === 0 ? "reverse" : "normal", ...styles.topCard, borderColor: isMine ? "var(--accent)" : medal ? medal.border : "var(--border)", ...(isMine ? { borderWidth: 2 } : {}) }}>
+    <div ref={cardRef} className={`sp-card sp-reveal sp-shine sp-shine-soft${inView ? " sp-in" : ""}`} style={{ animationDelay: `${((rank - 1) % 4) * 90}ms`, "--sp-shine-delay": `${1.5 + (rank - 1) * 0.5}s`, ...styles.topCard, borderColor: isMine ? "var(--accent)" : medal ? medal.border : "var(--border)", ...(isMine ? { borderWidth: 2 } : {}) }}>
       <div style={{ ...styles.topBadge, background: medal ? medal.color : "var(--accent)" }}>
         {Icon ? <Icon size={13} /> : rank}
         {Icon && <span>#{rank}</span>}
@@ -2782,8 +3403,10 @@ function ResultCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
 
 export default function ShiftPriorityRanker() {
   const [lang, setLang] = useState("en");
-  const [themeStyle, setThemeStyle] = useState("universal");
-  const [themeMode, setThemeMode] = useState("light");
+  const [themeStyle, setThemeStyle] = useState(() => loadThemePrefs().style);
+  const [themeMode, setThemeMode] = useState(() => loadThemePrefs().mode);
+  useEffect(() => { saveThemePrefs(themeStyle, themeMode); }, [themeStyle, themeMode]);
+  ACTIVE_THEME.style = themeStyle;
   const [showPriorityFlow, setShowPriorityFlow] = useState(false);
   // 'settings' | 'help' | 'about' | 'helpMenu' | 'compare2' | 'profile'
   // | 'crewLookup' | 'adminLogin' | 'admin'
@@ -3008,9 +3631,9 @@ export default function ShiftPriorityRanker() {
       if (!ws[ref]) ws[ref] = { t: "s", v: "" };
       ws[ref].s = { ...(ws[ref].s || {}), ...style };
     };
-    setStyle(0, 0, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.results.main) } }, font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } } });
-    setStyle(1, 0, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.results.sub) } }, font: { italic: true, sz: 10, color: { rgb: "FFFFFF" } } });
-    headers.forEach((_, c) => setStyle(2, c, { fill: { fgColor: { rgb: hexNoHash(EXPORT_THEMES.results.head) } }, font: { bold: true, color: { rgb: hexNoHash(EXPORT_THEMES.results.headText) } } }));
+    setStyle(0, 0, { fill: { fgColor: { rgb: hexNoHash(exportTheme("results").main) } }, font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } } });
+    setStyle(1, 0, { fill: { fgColor: { rgb: hexNoHash(exportTheme("results").sub) } }, font: { italic: true, sz: 10, color: { rgb: "FFFFFF" } } });
+    headers.forEach((_, c) => setStyle(2, c, { fill: { fgColor: { rgb: hexNoHash(exportTheme("results").head) } }, font: { bold: true, color: { rgb: hexNoHash(exportTheme("results").headText) } } }));
 
     const medalFill = { 0: "FBF1DA", 1: "F2F2F2", 2: "F6E9DC" };
     dataRows.forEach((_, i) => {
@@ -3031,9 +3654,7 @@ export default function ShiftPriorityRanker() {
   const rootVars = {
     "--bg": palette.bg, "--card": palette.card, "--border": palette.border, "--text": palette.text,
     "--muted": palette.muted, "--accent": palette.accent, "--accent2": palette.accent2, "--radius": palette.radius,
-    ...(themeMode === "dark"
-      ? { "--score-high": "#FACC15", "--score-mid": "#4ADE80", "--score-low": "#7D8796" }
-      : { "--score-high": "#A16207", "--score-mid": "#15803D", "--score-low": "#7B8494" }),
+    ...themeVars(themeStyle, themeMode),
   };
 
   return (
@@ -3062,8 +3683,8 @@ export default function ShiftPriorityRanker() {
         @keyframes sp-fade-up { from { opacity: 0; transform: translateY(18px) scale(0.98); } to { opacity: 1; transform: none; } }
         @keyframes sp-pop { from { opacity: 0; transform: translateY(26px) scale(0.93); } to { opacity: 1; transform: none; } }
         @keyframes sp-fade { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes sp-shine { 0%, 76% { transform: translateX(-260%) skewX(var(--sp-skew, -20deg)); } 100% { transform: translateX(560%) skewX(var(--sp-skew, -20deg)); } }
-        @keyframes sp-glow { 0%, 100% { box-shadow: 0 6px 14px rgba(11,143,135,0.28), 0 0 0 0 rgba(25,185,122,0); } 50% { box-shadow: 0 8px 24px rgba(25,185,122,0.55), 0 0 0 5px rgba(25,185,122,0.22); } }
+        @keyframes sp-shine { 0%, 76% { transform: translateX(-260%) skewX(-18deg); } 100% { transform: translateX(560%) skewX(-18deg); } }
+        @keyframes sp-glow { 0%, 100% { box-shadow: 0 6px 14px var(--my-glow-soft), 0 0 0 0 transparent; } 50% { box-shadow: 0 8px 24px var(--my-glow), 0 0 0 5px var(--my-ring); } }
         @keyframes sp-bob { 0%, 100% { transform: scale(1); opacity: 0.75; } 40% { transform: scale(1.8); opacity: 1; } 70% { transform: scale(1); } }
 
         .sp-hero, .sp-tile, .sp-myshift { transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease; }
@@ -3079,11 +3700,12 @@ export default function ShiftPriorityRanker() {
            their box (medal cards) are not cut off; per-card delay/angle/direction */
         .sp-shine { position: relative; }
         .sp-shine-layer { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; z-index: 1; }
-        .sp-shine-layer::after { content: ""; position: absolute; top: -30%; bottom: -30%; left: 0; width: 30%;
-          background: linear-gradient(90deg, transparent 0%, var(--sp-shine-c2, rgba(255,255,255,0.16)) 30%, var(--sp-shine-c, rgba(255,255,255,0.55)) 50%, var(--sp-shine-c2, rgba(255,255,255,0.16)) 70%, transparent 100%);
-          transform: translateX(-260%) skewX(var(--sp-skew, -20deg));
-          animation: sp-shine var(--sp-shine-dur, 4.6s) ease-in-out var(--sp-shine-delay, 1.5s) infinite var(--sp-shine-dir, normal); }
-        .sp-shine-soft { --sp-shine-c: rgba(245, 190, 60, 0.30); --sp-shine-c2: rgba(245, 190, 60, 0.08); --sp-shine-dur: 5.4s; }
+        .sp-shine-layer::after { content: ""; position: absolute; top: -30%; bottom: -30%; left: 0; width: 34%;
+          background: linear-gradient(90deg, transparent 0%, var(--sp-shine-c2, rgba(255,255,255,0.08)) 28%, var(--sp-shine-c, rgba(255,255,255,0.30)) 50%, var(--sp-shine-c2, rgba(255,255,255,0.08)) 72%, transparent 100%);
+          transform: translateX(-260%) skewX(-18deg);
+          /* one pattern for every card: ~2.6s slow glide, then ~8s of calm */
+          animation: sp-shine 11s cubic-bezier(0.45, 0.05, 0.35, 1) var(--sp-shine-delay, 1.5s) infinite; }
+        .sp-shine-soft { --sp-shine-c: rgba(245, 190, 60, 0.22); --sp-shine-c2: rgba(245, 190, 60, 0.06); }
 
         .sp-overlay { animation: sp-fade 0.22s ease backwards; }
         .sp-modal { animation: sp-pop 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards; }
@@ -3265,7 +3887,7 @@ export default function ShiftPriorityRanker() {
                   : !myCrew ? t("crewNumberNotInFile", lang)
                   : null;
                 return (
-                  <button className="sp-myshift sp-shine" onClick={onClick} style={{ "--sp-shine-delay": "1.9s", "--sp-skew": "22deg", "--sp-shine-dir": "reverse", direction: dir, marginTop: 12, flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 104, padding: "8px 8px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", color: "#fff", background: "linear-gradient(135deg, #0B8F87, #19B97A)", boxShadow: "0 6px 14px rgba(11,143,135,0.28)", fontFamily: "inherit" }}>
+                  <button className="sp-myshift sp-shine" onClick={onClick} style={{ "--sp-shine-delay": "1.8s", direction: dir, marginTop: 12, flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 104, padding: "8px 8px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", color: "#fff", background: "var(--my-g)", boxShadow: "0 6px 14px var(--my-glow-soft)", fontFamily: "inherit" }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 4, fontWeight: 800, fontSize: 13.5, whiteSpace: "nowrap" }}><Star size={13} color="#fff" /> {t("myShiftHomeTitle", lang)}</span>
                     {myCrew && <span style={{ fontSize: 11.5, opacity: 0.9 }}>{t("crewWord", lang)} {String(myCrew.crew)}</span>}
                     {myCrew && (today ? (
@@ -3285,7 +3907,7 @@ export default function ShiftPriorityRanker() {
 
         {!showPriorityFlow && (
           <div className="no-print">
-            <button className="sp-hero sp-shine" onClick={() => setShowPriorityFlow(true)} style={{ ...styles.heroTile, "--sp-shine-delay": "1.4s", "--sp-skew": "-20deg" }}>
+            <button className="sp-hero sp-shine" onClick={() => setShowPriorityFlow(true)} style={{ ...styles.heroTile, "--sp-shine-delay": "1.2s" }}>
               <span style={styles.heroTileIcon}><Star size={22} color="#fff" /></span>
               <span style={{ flex: 1 }}>
                 <div style={styles.heroTileTitle}>{t("title", lang)}</div>
@@ -3297,17 +3919,17 @@ export default function ShiftPriorityRanker() {
 
             <div style={styles.hubGroupLabel}>{t("hubGroupCrews", lang)}</div>
             <div style={styles.hubGrid}>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("compare2")} style={{ "--sp-shine-delay": "2.1s", "--sp-skew": "-24deg", "--sp-shine-dir": "normal", animationDelay: "80ms", ...styles.hubTile, background: "linear-gradient(135deg, #6D5CE0, #9C8CFB)" }}>
+              <button className="sp-tile sp-shine" onClick={() => setActivePanel("compare2")} style={{ "--sp-shine-delay": "2.4s", animationDelay: "80ms", ...styles.hubTile, background: "var(--t-compare-g)" }}>
                 <GitCompare size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("compare2Title", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("crewLookup")} style={{ "--sp-shine-delay": "2.9s", "--sp-skew": "16deg", "--sp-shine-dir": "reverse", animationDelay: "135ms", ...styles.hubTile, background: "linear-gradient(135deg, #0EA37E, #3DDC97)" }}>
+              <button className="sp-tile sp-shine" onClick={() => setActivePanel("crewLookup")} style={{ "--sp-shine-delay": "2.9s", animationDelay: "135ms", ...styles.hubTile, background: "var(--t-browse-g)" }}>
                 <Search size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("crewLookupTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("swapFinder")} style={{ "--sp-shine-delay": "3.6s", "--sp-skew": "-18deg", "--sp-shine-dir": "normal", animationDelay: "190ms", ...styles.hubTile, background: "linear-gradient(135deg, #D9480F, #F59F00)" }}>
+              <button className="sp-tile sp-shine" onClick={() => setActivePanel("swapFinder")} style={{ "--sp-shine-delay": "3.4s", animationDelay: "190ms", ...styles.hubTile, background: "var(--t-swap-g)" }}>
                 <CalendarOff size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("hubSwapFinder", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
@@ -3316,19 +3938,19 @@ export default function ShiftPriorityRanker() {
 
             <div style={styles.hubGroupLabel}>{t("hubGroupMe", lang)}</div>
             <div style={styles.hubGrid}>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("profile")} style={{ "--sp-shine-delay": "2.5s", "--sp-skew": "20deg", "--sp-shine-dir": "reverse", animationDelay: "245ms", ...styles.hubTile, background: "linear-gradient(135deg, #E0447F, #F17CA6)" }}>
+              <button className="sp-tile sp-shine" onClick={() => setActivePanel("profile")} style={{ "--sp-shine-delay": "3.9s", animationDelay: "245ms", ...styles.hubTile, background: "var(--t-profile-g)" }}>
                 <User size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("profileTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
               {dailyLogVisible && (
-                <button className="sp-tile sp-shine" onClick={() => setActivePanel("dailyLog")} style={{ "--sp-shine-delay": "3.2s", "--sp-skew": "-26deg", "--sp-shine-dir": "normal", animationDelay: "300ms", ...styles.hubTile, background: "linear-gradient(135deg, #2463EB, #4F8CFB)" }}>
+                <button className="sp-tile sp-shine" onClick={() => setActivePanel("dailyLog")} style={{ "--sp-shine-delay": "4.4s", animationDelay: "300ms", ...styles.hubTile, background: "var(--t-log-g)" }}>
                   <ClipboardList size={18} color="#fff" />
                   <span style={styles.hubTileLabel}>{t("dailyLogMenuLabel", lang)}</span>
                   <span className="sp-shine-layer" aria-hidden="true" />
                 </button>
               )}
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("settings")} style={{ "--sp-shine-delay": "4.0s", "--sp-skew": "14deg", "--sp-shine-dir": "reverse", animationDelay: "355ms", ...styles.hubTile, background: "linear-gradient(135deg, #E08A1E, #F6B93B)" }}>
+              <button className="sp-tile sp-shine" onClick={() => setActivePanel("settings")} style={{ "--sp-shine-delay": "4.9s", animationDelay: "355ms", ...styles.hubTile, background: "var(--t-settings-g)" }}>
                 <Sun size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("settingsTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
@@ -3350,7 +3972,7 @@ export default function ShiftPriorityRanker() {
         )}
 
         {showPriorityFlow && (
-        <div style={{ "--accent": "#D12F48" }}>
+        <div style={{ "--accent": "var(--flow)" }}>
         {profile?.crewNumber && parsed && (() => {
           const myCrew = parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber));
           return (
@@ -3663,7 +4285,7 @@ const styles = {
   menuBtn: { display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", cursor: "pointer", color: "var(--text)" },
   menuDropdown: { position: "absolute", top: 36, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 6px 20px rgba(0,0,0,0.12)", padding: 6, display: "flex", flexDirection: "column", gap: 2, width: "max-content", minWidth: 220, maxWidth: "min(280px, calc(100vw - 24px))", zIndex: 200 },
   menuItem: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "8px 10px", borderRadius: 7, border: "none", background: "transparent", color: "var(--text)", cursor: "pointer", textAlign: "start", whiteSpace: "nowrap" },
-  heroTile: { display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "start", border: "none", borderRadius: "var(--radius)", padding: 16, marginBottom: 18, background: "linear-gradient(135deg, #E8435A, #F7934C)", cursor: "pointer", boxShadow: "0 6px 16px rgba(232,67,90,0.25)" },
+  heroTile: { display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "start", border: "none", borderRadius: "var(--radius)", padding: 16, marginBottom: 18, background: "var(--hero-g)", cursor: "pointer", boxShadow: "0 6px 16px rgba(0,0,0,0.18)" },
   heroTileIcon: { width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   heroTileTitle: { fontSize: 15, fontWeight: 800, color: "#fff" },
   heroTileSubtitle: { fontSize: 11.5, color: "rgba(255,255,255,0.85)", marginTop: 2 },
