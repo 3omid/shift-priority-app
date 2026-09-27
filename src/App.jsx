@@ -16,7 +16,7 @@ import {
   Upload, RotateCcw, ListChecks, AlertCircle, Check, Printer,
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, ArrowLeft, Plus,
   Menu, Sun, Moon, HelpCircle, Trash2, Users, Info, Mail, LogOut,
-  User, Star, CalendarOff, Shield, Lock, Search, ClipboardList, Pencil,
+  Star, CalendarOff, Shield, Lock, Search, ClipboardList, Pencil,
 } from "lucide-react";
 
 const APP_VERSION = pkg.version;
@@ -539,6 +539,9 @@ const STRINGS = {
   myShiftHomeTitle: { fa: "شیفت من", en: "My Shift", hi: "मेरी शिफ्ट" },
   myShiftHomeNoCrew: { fa: "شمارهٔ گروهت رو توی پروفایل وارد کن", en: "Add your crew # in Profile", hi: "प्रोफ़ाइल में क्रू # जोड़ें" },
   myShiftHomeNoFile: { fa: "اول فایل برنامه رو بارگذاری کن", en: "Load the schedule file first", hi: "पहले शेड्यूल फ़ाइल लोड करें" },
+  quickCover: { fa: "جایگزین", en: "Cover", hi: "कवर" },
+  quickLog: { fa: "دفترچه", en: "Log", hi: "लॉग" },
+  weekRingLabel: { fa: "این هفته", en: "This week", hi: "यह हफ़्ता" },
   swapShowMore: { fa: "نمایش بیشتر", en: "Show more", hi: "और दिखाएं" },
   crewLookupSearch: { fa: "جستجوی شماره یا اسم...", en: "Search number or name…", hi: "नंबर या नाम खोजें…" },
 
@@ -1507,6 +1510,24 @@ function DateTimeWidget({ lang }) {
         {lang !== "en" && <div style={styles.dtDateLine}>{enDate}</div>}
       </div>
     </div>
+  );
+}
+
+// This week's logged-vs-scheduled hours, as a coloured progress ring (the
+// track is a soft translucent white, but the progress arc itself uses
+// --accent2 so it always reads as a colour, never a plain white ring).
+function WeekRing({ percent, size = 56, stroke = 6 }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(100, percent));
+  const offset = c * (1 - clamped / 100);
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)", flexShrink: 0 }}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth={stroke} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--accent2)" strokeWidth={stroke}
+        strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
+        style={{ transition: "stroke-dashoffset 0.4s ease" }} />
+    </svg>
   );
 }
 
@@ -2934,6 +2955,7 @@ const BACKUP_STRINGS = {
   soundOff: { fa: "خاموش", en: "Off", hi: "बंद" },
   soundPop: { fa: "پاپ", en: "Pop", hi: "पॉप" },
   soundBubble: { fa: "حباب", en: "Bubble", hi: "बबल" },
+  soundClick: { fa: "کلیک", en: "Click", hi: "क्लिक" },
   soundTest: { fa: "تست", en: "Test", hi: "जाँच" },
   backupTitle: { fa: "پشتیبان‌گیری", en: "Backup", hi: "बैकअप" },
   backupHint: {
@@ -3047,11 +3069,11 @@ function SettingsPanel({
           <button onClick={() => setSoundSettings({ ...soundSettings, enabled: true })} style={{ ...styles.chip, ...(soundSettings.enabled ? styles.chipActive : {}) }}>{bt("soundOn", lang)}</button>
         </div>
         <div style={{ ...styles.chipRow, marginTop: 8, opacity: soundSettings.enabled ? 1 : 0.5 }}>
-          {["pop", "bubble"].map((type) => (
+          {["pop", "bubble", "click"].map((type) => (
             <button key={type} disabled={!soundSettings.enabled}
               onClick={() => setSoundSettings({ ...soundSettings, type })}
               style={{ ...styles.chip, ...(soundSettings.type === type ? styles.chipActive : {}) }}>
-              {bt(type === "pop" ? "soundPop" : "soundBubble", lang)}
+              {bt(type === "pop" ? "soundPop" : type === "bubble" ? "soundBubble" : "soundClick", lang)}
             </button>
           ))}
           <button onClick={() => testSound(soundSettings.type)} style={styles.chip}>🔊 {bt("soundTest", lang)}</button>
@@ -3760,6 +3782,36 @@ export default function ShiftPriorityRanker() {
     if (meta) meta.setAttribute("content", themeMode === "dark" ? palette.card : palette.accent);
   }, [palette, themeMode]);
 
+  // My own crew's row in the loaded schedule, used by the home screen's
+  // "My Shift" card and the weekly-hours ring below it.
+  const myCrew = useMemo(() => (
+    parsed && profile?.crewNumber ? parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber)) : null
+  ), [parsed, profile]);
+
+  // This week's logged hours (from the Daily Shift Log) vs. this week's
+  // scheduled hours (from the loaded board), as a 0-100 percent. null when
+  // there's nothing to show it against (no crew, or a 0-hour week).
+  // Recomputed whenever activePanel changes so it picks up log edits made
+  // in the Daily Shift Log panel as soon as the person returns home.
+  const weekProgress = useMemo(() => {
+    if (!myCrew) return null;
+    const scheduledMinutes = myCrew.days.reduce((sum, d) => sum + Math.round((Number(d.hours) || 0) * 60), 0);
+    if (scheduledMinutes <= 0) return null;
+    const now = new Date();
+    const sunday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+    const saturday = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() + 6);
+    const toKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const startKey = toKey(sunday), endKey = toKey(saturday);
+    let loggedMinutes = 0;
+    for (const e of loadDailyLogEntries()) {
+      if (!e?.date || e.date < startKey || e.date > endKey) continue;
+      loggedMinutes += Math.round((Number(e.totalHours) || 0) * 60);
+    }
+    const percent = Math.max(0, Math.min(100, Math.round((loggedMinutes / scheduledMinutes) * 100)));
+    return { percent, loggedHours: loggedMinutes / 60, scheduledHours: scheduledMinutes / 60 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myCrew, activePanel]);
+
   const handleFile = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -4127,63 +4179,105 @@ export default function ShiftPriorityRanker() {
           <div style={styles.routeDots}>
             <span className="sp-dot" style={styles.dot} /><span style={styles.routeLine} /><span className="sp-dot" style={{ ...styles.dot, animationDelay: ".35s" }} /><span style={styles.routeLine} /><span className="sp-dot" style={{ ...styles.dot, background: "var(--accent2)", animationDelay: ".7s" }} />
           </div>
+          {!showPriorityFlow && (
+            <button
+              className="sp-shine"
+              onClick={() => { tap(); setActivePanel("profile"); }}
+              aria-label={t("profileTitle", lang)}
+              style={styles.profileBubble}
+            >
+              {(profile?.firstName || "?").trim().charAt(0).toUpperCase()}
+              <span style={styles.profileBubblePencil}><Pencil size={9} color="#fff" /></span>
+            </button>
+          )}
           <h1 style={styles.title}>{t("title", lang)}</h1>
-          <p style={styles.subtitle}>{t("subtitle", lang)}</p>
-          {profile?.firstName && (
+          {/* On home, the same subtitle text already lives on the Shift
+              Prioritizer tile below, so it isn't repeated up here. */}
+          {showPriorityFlow && <p style={styles.subtitle}>{t("subtitle", lang)}</p>}
+          {profile?.firstName && !showPriorityFlow && (
             <p style={styles.welcomeLine}>{t("welcomeBack", lang)} <b>{profile.firstName}</b></p>
           )}
-          {showPriorityFlow ? (
-            <DateTimeWidget lang={lang} />
-          ) : (
-            // Home only: "My Shift" block physically LEFT of the clock in every
-            // language (the row is forced LTR; each block keeps the page direction).
-            <div style={{ display: "flex", justifyContent: "center", alignItems: "stretch", gap: 8, flexWrap: "nowrap", direction: "ltr" }}>
-              {(() => {
-                const myCrew = parsed && profile?.crewNumber ? parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber)) : null;
-                const today = myCrew ? myCrew.days.find((d) => d.dayIdx === new Date().getDay()) : null;
-                const onClick = () => {
-                  if (!profile?.crewNumber) setActivePanel("profile");
-                  else if (!parsed) setShowPriorityFlow(true);
-                  else if (myCrew) setShowMySchedule(true);
-                  else setActivePanel("profile");
-                };
-                const sub = !profile?.crewNumber ? t("myShiftHomeNoCrew", lang)
-                  : !parsed ? t("myShiftHomeNoFile", lang)
-                  : !myCrew ? t("crewNumberNotInFile", lang)
-                  : null;
-                return (
-                  <button className="sp-myshift sp-shine" onClick={onClick} style={{ "--sp-shine-delay": "1.8s", direction: dir, marginTop: 12, flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 104, padding: "8px 8px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", color: "#fff", background: "var(--my-g)", boxShadow: "0 6px 14px var(--my-glow-soft)", fontFamily: "inherit" }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontWeight: 800, fontSize: 13.5, whiteSpace: "nowrap" }}><Star size={13} color="#fff" /> {t("myShiftHomeTitle", lang)}</span>
-                    {myCrew && <span style={{ fontSize: 11.5, opacity: 0.9 }}>{t("crewWord", lang)} {String(myCrew.crew)}</span>}
-                    {myCrew && (today ? (
-                      <><span style={{ fontSize: 11, opacity: 0.9 }}>{t("todayLabel", lang)}</span><bdi dir="ltr" style={{ fontSize: 12.5, fontWeight: 800, whiteSpace: "nowrap" }}>{formatExcelTime(today.start)}–{formatExcelTime(today.end)}</bdi></>
-                    ) : (
-                      <span style={{ fontSize: 12.5, fontWeight: 700, textAlign: "center" }}>{t("todayLabel", lang)}: {t("off", lang)}</span>
-                    ))}
-                    {sub && <span style={{ fontSize: 10.5, opacity: 0.9, lineHeight: 1.35, textAlign: "center" }}>{sub}</span>}
-                    <span className="sp-shine-layer" aria-hidden="true" />
-                  </button>
-                );
-              })()}
-              <div style={{ direction: dir, display: "flex", flex: "0 1 auto", minWidth: 0 }}><DateTimeWidget lang={lang} /></div>
-            </div>
-          )}
+          <DateTimeWidget lang={lang} />
         </header>
 
         {!showPriorityFlow && (
           <div className="no-print">
-            <button className="sp-hero sp-shine" onClick={() => { tap(); setShowPriorityFlow(true); }} style={{ ...styles.heroTile, "--sp-shine-delay": "1.2s" }}>
-              <span style={styles.heroTileIcon}><Star size={22} color="#fff" /></span>
-              <span style={{ flex: 1 }}>
-                <div style={styles.heroTileTitle}>{t("title", lang)}</div>
-                <div style={styles.heroTileSubtitle}>{t("subtitle", lang)}</div>
-              </span>
-              <ArrowLeft size={16} color="#fff" />
-              <span className="sp-shine-layer" aria-hidden="true" />
-            </button>
+            {(() => {
+              const today = myCrew ? myCrew.days.find((d) => d.dayIdx === new Date().getDay()) : null;
+              const onCardClick = () => {
+                if (!profile?.crewNumber) setActivePanel("profile");
+                else if (!parsed) setShowPriorityFlow(true);
+                else if (myCrew) setShowMySchedule(true);
+                else setActivePanel("profile");
+              };
+              const sub = !profile?.crewNumber ? t("myShiftHomeNoCrew", lang)
+                : !parsed ? t("myShiftHomeNoFile", lang)
+                : !myCrew ? t("crewNumberNotInFile", lang)
+                : null;
+              return (
+                <button className="sp-myshift sp-shine" onClick={onCardClick} style={styles.myShiftHomeCard}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 14 }}>
+                    <Star size={14} color="#fff" /> {t("myShiftHomeTitle", lang)}
+                    {myCrew && <span style={{ fontWeight: 600, opacity: 0.85, fontSize: 12 }}>· {t("crewWord", lang)} {String(myCrew.crew)}</span>}
+                  </span>
+                  {myCrew ? (
+                    today ? (
+                      <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                        <span style={{ fontSize: 11.5, opacity: 0.85 }}>{t("todayLabel", lang)}</span>
+                        <bdi dir="ltr" style={{ fontSize: 19, fontWeight: 800 }}>{formatExcelTime(today.start)}–{formatExcelTime(today.end)}</bdi>
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 15, fontWeight: 800 }}>{t("todayLabel", lang)}: {t("off", lang)}</span>
+                    )
+                  ) : (
+                    sub && <span style={{ fontSize: 12, opacity: 0.9 }}>{sub}</span>
+                  )}
+                  <span style={{ display: "flex", gap: 8 }}>
+                    <span
+                      role="button" tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); tap(); setActivePanel("swapFinder"); }}
+                      style={styles.myShiftQuickBtn}
+                    >
+                      <CalendarOff size={13} /> {t("quickCover", lang)}
+                    </span>
+                    {dailyLogVisible && (
+                      <span
+                        role="button" tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); tap(); setActivePanel("dailyLog"); }}
+                        style={styles.myShiftQuickBtn}
+                      >
+                        <ClipboardList size={13} /> {t("quickLog", lang)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="sp-shine-layer" aria-hidden="true" />
+                </button>
+              );
+            })()}
 
-            <div style={styles.hubGroupLabel}>{t("hubGroupCrews", lang)}</div>
+            {weekProgress && (
+              <div style={styles.weekRingCard}>
+                <div style={{ position: "relative", width: 56, height: 56 }}>
+                  <WeekRing percent={weekProgress.percent} size={56} stroke={6} />
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13.5, fontWeight: 800, color: "#fff" }}>
+                    {weekProgress.percent}%
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.9 }}>{t("weekRingLabel", lang)}</span>
+                  <bdi dir="ltr" style={{ fontSize: 13, fontWeight: 800 }}>
+                    {weekProgress.loggedHours.toFixed(1)}/{weekProgress.scheduledHours.toFixed(1)} {t("hoursWord", lang)}
+                  </bdi>
+                </div>
+              </div>
+            )}
+
             <div style={styles.hubGrid}>
+              <button className="sp-hero sp-shine" onClick={() => { tap(); setShowPriorityFlow(true); }} style={{ "--sp-shine-delay": "1.2s", ...styles.hubTile, gridColumn: "span 2", flexDirection: "row", alignItems: "center", gap: 10, background: "var(--hero-g)" }}>
+                <Star size={20} color="#fff" />
+                <span style={{ ...styles.hubTileLabel, marginTop: 0, fontSize: 12 }}>{t("title", lang)}</span>
+                <span className="sp-shine-layer" aria-hidden="true" />
+              </button>
               <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("compare2"); }} style={{ "--sp-shine-delay": "2.4s", animationDelay: "80ms", ...styles.hubTile, background: "var(--t-compare-g)" }}>
                 <GitCompare size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("compare2Title", lang)}</span>
@@ -4194,38 +4288,19 @@ export default function ShiftPriorityRanker() {
                 <span style={styles.hubTileLabel}>{t("crewLookupTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("swapFinder"); }} style={{ "--sp-shine-delay": "3.4s", animationDelay: "190ms", ...styles.hubTile, background: "var(--t-swap-g)" }}>
-                <CalendarOff size={18} color="#fff" />
-                <span style={styles.hubTileLabel}>{t("hubSwapFinder", lang)}</span>
-                <span className="sp-shine-layer" aria-hidden="true" />
-              </button>
-            </div>
-
-            <div style={styles.hubGroupLabel}>{t("hubGroupMe", lang)}</div>
-            <div style={styles.hubGrid}>
-              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("profile"); }} style={{ "--sp-shine-delay": "3.9s", animationDelay: "245ms", ...styles.hubTile, background: "var(--t-profile-g)" }}>
-                <User size={18} color="#fff" />
-                <span style={styles.hubTileLabel}>{t("profileTitle", lang)}</span>
-                <span className="sp-shine-layer" aria-hidden="true" />
-              </button>
-              {dailyLogVisible && (
-                <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("dailyLog"); }} style={{ "--sp-shine-delay": "4.4s", animationDelay: "300ms", ...styles.hubTile, background: "var(--t-log-g)" }}>
-                  <ClipboardList size={18} color="#fff" />
-                  <span style={styles.hubTileLabel}>{t("dailyLogMenuLabel", lang)}</span>
-                  <span className="sp-shine-layer" aria-hidden="true" />
-                </button>
-              )}
               <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("settings"); }} style={{ "--sp-shine-delay": "4.9s", animationDelay: "355ms", ...styles.hubTile, background: "var(--t-settings-g)" }}>
                 <Sun size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("settingsTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("helpMenu"); }} style={{ "--sp-shine-delay": "5.4s", animationDelay: "410ms", ...styles.hubTile, background: "var(--t-browse-g)" }}>
+                <HelpCircle size={18} color="#fff" />
+                <span style={styles.hubTileLabel}>{t("helpMenuLabel", lang)}</span>
+                <span className="sp-shine-layer" aria-hidden="true" />
+              </button>
             </div>
 
             <div style={styles.hubListCard}>
-              <button style={styles.menuItem} onClick={() => setActivePanel("helpMenu")}>
-                <HelpCircle size={15} /> {t("helpMenuLabel", lang)}
-              </button>
               <button style={styles.menuItem} onClick={() => setActivePanel(isAdmin ? "admin" : "adminLogin")}>
                 <Shield size={15} /> {t("adminMenuLabel", lang)}
               </button>
@@ -4560,7 +4635,12 @@ const styles = {
   hubTileLabel: { fontSize: 10.5, fontWeight: 700, color: "#fff", lineHeight: 1.3, marginTop: 8 },
   hubComingSoonBadge: { position: "absolute", top: 6, insetInlineStart: 6, fontSize: 8, fontWeight: 700, padding: "1px 5px", borderRadius: 20, background: "rgba(255,255,255,0.9)", color: "#4B5563" },
   hubListCard: { border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--card)", padding: 6, display: "flex", flexDirection: "column", gap: 1, marginBottom: 14 },
-  header: { textAlign: "center", marginBottom: 18, paddingTop: 10 },
+  myShiftHomeCard: { display: "flex", flexDirection: "column", gap: 8, width: "100%", textAlign: "start", border: "none", borderRadius: "var(--radius)", padding: "14px 16px", marginBottom: 10, background: "var(--my-g)", color: "#fff", cursor: "pointer", boxShadow: "0 6px 16px var(--my-glow-soft)", fontFamily: "inherit", position: "relative" },
+  myShiftQuickBtn: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 700, padding: "5px 10px", borderRadius: 999, background: "rgba(255,255,255,0.2)", color: "#fff", cursor: "pointer" },
+  weekRingCard: { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: "var(--radius)", background: "var(--t-log-g)", color: "#fff", marginBottom: 10, boxShadow: "0 4px 10px rgba(0,0,0,0.14)" },
+  profileBubble: { position: "absolute", top: 4, insetInlineEnd: 0, width: 34, height: 34, borderRadius: "50%", background: "var(--accent)", color: "#fff", fontWeight: 800, fontSize: 15, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 8px rgba(0,0,0,0.2)" },
+  profileBubblePencil: { position: "absolute", bottom: -2, insetInlineEnd: -2, width: 16, height: 16, borderRadius: "50%", background: "var(--accent2)", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--bg)" },
+  header: { textAlign: "center", marginBottom: 18, paddingTop: 10, position: "relative" },
   headerLogo: { width: 56, height: 56, borderRadius: 14, objectFit: "contain", marginBottom: 6 },
   routeDots: { display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 },
   splashOverlay: { position: "fixed", inset: 0, zIndex: 999, background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" },

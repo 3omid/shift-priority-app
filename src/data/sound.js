@@ -35,7 +35,22 @@ function bubble(volume = 0.4) {
   o.start(t); o.stop(t + 0.1);
 }
 
-const SOUNDS = { pop, bubble };
+// Short, crisp mechanical-keyboard-style click — a fast pitch drop with a
+// hard percussive decay, distinct from the softer pop/bubble tones.
+function click(volume = 0.4) {
+  const c = audioCtx(), t = c.currentTime;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = "square";
+  o.frequency.setValueAtTime(2400, t);
+  o.frequency.exponentialRampToValueAtTime(1200, t + 0.01);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(volume * 0.3, t + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.018);
+  o.connect(g).connect(c.destination);
+  o.start(t); o.stop(t + 0.03);
+}
+
+const SOUNDS = { pop, bubble, click };
 
 // Plays the given type immediately — used by the Settings "test" buttons
 // regardless of whether sound is currently enabled.
