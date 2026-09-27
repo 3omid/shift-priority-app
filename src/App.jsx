@@ -1667,6 +1667,12 @@ function deriveExchangeBox({ crewNum, date, driverNum }, crews, crewNames, crewE
     driverNum: driverNum || "",
     driverName: driverNum ? resolveCrewName(driverNum, crews, crewNames) : "",
     employeeId: driverNum ? resolveEmployeeId(driverNum, profile, crewEmployeeIds) : "",
+    // The crew's OWN regular driver/name — i.e. whose run this normally is
+    // (distinct from `driverName` above, the person actually covering it).
+    // The real paper form asks for both: "I <driverName> ... will work on
+    // <date> for <crewOwnerName>".
+    crewOwnerName: crewNum ? resolveCrewName(crewNum, crews, crewNames) : "",
+    crewOwnerEmployeeId: crewNum ? resolveEmployeeId(crewNum, profile, crewEmployeeIds) : "",
     hasShift: !!day,
     hasCrewAndDate,
     code: day?.code || "",
@@ -1674,6 +1680,10 @@ function deriveExchangeBox({ crewNum, date, driverNum }, crews, crewNames, crewE
     pieceStart: day ? formatExcelTime(day.start) : "",
     pieceEnd: day ? formatExcelTime(day.end) : "",
     hoursLabel: day ? formatDuration(day.hours, lang) : "",
+    // Plain decimal hours (e.g. "8.5") for the printed form's "Crew Value"
+    // field, matching how transit scheduling systems record it — separate
+    // from the friendlier hoursLabel shown in the in-app editor/preview.
+    hoursDecimal: day ? String(Math.round(day.hours * 100) / 100) : "",
     // In-app-only reference (never printed) — lets the person sanity-check
     // the auto-fill against the crew's usual AM/PM shift before printing.
     shiftInternal: crewObj ? `${crewObj.type || ""} ${crewObj.shiftRaw || ""}`.trim() : "",
@@ -3786,83 +3796,112 @@ function printCompareTable(matched, lang) {
   openPrintableReport(buildCompareHtml(matched, lang, timestamp), lang);
 }
 
-// Renders the real "TOK Transit — Shift Exchange Request Form": two
-// employee sections (each already fully derived by deriveExchangeBox — this
-// function only lays it out, it never computes or invents a field) plus the
-// "Operations Supervisor Use Only" section, which is ALWAYS rendered blank
-// (unchecked boxes, empty lines) — a real signature/approval only ever gets
-// added by hand, on paper, after this is printed.
+// Splits a "YYYY-MM-DD" string into the separate M / D / Y blanks the real
+// form asks for. Never guesses: an unknown/blank date just leaves all three
+// blank for the driver to write in by hand.
+function splitDateParts(dateStr) {
+  if (!dateStr) return { m: "", d: "", y: "" };
+  const [y, m, d] = dateStr.split("-");
+  return { m: String(Number(m)), d: String(Number(d)), y };
+}
+
+// Builds the printable page as a literal, field-for-field reproduction of
+// the real "TOK Transit — Shift Exchange Request Form" paper form (the
+// exact wording/layout of the two driver boxes and the Operations
+// Supervisor box below is copied from that form) — NOT a redesigned
+// summary. Every blank is either filled from deriveExchangeBox's output or
+// left genuinely blank (a real blank line, never a placeholder), so a
+// printed/PDF copy is the same document a supervisor already recognizes.
+// The Supervisor box's Yes/No boxes, reason, name, ID and both signature
+// lines are always left unfilled/unchecked — an approval only ever happens
+// on paper, by a person, never fabricated here.
 function buildSwapFormHtml({ box1, box2 }, lang, timestamp) {
-  const dir = lang === "fa" ? "rtl" : "ltr";
-  const th = exportTheme("swap");
-  const na = t("xchgNA", lang);
-  const row = (label, value) => `<div style="margin-bottom:12px;"><div style="font-size:10.5px;font-weight:700;color:${th.headText};text-transform:uppercase;letter-spacing:0.03em;margin-bottom:3px;">${label}</div><div style="border-bottom:1.5px solid #999;min-height:20px;font-size:14px;padding-bottom:2px;">${value || "&nbsp;"}</div></div>`;
-  const section = (label, d) => `
-    <div style="border:1px solid #ccc;border-radius:8px;padding:14px 16px;flex:1;">
-      <div style="font-weight:800;font-size:13px;margin-bottom:10px;">${label}</div>
-      <div class="grid2">
-        ${row(t("xchgDriverLabel", lang), d.driverName)}
-        ${row(t("employeeIdLabel", lang), d.employeeId || na)}
-        ${row(t("crewNumberLabel", lang), d.crewNum)}
-        ${row(t("xchgDateLabel", lang), d.date ? `${d.date}${d.weekdayLabel ? " · " + d.weekdayLabel : ""}` : "")}
-        ${row(t("xchgRunLabel", lang), d.code || na)}
-        ${row(t("xchgBlockLabel", lang), d.block || na)}
-        ${row(t("xchgPiece1Label", lang), (d.pieceStart || d.pieceEnd) ? `${d.pieceStart}–${d.pieceEnd}` : "")}
-        ${row(t("xchgPiece2Label", lang), na)}
-        ${row(t("xchgCrewValueLabel", lang), d.hoursLabel || na)}
-      </div>
-      ${row(t("xchgEmployeeSignLabel", lang), "")}
+  const submitted = splitDateParts(localDateStr());
+  const na = "N/A";
+  // An inline fill-in blank: a bottom-border line with the value centered
+  // on it, or a genuinely empty line (no placeholder text) when unknown.
+  const blank = (value, minWidth) => `<span style="display:inline-block; min-width:${minWidth}px; border-bottom:1.3px solid #333; padding:0 3px 1px; text-align:center; font-weight:600;">${value ? value : "&nbsp;"}</span>`;
+  const box = (num, d) => {
+    const p = splitDateParts(d.date);
+    return `
+    <div class="box">
+      <p>
+        I ${blank(d.driverName, 190)} ID #${blank(d.employeeId, 60)} will work on ${blank(p.m, 30)} ${blank(p.d, 26)} ${blank(p.y, 55)} for ${blank(d.crewOwnerName, 190)}
+      </p>
+      <p>
+        ID #${blank(d.crewOwnerEmployeeId, 60)}. It is run #${blank(d.code, 60)}. Piece 1 is from ${blank(d.pieceStart, 60)} to ${blank(d.pieceEnd, 60)} on block ${blank(d.block, 120)}. Piece 2 is from ${blank(na, 50)} to ${blank(na, 50)}
+      </p>
+      <p>
+        on block ${blank(na, 120)}. &nbsp; Crew value ${blank(d.hoursDecimal, 55)}. &nbsp; Signature ${num} ${blank("", 200)}
+      </p>
     </div>`;
-  const checkbox = (label) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-inline-end:18px;"><span style="width:13px;height:13px;border:1.5px solid #666;border-radius:3px;display:inline-block;"></span>${label}</span>`;
-  return `<!doctype html><html lang="${lang}" dir="${dir}"><head><meta charset="UTF-8" />
-  <title>${t("xchgFormTitle", lang)}</title>
+  };
+  const yesNo = () => `<span class="ynopt"><span class="ckbox"></span>Yes</span><span class="ynopt"><span class="ckbox"></span>No</span>`;
+  return `<!doctype html><html lang="en" dir="ltr"><head><meta charset="UTF-8" />
+  <title>Shift Exchange Request Form</title>
   <style>
-    body { font-family: Tahoma, 'Vazirmatn', sans-serif; margin: 24px; color:#20242B; }
-    .hdr { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
-    .hdr h1 { font-size:20px; margin:0 0 4px; }
-    .ts { text-align:left; font-size:12px; color:#666; }
-    .toolbar { position: sticky; top: 0; background: #fff; padding: 10px 0 16px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; margin-bottom: 16px; z-index: 10; }
+    body { font-family: Arial, Helvetica, sans-serif; margin: 26px; color:#111; font-size: 13.5px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .toolbar { position: sticky; top: 0; background: #fff; padding: 10px 0 16px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; margin-bottom: 18px; z-index: 10; }
     .toolbar button { font-size:14px; padding:10px 16px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
     .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
-    .toolbar .print-btn { color:#fff; font-weight:700; }
-    .sections { display:flex; gap: 16px; flex-wrap: wrap; }
-    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
-    .sup { border:1.5px dashed #999; border-radius:8px; padding:14px 16px; margin-top:18px; }
-    ${exportCss(th)}
-    @media print { .toolbar { display: none !important; } .sections, .sup { break-inside: avoid; } }
+    .toolbar .print-btn { background:#111; color:#fff; font-weight:700; border-color:#111; }
+    .ts { text-align:right; font-size:11px; color:#888; margin-bottom: 6px; }
+    .hdr { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 6px; }
+    .logo { font-weight:900; font-size:20px; letter-spacing:0.02em; }
+    .logo small { display:block; font-weight:700; font-size:10px; letter-spacing:0.25em; color:#444; }
+    .submitted { font-size:12px; text-align:right; }
+    h1 { text-align:center; font-size:19px; margin: 2px 0 14px; }
+    .intro p { font-size:11.5px; line-height:1.45; margin: 0 0 7px; }
+    .box { border:2px solid #111; border-radius: 4px; padding: 10px 14px 12px; margin-bottom: 12px; }
+    .box p { margin: 0 0 10px; line-height: 2.1; }
+    .sup { border:2px solid #111; border-radius: 4px; padding: 10px 14px 12px; }
+    .sup h2 { font-size: 13.5px; margin: 0 0 10px; }
+    .supq { display:flex; justify-content:space-between; align-items:center; gap: 10px; font-size:12.5px; margin-bottom: 8px; max-width: 640px; }
+    .yn { display:flex; gap: 18px; flex-shrink:0; }
+    .ynopt { display:flex; align-items:center; gap: 5px; }
+    .ckbox { width:13px; height:13px; border:1.4px solid #111; display:inline-block; }
+    .sup p { font-size:12.5px; margin: 10px 0; line-height: 2; }
+    .footer { margin-top: 14px; font-size: 10.5px; color:#666; }
+    @media print { .toolbar { display: none !important; } .box, .sup { break-inside: avoid; } }
   </style></head>
   <body>
     <div class="toolbar">
-      <button class="print-btn" onclick="window.print()">🖨️ ${t("printBtn", lang)}</button>
-      <button class="close-btn" onclick="window.close()">✕ ${t("close", lang)}</button>
+      <button class="print-btn" onclick="window.print()">🖨️ Print / PDF</button>
+      <button class="close-btn" onclick="window.close()">✕ Close</button>
     </div>
+    <div class="ts">${timestamp}</div>
     <div class="hdr">
-      <div><h1>${t("xchgFormTitle", lang)}</h1></div>
-      <div class="ts">${timestamp}</div>
+      <div class="logo">TOK<small>TRANSIT</small></div>
+      <div class="submitted">Date Request Submitted:&nbsp; M${blank(submitted.m, 26)} D${blank(submitted.d, 22)} Y${blank(submitted.y, 44)}</div>
     </div>
-    <div class="rainbow"></div>
-    <div class="sections">
-      ${section(t("xchgSection1", lang), box1)}
-      ${section(t("xchgSection2", lang), box2)}
+    <h1>Shift Exchange Request Form</h1>
+    <div class="intro">
+      <p>Driver 1 completes 1<sup>st</sup> box - Driver 2 completes 2<sup>nd</sup> box. If the work only has 1 piece, enter &ldquo;N/A&rdquo; in the blanks on piece 2 - Operations Supervisor will complete the 3<sup>rd</sup> box.</p>
+      <p>All information must be completed and both drivers must sign form prior to the form being submitted to Operations Supervisor. Shift Exchanges are at the sole discretion of Management and it is each Driver&rsquo;s responsibility to ensure the request has been approved before the requested date(s).</p>
+      <p>*Shift Exchanges must take place within the same pay period. If approved, crew value guarantees will be voided and all hours worked due to shift exchanges are not eligible for overtime.</p>
+      <p>*Request must be made at least five (5) days in advance of the Shift Exchange, and be compliant with Employment Standards, the Collective Agreement and other legislation.</p>
+      <p>*This agreement is between the two drivers involved and it is expected that each driver will fulfill their commitment.</p>
     </div>
+    ${box(1, box1)}
+    ${box(2, box2)}
     <div class="sup">
-      <div style="font-weight:800;font-size:13px;margin-bottom:10px;">${t("xchgSupervisorTitle", lang)}</div>
-      <div style="margin-bottom:12px;font-size:13px;">${t("xchgApprovedLabel", lang)} ${checkbox(t("xchgYes", lang))} ${checkbox(t("xchgNo", lang))}</div>
-      <div class="grid2">
-        ${row(t("xchgReasonLabel", lang), "")}
-        ${row(t("xchgSupervisorNameLabel", lang), "")}
-        ${row(t("xchgSupervisorSignLabel", lang), "")}
-        ${row(t("xchgDateLabel", lang), "")}
-        ${row(t("xchgTrapezeLabel", lang), "")}
-        ${row(t("xchgDispatchLabel", lang), "")}
-      </div>
+      <h2>Operations Supervisor Use Only</h2>
+      <div class="supq"><span>Is the shift information above correct?</span><span class="yn">${yesNo()}</span></div>
+      <div class="supq"><span>Is there a minimum of 8 hours off before and after driver 1 and 2&rsquo;s new shift, and compliant with off day requirements?</span><span class="yn">${yesNo()}</span></div>
+      <div class="supq"><span>Is this switch taking place within the same pay period?</span><span class="yn">${yesNo()}</span></div>
+      <div class="supq"><span>Is the switch approved?</span><span class="yn">${yesNo()}</span></div>
+      <p>If approved, record switch on Dispatch Sheet</p>
+      <p>If <u>not</u> approved, state reason ${blank("", 260)} &nbsp; Date: ${blank("", 120)}</p>
+      <p>Operations Supervisor Name ${blank("", 220)} ID ${blank("", 70)} Signature ${blank("", 200)}</p>
+      <p>Entered in Trapeze by ${blank("", 160)} &nbsp;&nbsp; Entered on Dispatch Sheet by ${blank("", 160)}</p>
     </div>
+    <div class="footer">Reproduces TOK Transit's own "Shift Exchange Request Form" (rev. January 23, 2020) — pre-filled by Shift Priority from your loaded schedule; nothing in the Supervisor box above is filled in.</div>
   </body></html>`;
 }
 
 function printSwapForm(f, lang) {
   const now = new Date();
-  const timestamp = `${formatJalaliDate(now)} — ${new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric" }).format(now)} — ${now.toLocaleTimeString("en-GB")}`;
+  const timestamp = `Generated ${new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric" }).format(now)} — ${now.toLocaleTimeString("en-GB")}`;
   openPrintableReport(buildSwapFormHtml(f, lang, timestamp), lang);
 }
 
