@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import pkg from "../package.json";
-import { exportBackup, validateBackupFile, restoreBackup, daysSinceLastExport } from "./data/backup.js";
+import { exportBackup, validateBackupFile, restoreBackup, daysSinceLastExport, listSnapshots, restoreSnapshotById } from "./data/backup.js";
 import { playTap, testSound } from "./data/sound.js";
 import {
   loadProfile, saveProfile, clearProfileStorage,
@@ -16,7 +16,7 @@ import {
   Upload, RotateCcw, ListChecks, AlertCircle, Check, Printer,
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, ArrowLeft, Plus,
   Menu, Sun, Moon, HelpCircle, Trash2, Users, Info, Mail, LogOut,
-  Star, CalendarOff, Shield, Lock, Search, ClipboardList, Pencil,
+  Star, CalendarOff, Shield, Lock, Search, ClipboardList, Pencil, Palette, History,
 } from "lucide-react";
 
 const APP_VERSION = pkg.version;
@@ -409,6 +409,8 @@ const REGION_LABELS = {
 const STRINGS = {
   title: { fa: "اولویت‌بندی شیفت", en: "Shift Prioritizer", hi: "शिफ्ट प्राथमिकता" },
   subtitle: { fa: "جدول شیفت رو آپلود کن، اولویت‌هاتو بچین", en: "Upload your shift sheet and build your priorities", hi: "अपनी शिफ्ट शीट अपलोड करें और प्राथमिकताएँ तय करें" },
+  hiGreeting: { fa: "سلام،", en: "Hi,", hi: "नमस्ते," },
+  weekHoursBadge: { fa: "ساعت", en: "h", hi: "घं" },
   uploadStep: { fa: "۱. فایل اکسل شیفت‌ها", en: "1. Shift Excel File", hi: "१. शिफ्ट एक्सेल फ़ाइल" },
   uploadPlaceholder: { fa: "برای انتخاب فایل ضربه بزن (xlsx / xls)", en: "Tap to choose a file (xlsx / xls)", hi: "फ़ाइल चुनने के लिए टैप करें (xlsx / xls)" },
   changeFileLink: { fa: "تغییر", en: "Change", hi: "बदलें" },
@@ -539,8 +541,9 @@ const STRINGS = {
   myShiftHomeTitle: { fa: "شیفت من", en: "My Shift", hi: "मेरी शिफ्ट" },
   myShiftHomeNoCrew: { fa: "شمارهٔ گروهت رو توی پروفایل وارد کن", en: "Add your crew # in Profile", hi: "प्रोफ़ाइल में क्रू # जोड़ें" },
   myShiftHomeNoFile: { fa: "اول فایل برنامه رو بارگذاری کن", en: "Load the schedule file first", hi: "पहले शेड्यूल फ़ाइल लोड करें" },
-  quickCover: { fa: "جایگزین", en: "Cover", hi: "कवर" },
-  quickLog: { fa: "دفترچه", en: "Log", hi: "लॉग" },
+  quickSwapForm: { fa: "فرم جابجایی", en: "Swap form", hi: "स्वैप फ़ॉर्म" },
+  quickCover: { fa: "پوشش مرخصی", en: "Leave cover", hi: "छुट्टी कवर" },
+  quickLog: { fa: "دفترچه شیفت", en: "Shift log", hi: "शिफ्ट लॉग" },
   weekRingLabel: { fa: "این هفته", en: "This week", hi: "यह हफ़्ता" },
   swapShowMore: { fa: "نمایش بیشتر", en: "Show more", hi: "और दिखाएं" },
   crewLookupSearch: { fa: "جستجوی شماره یا اسم...", en: "Search number or name…", hi: "नंबर या नाम खोजें…" },
@@ -1480,7 +1483,7 @@ function AnalogClock({ hourAngle, minuteAngle, secondAngle, size = 64 }) {
   );
 }
 
-function DateTimeWidget({ lang }) {
+function DateTimeWidget({ lang, compact }) {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -1502,7 +1505,7 @@ function DateTimeWidget({ lang }) {
   const secondAngle = seconds * 6;
 
   return (
-    <div style={{ ...styles.dtWidget, background: "var(--clock-g)", border: "none", boxShadow: "0 6px 14px rgba(0,0,0,0.18)", "--card": "rgba(255,255,255,0.16)", "--border": "rgba(255,255,255,0.55)", "--text": "#fff", "--muted": "rgba(255,255,255,0.85)", "--accent": "#fff", "--accent2": "#FFE9A8" }}>
+    <div style={{ ...styles.dtWidget, ...(compact ? { marginTop: 0, width: "100%", boxSizing: "border-box" } : {}), background: "var(--clock-g)", border: "none", boxShadow: "0 6px 14px rgba(0,0,0,0.18)", "--card": "rgba(255,255,255,0.16)", "--border": "rgba(255,255,255,0.55)", "--text": "#fff", "--muted": "rgba(255,255,255,0.85)", "--accent": "#fff", "--accent2": "#FFE9A8" }}>
       <AnalogClock hourAngle={hourAngle} minuteAngle={minuteAngle} secondAngle={secondAngle} />
       <div style={styles.dtTextCol}>
         <div style={styles.dtDigital}>{digital}</div>
@@ -2987,6 +2990,25 @@ const BACKUP_STRINGS = {
   modeMergeHint: { fa: "بقیه هم جایگزین می‌شود؛ فقط دفترچه‌ی شیفت با تاریخ‌های موجود ترکیب می‌شود.", en: "Everything else is still replaced; only the daily log is combined with what's already here, by date.", hi: "बाकी सब बदल जाता है; केवल दैनिक लॉग तारीख़ के अनुसार मिलाया जाता है।" },
   restoreBtn: { fa: "بازیابی", en: "Restore", hi: "पुनर्स्थापित करें" },
   restoreDone: { fa: "بازیابی انجام شد. یک نسخه از قبل هم ذخیره شد.", en: "Restored. A snapshot of your previous data was saved too.", hi: "पुनर्स्थापित हो गया।" },
+  autoBackupsTitle: { fa: "بکاپ‌های خودکار", en: "Automatic backups", hi: "स्वचालित बैकअप" },
+  autoBackupsHint: {
+    fa: "علاوه بر خروجیِ دستی، برنامه هر روز و هر هفته و بعد از تغییرات مهم، به‌طور خودکار یک نسخه از اطلاعاتت را همین‌جا ذخیره می‌کند.",
+    en: "Besides a manual export, the app also automatically keeps daily, weekly, and change-triggered snapshots of your data right here.",
+    hi: "मैनुअल निर्यात के अलावा, ऐप रोज़ाना, साप्ताहिक और बदलाव के बाद अपने-आप एक स्नैपशॉट यहीं सहेजता है।",
+  },
+  noSnapshots: { fa: "هنوز بکاپ خودکاری ساخته نشده.", en: "No automatic backups yet.", hi: "अभी तक कोई स्वचालित बैकअप नहीं।" },
+  snapshotReasonAuto: { fa: "خودکار", en: "auto", hi: "स्वतः" },
+  snapshotReasonDaily: { fa: "روزانه", en: "daily", hi: "दैनिक" },
+  snapshotReasonWeekly: { fa: "هفتگی", en: "weekly", hi: "साप्ताहिक" },
+  snapshotReasonPreMigration: { fa: "پیش از مهاجرت", en: "pre-migration", hi: "माइग्रेशन-पूर्व" },
+  snapshotReasonPreRestore: { fa: "پیش از بازیابی", en: "pre-restore", hi: "पुनर्स्थापन-पूर्व" },
+  restoreSnapshotBtn: { fa: "بازگردانی این نسخه", en: "Restore this", hi: "यह पुनर्स्थापित करें" },
+  restoreSnapshotConfirm: {
+    fa: "اطلاعات فعلی با این نسخه‌ی قدیمی‌تر جایگزین می‌شود (یک نسخه از وضعیت فعلی هم قبلش ذخیره می‌شود). ادامه بدهم؟",
+    en: "This replaces your current data with this older snapshot (your current state is saved first, just in case). Continue?",
+    hi: "यह वर्तमान डेटा को इस पुराने स्नैपशॉट से बदल देगा। जारी रखें?",
+  },
+  snapshotRestored: { fa: "همین نسخه بازگردانی شد.", en: "That snapshot was restored.", hi: "वह स्नैपशॉट पुनर्स्थापित हो गया।" },
 };
 function bt(key, lang) { return BACKUP_STRINGS[key] ? (BACKUP_STRINGS[key][lang] || BACKUP_STRINGS[key].en) : key; }
 
@@ -3001,12 +3023,30 @@ function SettingsPanel({
   const [fileError, setFileError] = React.useState("");
   const [restoreMode, setRestoreMode] = React.useState("replace");
   const [restoreDone, setRestoreDone] = React.useState(false);
+  const [snapshots, setSnapshots] = React.useState([]);
+  const [snapshotRestoredId, setSnapshotRestoredId] = React.useState(null);
 
-  React.useEffect(() => { daysSinceLastExport().then(setLastExportDays); }, []);
+  const refreshSnapshots = () => listSnapshots().then(setSnapshots);
+  React.useEffect(() => { daysSinceLastExport().then(setLastExportDays); refreshSnapshots(); }, []);
 
   const doExport = async () => {
     await exportBackup();
     setLastExportDays(0);
+  };
+
+  const snapshotReasonLabel = (reason) => bt(
+    reason === "auto" ? "snapshotReasonAuto"
+    : reason === "daily" ? "snapshotReasonDaily"
+    : reason === "weekly" ? "snapshotReasonWeekly"
+    : reason === "pre-migration" ? "snapshotReasonPreMigration"
+    : reason === "pre-restore" ? "snapshotReasonPreRestore"
+    : reason, lang);
+
+  const doRestoreSnapshot = async (id) => {
+    if (!window.confirm(bt("restoreSnapshotConfirm", lang))) return;
+    await restoreSnapshotById(id);
+    setSnapshotRestoredId(id);
+    refreshSnapshots();
   };
 
   const onPickFile = async (e) => {
@@ -3027,6 +3067,7 @@ function SettingsPanel({
     await restoreBackup(pendingFile.data, { mode: restoreMode === "merge" ? "mergeDailyLog" : "replace" });
     setRestoreDone(true);
     setPendingFile(null);
+    refreshSnapshots();
   };
 
   const exportedAgoText = lastExportDays === null ? "" :
@@ -3130,6 +3171,31 @@ function SettingsPanel({
             </div>
           )}
         </div>
+      </div>
+
+      {/* ---- Automatic backups (new) ---- */}
+      <div style={styles.prefGroup}>
+        <div style={styles.prefTitle}><History size={14} style={{ verticalAlign: "-2px", marginInlineEnd: 4 }} /> {bt("autoBackupsTitle", lang)}</div>
+        <p style={styles.hint}>{bt("autoBackupsHint", lang)}</p>
+        {snapshots.length === 0 ? (
+          <p style={styles.hint}>{bt("noSnapshots", lang)}</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+            {snapshots.map((s) => (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px", fontSize: 12 }}>
+                <span style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  <span style={{ fontWeight: 700 }}>{new Date(s.createdAt).toLocaleString()}</span>
+                  <span style={{ color: "var(--muted)" }}>{snapshotReasonLabel(s.reason)}</span>
+                </span>
+                {snapshotRestoredId === s.id ? (
+                  <span style={{ color: "#1E7A45", fontWeight: 700, fontSize: 11.5 }}>{bt("snapshotRestored", lang)}</span>
+                ) : (
+                  <button onClick={() => doRestoreSnapshot(s.id)} style={{ ...styles.chip, whiteSpace: "nowrap" }}>{bt("restoreSnapshotBtn", lang)}</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -4174,12 +4240,18 @@ export default function ShiftPriorityRanker() {
       })()}
 
       <div>
-        <header className="no-print" style={styles.header}>
-          <img src="./logo.png" alt="" style={styles.headerLogo} />
-          <div style={styles.routeDots}>
-            <span className="sp-dot" style={styles.dot} /><span style={styles.routeLine} /><span className="sp-dot" style={{ ...styles.dot, animationDelay: ".35s" }} /><span style={styles.routeLine} /><span className="sp-dot" style={{ ...styles.dot, background: "var(--accent2)", animationDelay: ".7s" }} />
-          </div>
-          {!showPriorityFlow && (
+        {showPriorityFlow ? (
+          <header className="no-print" style={styles.header}>
+            <img src="./logo.png" alt="" style={styles.headerLogo} />
+            <div style={styles.routeDots}>
+              <span className="sp-dot" style={styles.dot} /><span style={styles.routeLine} /><span className="sp-dot" style={{ ...styles.dot, animationDelay: ".35s" }} /><span style={styles.routeLine} /><span className="sp-dot" style={{ ...styles.dot, background: "var(--accent2)", animationDelay: ".7s" }} />
+            </div>
+            <h1 style={styles.title}>{t("title", lang)}</h1>
+            <p style={styles.subtitle}>{t("subtitle", lang)}</p>
+            <DateTimeWidget lang={lang} />
+          </header>
+        ) : (
+          <div className="no-print" style={styles.homeGreetingRow}>
             <button
               className="sp-shine"
               onClick={() => { tap(); setActivePanel("profile"); }}
@@ -4189,21 +4261,18 @@ export default function ShiftPriorityRanker() {
               {(profile?.firstName || "?").trim().charAt(0).toUpperCase()}
               <span style={styles.profileBubblePencil}><Pencil size={9} color="#fff" /></span>
             </button>
-          )}
-          <h1 style={styles.title}>{t("title", lang)}</h1>
-          {/* On home, the same subtitle text already lives on the Shift
-              Prioritizer tile below, so it isn't repeated up here. */}
-          {showPriorityFlow && <p style={styles.subtitle}>{t("subtitle", lang)}</p>}
-          {profile?.firstName && !showPriorityFlow && (
-            <p style={styles.welcomeLine}>{t("welcomeBack", lang)} <b>{profile.firstName}</b></p>
-          )}
-          <DateTimeWidget lang={lang} />
-        </header>
+            <p style={styles.homeGreetingText}>
+              {t("hiGreeting", lang)} {profile?.firstName ? <b>{profile.firstName}</b> : null} 👋
+            </p>
+          </div>
+        )}
 
         {!showPriorityFlow && (
           <div className="no-print">
             {(() => {
-              const today = myCrew ? myCrew.days.find((d) => d.dayIdx === new Date().getDay()) : null;
+              const todayIdxHome = new Date().getDay();
+              const weekdayNamesHome = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
+              const today = myCrew ? myCrew.days.find((d) => d.dayIdx === todayIdxHome) : null;
               const onCardClick = () => {
                 if (!profile?.crewNumber) setActivePanel("profile");
                 else if (!parsed) setShowPriorityFlow(true);
@@ -4216,37 +4285,72 @@ export default function ShiftPriorityRanker() {
                 : null;
               return (
                 <button className="sp-myshift sp-shine" onClick={onCardClick} style={styles.myShiftHomeCard}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 14 }}>
-                    <Star size={14} color="#fff" /> {t("myShiftHomeTitle", lang)}
-                    {myCrew && <span style={{ fontWeight: 600, opacity: 0.85, fontSize: 12 }}>· {t("crewWord", lang)} {String(myCrew.crew)}</span>}
-                  </span>
-                  {myCrew ? (
-                    today ? (
-                      <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                        <span style={{ fontSize: 11.5, opacity: 0.85 }}>{t("todayLabel", lang)}</span>
-                        <bdi dir="ltr" style={{ fontSize: 19, fontWeight: 800 }}>{formatExcelTime(today.start)}–{formatExcelTime(today.end)}</bdi>
+                  <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 14 }}>
+                      <Star size={14} color="#fff" /> {t("myShiftHomeTitle", lang)}
+                      {myCrew && <span style={{ fontWeight: 600, opacity: 0.85, fontSize: 12 }}>· {t("crewWord", lang)} {String(myCrew.crew)}</span>}
+                    </span>
+                    {myCrew && (
+                      <span style={{ fontSize: 11, fontWeight: 700, background: "rgba(255,255,255,0.22)", borderRadius: 999, padding: "3px 9px", flexShrink: 0 }}>
+                        <bdi dir="ltr">{myCrew.totalHours}</bdi> {t("weekHoursBadge", lang)}
                       </span>
-                    ) : (
-                      <span style={{ fontSize: 15, fontWeight: 800 }}>{t("todayLabel", lang)}: {t("off", lang)}</span>
-                    )
+                    )}
+                  </span>
+
+                  {myCrew ? (
+                    <span style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      {today ? (
+                        <bdi dir="ltr" style={{ fontSize: 22, fontWeight: 800 }}>{formatExcelTime(today.start)}–{formatExcelTime(today.end)}</bdi>
+                      ) : (
+                        <span style={{ fontSize: 24, fontWeight: 800 }}>{t("off", lang)}</span>
+                      )}
+                      <span style={{ fontSize: 11.5, opacity: 0.85 }}>{t("todayLabel", lang)} · {weekdayNamesHome[todayIdxHome]}</span>
+                    </span>
                   ) : (
                     sub && <span style={{ fontSize: 12, opacity: 0.9 }}>{sub}</span>
                   )}
-                  <span style={{ display: "flex", gap: 8 }}>
+
+                  {myCrew && (
+                    <span style={styles.dayChipRow}>
+                      {[0, 1, 2, 3, 4, 5, 6].map((i) => {
+                        const d = myCrew.days.find((x) => x.dayIdx === i);
+                        const isToday = i === todayIdxHome;
+                        return (
+                          <span key={i} style={styles.dayChipCol}>
+                            <span style={{ ...styles.dayChip, background: d ? (REGION_COLORS[d.regionKey] || "#9AA0A6") : "rgba(255,255,255,0.22)", ...(isToday ? styles.dayChipToday : {}) }}>
+                              {d ? (d.code || "•") : "·"}
+                            </span>
+                            <span style={styles.dayChipLabel}>{weekdayNamesHome[i].charAt(0)}</span>
+                          </span>
+                        );
+                      })}
+                    </span>
+                  )}
+
+                  <span style={styles.myShiftActionsRow}>
+                    {/* "Swap form" doesn't exist as its own feature yet — it opens
+                        the same leave-replacement finder as "Leave cover" for now. */}
                     <span
                       role="button" tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); tap(); setActivePanel("swapFinder"); }}
-                      style={styles.myShiftQuickBtn}
+                      style={styles.myShiftActionBtn}
                     >
-                      <CalendarOff size={13} /> {t("quickCover", lang)}
+                      <FileSpreadsheet size={16} /> {t("quickSwapForm", lang)}
+                    </span>
+                    <span
+                      role="button" tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); tap(); setActivePanel("swapFinder"); }}
+                      style={styles.myShiftActionBtn}
+                    >
+                      <CalendarOff size={16} /> {t("quickCover", lang)}
                     </span>
                     {dailyLogVisible && (
                       <span
                         role="button" tabIndex={0}
                         onClick={(e) => { e.stopPropagation(); tap(); setActivePanel("dailyLog"); }}
-                        style={styles.myShiftQuickBtn}
+                        style={styles.myShiftActionBtn}
                       >
-                        <ClipboardList size={13} /> {t("quickLog", lang)}
+                        <ClipboardList size={16} /> {t("quickLog", lang)}
                       </span>
                     )}
                   </span>
@@ -4255,26 +4359,29 @@ export default function ShiftPriorityRanker() {
               );
             })()}
 
-            {weekProgress && (
-              <div style={styles.weekRingCard}>
-                <div style={{ position: "relative", width: 56, height: 56 }}>
-                  <WeekRing percent={weekProgress.percent} size={56} stroke={6} />
-                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13.5, fontWeight: 800, color: "#fff" }}>
-                    {weekProgress.percent}%
+            <div style={{ ...styles.homeTopCards, gridTemplateColumns: weekProgress ? "1fr 1fr" : "1fr" }}>
+              <DateTimeWidget lang={lang} compact />
+              {weekProgress && (
+                <div style={styles.weekRingCard}>
+                  <div style={{ position: "relative", width: 48, height: 48 }}>
+                    <WeekRing percent={weekProgress.percent} size={48} stroke={5} />
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff" }}>
+                      {weekProgress.percent}%
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, opacity: 0.9 }}>{t("weekRingLabel", lang)}</span>
+                    <bdi dir="ltr" style={{ fontSize: 12.5, fontWeight: 800 }}>
+                      {weekProgress.loggedHours.toFixed(1)}/{weekProgress.scheduledHours.toFixed(1)} {t("hoursWord", lang)}
+                    </bdi>
                   </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.9 }}>{t("weekRingLabel", lang)}</span>
-                  <bdi dir="ltr" style={{ fontSize: 13, fontWeight: 800 }}>
-                    {weekProgress.loggedHours.toFixed(1)}/{weekProgress.scheduledHours.toFixed(1)} {t("hoursWord", lang)}
-                  </bdi>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
 
             <div style={styles.hubGrid}>
               <button className="sp-hero sp-shine" onClick={() => { tap(); setShowPriorityFlow(true); }} style={{ "--sp-shine-delay": "1.2s", ...styles.hubTile, gridColumn: "span 2", flexDirection: "row", alignItems: "center", gap: 10, background: "var(--hero-g)" }}>
-                <Star size={20} color="#fff" />
+                <Trophy size={20} color="#fff" />
                 <span style={{ ...styles.hubTileLabel, marginTop: 0, fontSize: 12 }}>{t("title", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
@@ -4284,16 +4391,16 @@ export default function ShiftPriorityRanker() {
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
               <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("crewLookup"); }} style={{ "--sp-shine-delay": "2.9s", animationDelay: "135ms", ...styles.hubTile, background: "var(--t-browse-g)" }}>
-                <Search size={18} color="#fff" />
+                <Users size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("crewLookupTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
               <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("settings"); }} style={{ "--sp-shine-delay": "4.9s", animationDelay: "355ms", ...styles.hubTile, background: "var(--t-settings-g)" }}>
-                <Sun size={18} color="#fff" />
+                <Palette size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("settingsTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("helpMenu"); }} style={{ "--sp-shine-delay": "5.4s", animationDelay: "410ms", ...styles.hubTile, background: "var(--t-browse-g)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("helpMenu"); }} style={{ "--sp-shine-delay": "5.4s", animationDelay: "410ms", ...styles.hubTile, background: "linear-gradient(135deg, #6B7280, #9CA3AF)" }}>
                 <HelpCircle size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("helpMenuLabel", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
@@ -4637,8 +4744,18 @@ const styles = {
   hubListCard: { border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--card)", padding: 6, display: "flex", flexDirection: "column", gap: 1, marginBottom: 14 },
   myShiftHomeCard: { display: "flex", flexDirection: "column", gap: 8, width: "100%", textAlign: "start", border: "none", borderRadius: "var(--radius)", padding: "14px 16px", marginBottom: 10, background: "var(--my-g)", color: "#fff", cursor: "pointer", boxShadow: "0 6px 16px var(--my-glow-soft)", fontFamily: "inherit", position: "relative" },
   myShiftQuickBtn: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 700, padding: "5px 10px", borderRadius: 999, background: "rgba(255,255,255,0.2)", color: "#fff", cursor: "pointer" },
-  weekRingCard: { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: "var(--radius)", background: "var(--t-log-g)", color: "#fff", marginBottom: 10, boxShadow: "0 4px 10px rgba(0,0,0,0.14)" },
-  profileBubble: { position: "absolute", top: 4, insetInlineEnd: 0, width: 34, height: 34, borderRadius: "50%", background: "var(--accent)", color: "#fff", fontWeight: 800, fontSize: 15, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 8px rgba(0,0,0,0.2)" },
+  myShiftActionsRow: { display: "flex", gap: 8, marginTop: 4 },
+  myShiftActionBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 4px", borderRadius: 10, border: "none", background: "rgba(255,255,255,0.16)", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 10.5, fontWeight: 700, lineHeight: 1.15, textAlign: "center" },
+  dayChipRow: { display: "flex", gap: 5, marginTop: 2 },
+  dayChipCol: { display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flex: 1, minWidth: 0 },
+  dayChip: { width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#fff", flexShrink: 0 },
+  dayChipToday: { boxShadow: "0 0 0 2px #fff", border: "2px solid #fff" },
+  dayChipLabel: { fontSize: 9, fontWeight: 700, opacity: 0.85 },
+  homeTopCards: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10, alignItems: "stretch" },
+  weekRingCard: { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: "var(--radius)", background: "var(--t-log-g)", color: "#fff", boxShadow: "0 4px 10px rgba(0,0,0,0.14)" },
+  homeGreetingRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingTop: 6 },
+  homeGreetingText: { fontSize: 15.5, fontWeight: 800, color: "var(--text)", margin: 0 },
+  profileBubble: { position: "relative", flexShrink: 0, width: 38, height: 38, borderRadius: "50%", background: "var(--accent)", color: "#fff", fontWeight: 800, fontSize: 16, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 8px rgba(0,0,0,0.2)" },
   profileBubblePencil: { position: "absolute", bottom: -2, insetInlineEnd: -2, width: 16, height: 16, borderRadius: "50%", background: "var(--accent2)", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--bg)" },
   header: { textAlign: "center", marginBottom: 18, paddingTop: 10, position: "relative" },
   headerLogo: { width: 56, height: 56, borderRadius: 14, objectFit: "contain", marginBottom: 6 },
