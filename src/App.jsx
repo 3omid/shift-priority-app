@@ -603,6 +603,7 @@ const STRINGS = {
   xchgSection2: { fa: "بخش ۲", en: "Section 2", hi: "सेक्शन २" },
   xchgWhichCrew: { fa: "این بخش برای کدوم راننده/گروهه", en: "Which employee (crew)", hi: "कौन सा कर्मचारी (क्रू)" },
   xchgDriverLabel: { fa: "نام راننده", en: "Employee name", hi: "कर्मचारी का नाम" },
+  xchgForLabel: { fa: "این شیفت را به‌جای چه کسی کار می‌کند", en: "Covering shift for", hi: "किसकी शिफ़्ट के बदले" },
   xchgDateLabel: { fa: "تاریخ", en: "Date", hi: "तारीख़" },
   xchgRunLabel: { fa: "شماره ران (Run #)", en: "Run #", hi: "रन #" },
   xchgPiece1Label: { fa: "Piece 1", en: "Piece 1", hi: "Piece 1" },
@@ -2960,19 +2961,27 @@ function ExchangeFormPreview({ lang, derived1, derived2 }) {
       <div style={{ borderBottom: "1.5px solid var(--border)", minHeight: 18, fontSize: 13, paddingBottom: 2 }}>{value || " "}</div>
     </div>
   );
-  const section = (label, d) => (
+  // A box's DRIVER identity (name/ID/signature) is always the person
+  // performing the shift — but the shift being described (date, run #,
+  // block, piece times, crew value) is the ORIGINAL owner of that shift,
+  // i.e. the OTHER driver being covered for. So `self` supplies identity and
+  // `partner` supplies every shift/date field — never the other way around.
+  // See buildSwapFormHtml's box() for the exact same mapping in the printed
+  // form.
+  const section = (label, self, partner) => (
     <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px", flex: 1, minWidth: 220 }}>
       <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 8 }}>{label}</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 12px" }}>
-        {row(t("xchgDriverLabel", lang), d.driverName)}
-        {row(t("employeeIdLabel", lang), d.employeeId)}
-        {row(t("crewNumberLabel", lang), d.crewNum)}
-        {row(t("xchgDateLabel", lang), d.date ? `${d.date}${d.weekdayLabel ? " · " + d.weekdayLabel : ""}` : "")}
-        {row(t("xchgRunLabel", lang), d.code)}
-        {row(t("xchgBlockLabel", lang), d.block)}
-        {row(t("xchgPiece1Label", lang), d.pieceStart || d.pieceEnd ? `${d.pieceStart}–${d.pieceEnd}` : "")}
+        {row(t("xchgDriverLabel", lang), self.driverName)}
+        {row(t("employeeIdLabel", lang), self.employeeId)}
+        {row(t("xchgForLabel", lang), partner.driverName)}
+        {row(t("crewNumberLabel", lang), partner.crewNum)}
+        {row(t("xchgDateLabel", lang), partner.date ? `${partner.date}${partner.weekdayLabel ? " · " + partner.weekdayLabel : ""}` : "")}
+        {row(t("xchgRunLabel", lang), partner.code)}
+        {row(t("xchgBlockLabel", lang), partner.block)}
+        {row(t("xchgPiece1Label", lang), partner.pieceStart || partner.pieceEnd ? `${partner.pieceStart}–${partner.pieceEnd}` : "")}
         {row(t("xchgPiece2Label", lang), "")}
-        {row(t("xchgCrewValueLabel", lang), d.hoursLabel)}
+        {row(t("xchgCrewValueLabel", lang), partner.hoursLabel)}
       </div>
       {row(t("xchgEmployeeSignLabel", lang), "")}
     </div>
@@ -2980,8 +2989,8 @@ function ExchangeFormPreview({ lang, derived1, derived2 }) {
   return (
     <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12, background: "var(--bg)" }}>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {section(t("xchgSection1", lang), derived1)}
-        {section(t("xchgSection2", lang), derived2)}
+        {section(t("xchgSection1", lang), derived1, derived2)}
+        {section(t("xchgSection2", lang), derived2, derived1)}
       </div>
       <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "10px 12px", marginTop: 10 }}>
         <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 8 }}>{t("xchgSupervisorTitle", lang)}</div>
@@ -3854,12 +3863,16 @@ function splitDateParts(dateStr) {
 // header, same wording, same two driver boxes and the same "Operations
 // Supervisor Use Only" box below, in the same order, on one page. Nothing
 // is added, removed, reordered or redesigned; only the existing blanks are
-// filled. Each box is ONE driver's own record (deriveExchangeBox), and the
-// form's "for ___ ID#___" phrase names the OTHER box's driver — so `box()`
-// takes the partner box purely to read its name/ID, not a second data set.
-// Piece 2 and its Block are always left genuinely blank (no split-shift
-// data exists to put there — never "N/A" typed in on the person's behalf;
-// the form's own instructions already tell the driver to write that in by
+// filled. A box's DRIVER identity (name/ID, Signature) is the person
+// PERFORMING the shift; the shift being described (date, run #, block,
+// piece times, crew value) belongs to the ORIGINAL owner of that shift —
+// i.e. the OTHER driver they're covering for. So `box(num, self, partner)`
+// reads name/ID/signature from `self`, and date/run/block/piece/crew-value
+// from `partner` — never the other way around (see the matching mapping in
+// ExchangeFormPreview's section()). Piece 2 and its Block are always left
+// genuinely blank (the current schedule data has no split-shift/Piece-2
+// values to put there — never "N/A" typed in on the person's behalf; the
+// form's own instructions already tell the driver to write that in by
 // hand). The Supervisor box's Yes/No boxes, reason, name, ID and both
 // signature lines are always left blank/unchecked — an approval only ever
 // happens on paper, by a person, never fabricated here.
@@ -3868,18 +3881,18 @@ function buildSwapFormHtml({ box1, box2 }, lang, timestamp) {
   // An inline fill-in blank: a bottom-border line with the value centered
   // on it, or a genuinely empty line (no placeholder text) when unknown.
   const blank = (value, minWidth) => `<span style="display:inline-block; min-width:${minWidth}px; border-bottom:1.2px solid #333; padding:0 3px; text-align:center; font-weight:600;">${value ? value : "&nbsp;"}</span>`;
-  const box = (num, d, partner) => {
-    const p = splitDateParts(d.date);
+  const box = (num, self, partner) => {
+    const p = splitDateParts(partner.date);
     return `
     <div class="box">
       <p>
-        I ${blank(d.driverName, 175)} ID #${blank(d.employeeId, 55)} will work on ${blank(p.m, 26)} ${blank(p.d, 22)} ${blank(p.y, 48)} for ${blank(partner.driverName, 175)}
+        I ${blank(self.driverName, 175)} ID #${blank(self.employeeId, 55)} will work on ${blank(p.m, 26)} ${blank(p.d, 22)} ${blank(p.y, 48)} for ${blank(partner.driverName, 175)}
       </p>
       <p>
-        ID #${blank(partner.employeeId, 55)}. It is run #${blank(d.code, 55)}. Piece 1 is from ${blank(d.pieceStart, 55)} to ${blank(d.pieceEnd, 55)} on block ${blank(d.block, 110)}. Piece 2 is from ${blank("", 46)} to ${blank("", 46)}
+        ID #${blank(partner.employeeId, 55)}. It is run #${blank(partner.code, 55)}. Piece 1 is from ${blank(partner.pieceStart, 55)} to ${blank(partner.pieceEnd, 55)} on block ${blank(partner.block, 110)}. Piece 2 is from ${blank("", 46)} to ${blank("", 46)}
       </p>
       <p>
-        on block ${blank("", 110)}. &nbsp; Crew value ${blank(d.hoursDecimal, 50)}. &nbsp; Signature ${num} ${blank("", 180)}
+        on block ${blank("", 110)}. &nbsp; Crew value ${blank(partner.hoursDecimal, 50)}. &nbsp; Signature ${num} ${blank("", 180)}
       </p>
     </div>`;
   };
