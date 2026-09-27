@@ -19,11 +19,15 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
-      // Only register the service worker outside of local development —
-      // it was caching stale data during "npm run dev" (e.g. old Excel
-      // sheet tabs sticking around after a new file was uploaded).
+      // Service workers don't exist under file:// (the packaged Electron
+      // app) — registering there always threw, silently, which was
+      // harmless but pointless. Only try on a real http/https origin, and
+      // keep the existing dev-mode skip (it was caching stale data during
+      // "npm run dev", e.g. old Excel sheet tabs sticking around after a
+      // new file was uploaded).
       const isLocalDev = ["localhost", "127.0.0.1"].includes(location.hostname);
-      if ("serviceWorker" in navigator && !isLocalDev) {
+      const isWeb = location.protocol === "http:" || location.protocol === "https:";
+      if ("serviceWorker" in navigator && isWeb && !isLocalDev) {
         window.addEventListener("load", () => {
           navigator.serviceWorker.register("./sw.js").catch(() => {});
         });

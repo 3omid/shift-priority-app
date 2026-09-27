@@ -1,6 +1,17 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 
+// Pin userData to a fixed folder name, independent of package.json's
+// "name"/"productName". Without this, running `electron .` (which uses
+// "name": "shift-priority-app") and running the built portable .exe (which
+// uses "productName": "Shift Priority") would each get their OWN separate
+// data folder — and if productName is ever renamed later, every existing
+// user's saved data would appear to vanish (it would still be on disk, just
+// under the old folder). "Shift Priority" matches the current productName,
+// so anyone who already has the app installed keeps their existing data
+// with no migration needed.
+app.setName("Shift Priority");
+
 function createWindow() {
   const isDev = !app.isPackaged;
   // In dev, Vite serves everything under public/ as-is; once built, Vite

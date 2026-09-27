@@ -1,6 +1,17 @@
 import React, { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import pkg from "../package.json";
+import { exportBackup, validateBackupFile, restoreBackup, daysSinceLastExport } from "./data/backup.js";
+import { playTap, testSound } from "./data/sound.js";
+import {
+  loadProfile, saveProfile, clearProfileStorage,
+  loadCrewNames, saveCrewNames,
+  loadThemePrefs, saveThemePrefs,
+  loadDailyLogEntries, saveDailyLogEntries,
+  loadDailyLogAccess, saveDailyLogAccess,
+  loadLastFile, saveLastFile, clearLastFileStorage,
+  loadSoundSettings, saveSoundSettings,
+} from "./data/legacyApiShim.js";
 import {
   Upload, RotateCcw, ListChecks, AlertCircle, Check, Printer,
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, ArrowLeft, Plus,
@@ -12,16 +23,11 @@ const APP_VERSION = pkg.version;
 const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const CATCHALL = "OTHER";
 const OFFICE_THEME = ["000000", "FFFFFF", "44546A", "E7E6E6", "4472C4", "ED7D31", "A5A5A5", "FFC000", "5B9BD5", "70AD47"];
-// Personal profile (name + "my crew number") — lives only in this
-// browser/device's localStorage. Nothing here is ever sent anywhere, so one
-// person's saved profile can never show up for anyone else who opens this
-// same app/build.
-const PROFILE_KEY = "shiftPriorityProfile";
-// Crew-number -> driver-name directory. A manually-entered/edited name
-// (added or fixed from the Admin panel) always wins over a name auto-read
-// from an uploaded file's "Driver Name" column — see resolveCrewName().
-// Also per-device localStorage only, same as PROFILE_KEY above.
-const CREW_NAMES_KEY = "shiftPriorityCrewNames";
+// Profile, crew names, theme, sound, and the daily log all now live in
+// IndexedDB via src/data/store.js (see legacyApiShim.js above) — the
+// localStorage key constants that used to sit here (PROFILE_KEY,
+// CREW_NAMES_KEY, LAST_FILE_KEY, THEME_KEY) are gone; schema.js is the one
+// place that now knows those key names.
 // Whether this browser tab is currently unlocked as Admin. Deliberately
 // sessionStorage (not localStorage): it clears itself when the tab/app
 // closes, instead of leaving Admin unlocked forever on a shared device.
@@ -90,13 +96,6 @@ const CREW_NAME_DEFAULTS = {
   "41": "Candy Lin",
   "42": "Morteza Hosseini",
 };
-
-// The last successfully-parsed schedule (already-parsed crew data, not the
-// raw Excel file) so re-opening the app — closing and reopening the tab,
-// relaunching the installed PWA, restarting the Electron app — shows the
-// same schedule again instead of forcing a re-upload every single time.
-// Also localStorage-only: same one-device-only rule as everything above.
-const LAST_FILE_KEY = "shiftPriorityLastFile";
 
 // ---------- Excel parsing ----------
 
@@ -1268,7 +1267,6 @@ const THEME_PALETTES = {
   }
 };
 const THEME_ORDER = Object.keys(THEME_PALETTES);
-const THEME_KEY = "shiftPriorityTheme";
 
 function getTheme(style) {
   return THEME_PALETTES[style] || THEME_PALETTES.universal;
@@ -1302,16 +1300,6 @@ function themeVars(style, mode) {
   Object.entries(th.tiles).forEach(([k, pair]) => { vars[`--t-${k}-g`] = g(pair); vars[`--t-${k}`] = pair[0]; });
   return vars;
 }
-function loadThemePrefs() {
-  try {
-    const v = JSON.parse(localStorage.getItem(THEME_KEY) || "null");
-    return { style: v && THEME_PALETTES[v.style] ? v.style : "universal", mode: v && v.mode === "dark" ? "dark" : "light" };
-  } catch { return { style: "universal", mode: "light" }; }
-}
-function saveThemePrefs(style, mode) {
-  try { localStorage.setItem(THEME_KEY, JSON.stringify({ style, mode })); } catch { /* ignore storage errors */ }
-}
-
 // Exports (PDF/print + Excel) follow the active theme too. The report
 // builders are plain functions, so the app records the active style here.
 const ACTIVE_THEME = { style: "universal" };
@@ -1548,16 +1536,8 @@ function Modal({ title, onClose, onBack, children, headerGradient, accent }) {
 }
 
 // ---------- Crew name directory ----------
-// crewNumber (string) -> driver name. A manual entry here always wins over
-// a name auto-read from the uploaded file's "Driver Name" column — see
-// resolveCrewName() below. That's how Admin fixes a typo, or adds a name
-// for a crew number the current file has no name column for at all.
-function loadCrewNames() {
-  try { return JSON.parse(localStorage.getItem(CREW_NAMES_KEY) || "{}"); } catch { return {}; }
-}
-function saveCrewNames(map) {
-  try { localStorage.setItem(CREW_NAMES_KEY, JSON.stringify(map)); } catch { /* ignore storage errors */ }
-}
+// loadCrewNames/saveCrewNames now come from ./data/legacyApiShim.js (backed
+// by IndexedDB) — see the import block at the top of this file.
 function resolveCrewName(crewNumber, crews, manualNames) {
   const key = String(crewNumber);
   if (manualNames && Object.prototype.hasOwnProperty.call(manualNames, key)) return manualNames[key];
@@ -1577,46 +1557,12 @@ function saveAdminSession(isAdmin) {
   } catch { /* ignore storage errors */ }
 }
 
-// ---------- Profile (name + "my crew number") ----------
-// Same storage mechanism as history above — plain localStorage, private to
-// this browser/device. Kept as its own key so clearing history never
-// touches the saved profile and vice versa.
-function loadProfile() {
-  try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || "null"); } catch { return null; }
-}
-function saveProfile(profile) {
-  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch { /* ignore storage errors */ }
-}
-function clearProfileStorage() {
-  try { localStorage.removeItem(PROFILE_KEY); } catch { /* ignore */ }
-}
-
-// ---------- Last parsed schedule (avoids re-uploading every visit) ----------
-function loadLastFile() {
-  try { return JSON.parse(localStorage.getItem(LAST_FILE_KEY) || "null"); } catch { return null; }
-}
-function saveLastFile(entry) {
-  try { localStorage.setItem(LAST_FILE_KEY, JSON.stringify(entry)); } catch { /* ignore storage errors, e.g. quota */ }
-}
-function clearLastFileStorage() {
-  try { localStorage.removeItem(LAST_FILE_KEY); } catch { /* ignore */ }
-}
-
-// ---------- Daily Log (per-device only, not synced anywhere) ----------
-const DAILY_LOG_ENTRIES_KEY = "shiftPriorityDailyLogEntries";
-const DAILY_LOG_ACCESS_KEY = "shiftPriorityDailyLogAccess";
-function loadDailyLogEntries() {
-  try { const v = JSON.parse(localStorage.getItem(DAILY_LOG_ENTRIES_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
-}
-function saveDailyLogEntries(list) {
-  try { localStorage.setItem(DAILY_LOG_ENTRIES_KEY, JSON.stringify(list)); } catch { /* ignore storage errors */ }
-}
-function loadDailyLogAccess() {
-  try { const v = JSON.parse(localStorage.getItem(DAILY_LOG_ACCESS_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
-}
-function saveDailyLogAccess(list) {
-  try { localStorage.setItem(DAILY_LOG_ACCESS_KEY, JSON.stringify(list)); } catch { /* ignore storage errors */ }
-}
+// ---------- Profile, last parsed schedule, Daily Log ----------
+// loadProfile/saveProfile/clearProfileStorage, loadLastFile/saveLastFile/
+// clearLastFileStorage, and loadDailyLogEntries/saveDailyLogEntries/
+// loadDailyLogAccess/saveDailyLogAccess all now come from
+// ./data/legacyApiShim.js (backed by IndexedDB) — see the import block at
+// the top of this file.
 function computeLogHours(startTime, endTime) {
   if (!startTime || !endTime) return 0;
   const [sh, sm] = startTime.split(":").map(Number);
@@ -2982,17 +2928,99 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, dailyLogAccess, setD
 
 // ---------- Settings (theme) ----------
 
-function SettingsPanel({ lang, themeStyle, setThemeStyle, themeMode, setThemeMode, onClose }) {
+const BACKUP_STRINGS = {
+  soundTitle: { fa: "صدا", en: "Sound", hi: "ध्वनि" },
+  soundOn: { fa: "روشن", en: "On", hi: "चालू" },
+  soundOff: { fa: "خاموش", en: "Off", hi: "बंद" },
+  soundPop: { fa: "پاپ", en: "Pop", hi: "पॉप" },
+  soundBubble: { fa: "حباب", en: "Bubble", hi: "बबल" },
+  soundTest: { fa: "تست", en: "Test", hi: "जाँच" },
+  backupTitle: { fa: "پشتیبان‌گیری", en: "Backup", hi: "बैकअप" },
+  backupHint: {
+    fa: "یک فایل شامل پروفایل، اسامی کروها، دفترچه شیفت و تنظیمات می‌سازد. فایل اکسل برد در آن نیست، چون قابل بارگذاری مجدد است.",
+    en: "Makes a file with your profile, crew names, daily log and settings. The Excel board isn't included — it can just be re-uploaded.",
+    hi: "आपकी प्रोफ़ाइल, क्रू नाम, दैनिक लॉग और सेटिंग्स वाली फ़ाइल बनाता है। एक्सेल शामिल नहीं है — फिर से अपलोड किया जा सकता है।",
+  },
+  exportBtn: { fa: "خروجی گرفتن", en: "Export backup", hi: "बैकअप निर्यात करें" },
+  exportedAgo: { fa: "آخرین خروجی:", en: "Last export:", hi: "आख़िरी निर्यात:" },
+  never: { fa: "هیچ‌وقت", en: "never", hi: "कभी नहीं" },
+  daysAgo: { fa: "روز پیش", en: "days ago", hi: "दिन पहले" },
+  todayWord: { fa: "امروز", en: "today", hi: "आज" },
+  reminderLine: {
+    fa: "بیش از ۳۰ روز از آخرین خروجی گذشته. یک فایل بگیر و جایی امن نگه‌دار.",
+    en: "It's been over 30 days since your last export. Take one and keep it somewhere safe.",
+    hi: "आख़िरी निर्यात को 30 दिन से ज़्यादा हो गए। एक फ़ाइल लें और सुरक्षित रखें।",
+  },
+  restoreTitle: { fa: "بازیابی از فایل", en: "Restore from a file", hi: "फ़ाइल से पुनर्स्थापित करें" },
+  chooseFile: { fa: "انتخاب فایل بکاپ...", en: "Choose backup file...", hi: "बैकअप फ़ाइल चुनें..." },
+  invalidFile: { fa: "این فایل معتبر نیست یا مال این برنامه نیست.", en: "This file isn't valid, or isn't from this app.", hi: "यह फ़ाइल मान्य नहीं है।" },
+  tooNewFile: { fa: "این فایل مال یک نسخه‌ی جدیدتر از برنامه است؛ اول برنامه را آپدیت کن.", en: "This file is from a newer version of the app — update the app first.", hi: "यह फ़ाइल ऐप के नए संस्करण से है।" },
+  summaryProfile: { fa: "پروفایل", en: "profile", hi: "प्रोफ़ाइल" },
+  summaryCrews: { fa: "اسم کرو", en: "crew names", hi: "क्रू नाम" },
+  summaryLog: { fa: "رکورد دفترچه", en: "log entries", hi: "लॉग प्रविष्टियाँ" },
+  createdOn: { fa: "ساخته‌شده در", en: "created", hi: "बनाया गया" },
+  modeReplace: { fa: "جایگزینی کامل", en: "Full replace", hi: "पूरी तरह बदलें" },
+  modeMerge: { fa: "فقط ادغام دفترچه", en: "Merge daily log only", hi: "केवल लॉग मिलाएँ" },
+  modeReplaceHint: { fa: "همه‌چیز با فایل بکاپ جایگزین می‌شود.", en: "Everything is replaced with the backup's values.", hi: "सब कुछ बैकअप से बदल दिया जाता है।" },
+  modeMergeHint: { fa: "بقیه هم جایگزین می‌شود؛ فقط دفترچه‌ی شیفت با تاریخ‌های موجود ترکیب می‌شود.", en: "Everything else is still replaced; only the daily log is combined with what's already here, by date.", hi: "बाकी सब बदल जाता है; केवल दैनिक लॉग तारीख़ के अनुसार मिलाया जाता है।" },
+  restoreBtn: { fa: "بازیابی", en: "Restore", hi: "पुनर्स्थापित करें" },
+  restoreDone: { fa: "بازیابی انجام شد. یک نسخه از قبل هم ذخیره شد.", en: "Restored. A snapshot of your previous data was saved too.", hi: "पुनर्स्थापित हो गया।" },
+};
+function bt(key, lang) { return BACKUP_STRINGS[key] ? (BACKUP_STRINGS[key][lang] || BACKUP_STRINGS[key].en) : key; }
+
+function SettingsPanel({
+  lang, themeStyle, setThemeStyle, themeMode, setThemeMode,
+  soundSettings, setSoundSettings, onClose,
+}) {
   const styleOptions = THEME_ORDER.map((v) => ({ v, l: THEME_PALETTES[v].name[lang] || THEME_PALETTES[v].name.en, th: THEME_PALETTES[v] }));
+
+  const [lastExportDays, setLastExportDays] = React.useState(null);
+  const [pendingFile, setPendingFile] = React.useState(null); // { data, summary }
+  const [fileError, setFileError] = React.useState("");
+  const [restoreMode, setRestoreMode] = React.useState("replace");
+  const [restoreDone, setRestoreDone] = React.useState(false);
+
+  React.useEffect(() => { daysSinceLastExport().then(setLastExportDays); }, []);
+
+  const doExport = async () => {
+    await exportBackup();
+    setLastExportDays(0);
+  };
+
+  const onPickFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setFileError(""); setPendingFile(null); setRestoreDone(false);
+    const text = await file.text();
+    const result = await validateBackupFile(text);
+    if (!result.ok) {
+      setFileError(result.reason === "too-new" ? bt("tooNewFile", lang) : bt("invalidFile", lang));
+      return;
+    }
+    setPendingFile(result);
+  };
+
+  const doRestore = async () => {
+    await restoreBackup(pendingFile.data, { mode: restoreMode === "merge" ? "mergeDailyLog" : "replace" });
+    setRestoreDone(true);
+    setPendingFile(null);
+  };
+
+  const exportedAgoText = lastExportDays === null ? "" :
+    lastExportDays === Infinity ? bt("never", lang) :
+    lastExportDays < 1 ? bt("todayWord", lang) :
+    `${Math.floor(lastExportDays)} ${bt("daysAgo", lang)}`;
+
   return (
     <Modal title={t("settingsTitle", lang)} onClose={onClose} headerGradient="var(--t-settings-g)" accent="var(--t-settings)">
       <div style={styles.prefGroup}>
         <div style={styles.prefTitle}>{t("themeMode", lang)}</div>
         <div style={styles.chipRow}>
-          <button key={themeMode === "light" ? "l-on" : "l"} onClick={() => setThemeMode("light")} style={{ ...styles.chip, ...(themeMode === "light" ? styles.chipActive : {}) }}>
+          <button onClick={() => setThemeMode("light")} style={{ ...styles.chip, ...(themeMode === "light" ? styles.chipActive : {}) }}>
             <Sun size={14} /> {t("light", lang)}
           </button>
-          <button key={themeMode === "dark" ? "d-on" : "d"} onClick={() => setThemeMode("dark")} style={{ ...styles.chip, ...(themeMode === "dark" ? styles.chipActive : {}) }}>
+          <button onClick={() => setThemeMode("dark")} style={{ ...styles.chip, ...(themeMode === "dark" ? styles.chipActive : {}) }}>
             <Moon size={14} /> {t("dark", lang)}
           </button>
         </div>
@@ -3001,14 +3029,84 @@ function SettingsPanel({ lang, themeStyle, setThemeStyle, themeMode, setThemeMod
         <div style={styles.prefTitle}>{t("themeStyle", lang)}</div>
         <div style={styles.chipRow}>
           {styleOptions.map((o) => (
-            <button key={o.v + (themeStyle === o.v ? "-on" : "")} onClick={() => setThemeStyle(o.v)} style={{ ...styles.chip, ...(themeStyle === o.v ? styles.chipActive : {}) }}>
-              {/* mini preview of the theme: hero, a tile and My Shift colours */}
+            <button key={o.v} onClick={() => setThemeStyle(o.v)} style={{ ...styles.chip, ...(themeStyle === o.v ? styles.chipActive : {}) }}>
               <span aria-hidden="true" style={{ display: "inline-flex", borderRadius: 999, overflow: "hidden", border: "1px solid rgba(0,0,0,0.12)" }}>
                 {[o.th.hero[0], o.th.tiles.browse[0], o.th.my[0], o.th.light.accent2].map((c, i) => <span key={i} style={{ width: 9, height: 14, background: c }} />)}
               </span>
               {themeStyle === o.v && <Check size={13} />} {o.l}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* ---- Sound (new) ---- */}
+      <div style={styles.prefGroup}>
+        <div style={styles.prefTitle}>{bt("soundTitle", lang)}</div>
+        <div style={styles.chipRow}>
+          <button onClick={() => setSoundSettings({ ...soundSettings, enabled: false })} style={{ ...styles.chip, ...(!soundSettings.enabled ? styles.chipActive : {}) }}>{bt("soundOff", lang)}</button>
+          <button onClick={() => setSoundSettings({ ...soundSettings, enabled: true })} style={{ ...styles.chip, ...(soundSettings.enabled ? styles.chipActive : {}) }}>{bt("soundOn", lang)}</button>
+        </div>
+        <div style={{ ...styles.chipRow, marginTop: 8, opacity: soundSettings.enabled ? 1 : 0.5 }}>
+          {["pop", "bubble"].map((type) => (
+            <button key={type} disabled={!soundSettings.enabled}
+              onClick={() => setSoundSettings({ ...soundSettings, type })}
+              style={{ ...styles.chip, ...(soundSettings.type === type ? styles.chipActive : {}) }}>
+              {bt(type === "pop" ? "soundPop" : "soundBubble", lang)}
+            </button>
+          ))}
+          <button onClick={() => testSound(soundSettings.type)} style={styles.chip}>🔊 {bt("soundTest", lang)}</button>
+        </div>
+      </div>
+
+      {/* ---- Backup (new) ---- */}
+      <div style={styles.prefGroup}>
+        <div style={styles.prefTitle}>{bt("backupTitle", lang)}</div>
+        <p style={styles.hint}>{bt("backupHint", lang)}</p>
+        <button onClick={doExport} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}>
+          <Printer size={14} /> {bt("exportBtn", lang)}
+        </button>
+        {lastExportDays !== null && (
+          <p style={styles.hint}>{bt("exportedAgo", lang)} {exportedAgoText}</p>
+        )}
+        {lastExportDays > 30 && (
+          <div style={styles.errorBox}><AlertCircle size={15} /><span>{bt("reminderLine", lang)}</span></div>
+        )}
+
+        <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 6 }}>{bt("restoreTitle", lang)}</div>
+          <label style={styles.uploadZone}>
+            <Upload size={18} color="var(--accent)" />
+            <span style={{ marginTop: 6, fontSize: 12.5 }}>{bt("chooseFile", lang)}</span>
+            <input type="file" accept=".json" onChange={onPickFile} style={{ display: "none" }} />
+          </label>
+          {fileError && <div style={styles.errorBox}><AlertCircle size={15} /><span>{fileError}</span></div>}
+          {restoreDone && <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, fontSize: 12, background: "#E6F4EA", color: "#1E7A45" }}>{bt("restoreDone", lang)}</div>}
+
+          {pendingFile && (
+            <div style={{ marginTop: 10, border: "1px solid var(--border)", borderRadius: 10, padding: 10 }}>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>
+                {bt("createdOn", lang)} {new Date(pendingFile.summary.createdAt).toLocaleString()}
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                {pendingFile.summary.hasProfile && <span style={styles.chip}>{bt("summaryProfile", lang)}</span>}
+                <span style={styles.chip}>{pendingFile.summary.crewNameCount} {bt("summaryCrews", lang)}</span>
+                <span style={styles.chip}>{pendingFile.summary.dailyLogCount} {bt("summaryLog", lang)}</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+                <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12.5 }}>
+                  <input type="radio" name="restoreMode" checked={restoreMode === "replace"} onChange={() => setRestoreMode("replace")} style={{ marginTop: 3 }} />
+                  <span><b>{bt("modeReplace", lang)}</b><br /><span style={{ color: "var(--muted)" }}>{bt("modeReplaceHint", lang)}</span></span>
+                </label>
+                <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12.5 }}>
+                  <input type="radio" name="restoreMode" checked={restoreMode === "merge"} onChange={() => setRestoreMode("merge")} style={{ marginTop: 3 }} />
+                  <span><b>{bt("modeMerge", lang)}</b><br /><span style={{ color: "var(--muted)" }}>{bt("modeMergeHint", lang)}</span></span>
+                </label>
+              </div>
+              <button onClick={doRestore} style={{ ...styles.smallActionBtn, background: "#B3432A", color: "#fff", borderColor: "#B3432A" }}>
+                <Check size={14} /> {bt("restoreBtn", lang)}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </Modal>
@@ -3566,6 +3664,9 @@ export default function ShiftPriorityRanker() {
   const [themeMode, setThemeMode] = useState(() => loadThemePrefs().mode);
   useEffect(() => { saveThemePrefs(themeStyle, themeMode); }, [themeStyle, themeMode]);
   ACTIVE_THEME.style = themeStyle;
+  const [soundSettings, setSoundSettingsState] = useState(() => loadSoundSettings());
+  const setSoundSettings = (next) => { setSoundSettingsState(next); saveSoundSettings(next); };
+  const tap = () => playTap(soundSettings);
   const [showPriorityFlow, setShowPriorityFlow] = useState(false);
   // 'settings' | 'help' | 'about' | 'helpMenu' | 'compare2' | 'profile'
   // | 'crewLookup' | 'adminLogin' | 'admin'
@@ -3921,7 +4022,12 @@ export default function ShiftPriorityRanker() {
         />
       )}
       {activePanel === "settings" && (
-        <SettingsPanel lang={lang} themeStyle={themeStyle} setThemeStyle={setThemeStyle} themeMode={themeMode} setThemeMode={setThemeMode} onClose={() => setActivePanel(null)} />
+        <SettingsPanel
+          lang={lang} themeStyle={themeStyle} setThemeStyle={setThemeStyle}
+          themeMode={themeMode} setThemeMode={setThemeMode}
+          soundSettings={soundSettings} setSoundSettings={setSoundSettings}
+          onClose={() => setActivePanel(null)}
+        />
       )}
       {activePanel === "help" && <HelpPanel lang={lang} onClose={() => setActivePanel(null)} />}
       {activePanel === "about" && <AboutPanel lang={lang} onClose={() => setActivePanel(null)} />}
@@ -4066,7 +4172,7 @@ export default function ShiftPriorityRanker() {
 
         {!showPriorityFlow && (
           <div className="no-print">
-            <button className="sp-hero sp-shine" onClick={() => setShowPriorityFlow(true)} style={{ ...styles.heroTile, "--sp-shine-delay": "1.2s" }}>
+            <button className="sp-hero sp-shine" onClick={() => { tap(); setShowPriorityFlow(true); }} style={{ ...styles.heroTile, "--sp-shine-delay": "1.2s" }}>
               <span style={styles.heroTileIcon}><Star size={22} color="#fff" /></span>
               <span style={{ flex: 1 }}>
                 <div style={styles.heroTileTitle}>{t("title", lang)}</div>
@@ -4078,17 +4184,17 @@ export default function ShiftPriorityRanker() {
 
             <div style={styles.hubGroupLabel}>{t("hubGroupCrews", lang)}</div>
             <div style={styles.hubGrid}>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("compare2")} style={{ "--sp-shine-delay": "2.4s", animationDelay: "80ms", ...styles.hubTile, background: "var(--t-compare-g)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("compare2"); }} style={{ "--sp-shine-delay": "2.4s", animationDelay: "80ms", ...styles.hubTile, background: "var(--t-compare-g)" }}>
                 <GitCompare size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("compare2Title", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("crewLookup")} style={{ "--sp-shine-delay": "2.9s", animationDelay: "135ms", ...styles.hubTile, background: "var(--t-browse-g)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("crewLookup"); }} style={{ "--sp-shine-delay": "2.9s", animationDelay: "135ms", ...styles.hubTile, background: "var(--t-browse-g)" }}>
                 <Search size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("crewLookupTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("swapFinder")} style={{ "--sp-shine-delay": "3.4s", animationDelay: "190ms", ...styles.hubTile, background: "var(--t-swap-g)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("swapFinder"); }} style={{ "--sp-shine-delay": "3.4s", animationDelay: "190ms", ...styles.hubTile, background: "var(--t-swap-g)" }}>
                 <CalendarOff size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("hubSwapFinder", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
@@ -4097,19 +4203,19 @@ export default function ShiftPriorityRanker() {
 
             <div style={styles.hubGroupLabel}>{t("hubGroupMe", lang)}</div>
             <div style={styles.hubGrid}>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("profile")} style={{ "--sp-shine-delay": "3.9s", animationDelay: "245ms", ...styles.hubTile, background: "var(--t-profile-g)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("profile"); }} style={{ "--sp-shine-delay": "3.9s", animationDelay: "245ms", ...styles.hubTile, background: "var(--t-profile-g)" }}>
                 <User size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("profileTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
               {dailyLogVisible && (
-                <button className="sp-tile sp-shine" onClick={() => setActivePanel("dailyLog")} style={{ "--sp-shine-delay": "4.4s", animationDelay: "300ms", ...styles.hubTile, background: "var(--t-log-g)" }}>
+                <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("dailyLog"); }} style={{ "--sp-shine-delay": "4.4s", animationDelay: "300ms", ...styles.hubTile, background: "var(--t-log-g)" }}>
                   <ClipboardList size={18} color="#fff" />
                   <span style={styles.hubTileLabel}>{t("dailyLogMenuLabel", lang)}</span>
                   <span className="sp-shine-layer" aria-hidden="true" />
                 </button>
               )}
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("settings")} style={{ "--sp-shine-delay": "4.9s", animationDelay: "355ms", ...styles.hubTile, background: "var(--t-settings-g)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("settings"); }} style={{ "--sp-shine-delay": "4.9s", animationDelay: "355ms", ...styles.hubTile, background: "var(--t-settings-g)" }}>
                 <Sun size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("settingsTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
