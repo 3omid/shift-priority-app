@@ -550,8 +550,7 @@ const STRINGS = {
   xchgMethodB: { fa: "پرشده از یابنده جایگزین", en: "Filled from Replacement Finder", hi: "रिप्लेसमेंट फ़ाइंडर से भरा गया" },
   xchgSection1: { fa: "بخش ۱", en: "Section 1", hi: "सेक्शन १" },
   xchgSection2: { fa: "بخش ۲", en: "Section 2", hi: "सेक्शन २" },
-  xchgWhichCrew: { fa: "شیفت کدوم گروه پوشش داده می‌شه", en: "Whose run is being covered", hi: "किस क्रू की ड्यूटी कवर हो रही है" },
-  xchgWhoDrives: { fa: "این شیفت رو کی می‌رونه", en: "Who will drive it", hi: "इसे कौन चलाएगा" },
+  xchgWhichCrew: { fa: "این بخش برای کدوم راننده/گروهه", en: "Which employee (crew)", hi: "कौन सा कर्मचारी (क्रू)" },
   xchgDriverLabel: { fa: "نام راننده", en: "Employee name", hi: "कर्मचारी का नाम" },
   xchgDateLabel: { fa: "تاریخ", en: "Date", hi: "तारीख़" },
   xchgRunLabel: { fa: "شماره ران (Run #)", en: "Run #", hi: "रन #" },
@@ -560,7 +559,6 @@ const STRINGS = {
   xchgBlockLabel: { fa: "Block", en: "Block", hi: "Block" },
   xchgCrewValueLabel: { fa: "Crew Value", en: "Crew Value", hi: "Crew Value" },
   xchgPickCrewBtn: { fa: "انتخاب گروه", en: "Pick crew", hi: "क्रू चुनें" },
-  xchgPickDriverBtn: { fa: "انتخاب راننده", en: "Pick driver", hi: "ड्राइवर चुनें" },
   xchgNoShiftThatDay: { fa: "این گروه در این تاریخ شیفتی ندارد.", en: "This crew has no shift on this date.", hi: "इस तारीख़ पर इस क्रू की कोई शिफ्ट नहीं है।" },
   xchgPickCrewFirst: { fa: "اول یک گروه انتخاب کن.", en: "Pick a crew first.", hi: "पहले एक क्रू चुनें।" },
   xchgNA: { fa: "—", en: "N/A", hi: "N/A" },
@@ -1643,18 +1641,21 @@ function addDaysToDateStr(dateStr, daysForward) {
 }
 
 // ---------- Shift Exchange Request Form (the real TOK Transit paper form) ----------
-// One "box" on the real form = { which crew's run is being covered, on what
-// date, and who is actually going to drive it }. Every displayed field is
-// DERIVED from that triple via the existing Excel-parsed data (parsed.crews)
-// plus the admin/profile name & employee-ID directories — never stored or
-// invented separately. This is the single place that mapping happens, so
-// both entry methods (manual search+pick, and "Fill Form" from the
-// Replacement Finder) share identical, always-in-sync results.
-//   crewNum   -> whose scheduled run this box is about (Crew field)
-//   date      -> the calendar date that run falls on (Date field)
-//   driverNum -> the crew # of the person who will actually drive it that
-//                day (their own name/Employee ID resolve the Driver field)
-function deriveExchangeBox({ crewNum, date, driverNum }, crews, crewNames, crewEmployeeIds, profile, lang) {
+// Confirmed reading of the real form: each of its two boxes is ONE driver's
+// OWN complete record — their own name, their own real Employee ID, their
+// own crew's run/Block/Piece/Crew Value on a given date. The form's "for
+// ___ ID#___" phrase just names the OTHER driver in the exchange (rendered
+// by cross-referencing the two boxes in buildSwapFormHtml) — it is not a
+// second data source. So a box only ever needs (crewNum, date):
+//   crewNum -> whose own crew/run this box is about (also identifies the
+//              driver: resolveCrewName/resolveEmployeeId of this same #)
+//   date    -> the calendar date that run falls on
+// Every displayed field is DERIVED here from the already-loaded Excel data
+// (parsed.crews) plus the admin/profile name & Employee-ID directories —
+// nothing is stored twice or invented. Both entry paths (manual search+pick
+// and "Fill Form" from the Replacement Finder) share this one function, so
+// they can never drift apart.
+function deriveExchangeBox({ crewNum, date }, crews, crewNames, crewEmployeeIds, profile, lang) {
   const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
   const crewObj = crewNum ? (crews || []).find((c) => String(c.crew) === String(crewNum)) : null;
   const weekday = date ? new Date(date + "T00:00:00").getDay() : null;
@@ -1664,15 +1665,11 @@ function deriveExchangeBox({ crewNum, date, driverNum }, crews, crewNames, crewE
     crewNum: crewNum || "",
     date: date || "",
     weekdayLabel: weekday !== null ? weekdayNames[weekday] : "",
-    driverNum: driverNum || "",
-    driverName: driverNum ? resolveCrewName(driverNum, crews, crewNames) : "",
-    employeeId: driverNum ? resolveEmployeeId(driverNum, profile, crewEmployeeIds) : "",
-    // The crew's OWN regular driver/name — i.e. whose run this normally is
-    // (distinct from `driverName` above, the person actually covering it).
-    // The real paper form asks for both: "I <driverName> ... will work on
-    // <date> for <crewOwnerName>".
-    crewOwnerName: crewNum ? resolveCrewName(crewNum, crews, crewNames) : "",
-    crewOwnerEmployeeId: crewNum ? resolveEmployeeId(crewNum, profile, crewEmployeeIds) : "",
+    driverName: crewNum ? resolveCrewName(crewNum, crews, crewNames) : "",
+    // Real Employee ID only — from the person's own Profile (when this crew
+    // # is their own) or the admin-maintained directory. Blank/unknown when
+    // neither has it; never fabricated.
+    employeeId: crewNum ? resolveEmployeeId(crewNum, profile, crewEmployeeIds) : "",
     hasShift: !!day,
     hasCrewAndDate,
     code: day?.code || "",
@@ -2823,13 +2820,12 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onFillFo
                   {onFillForm && r.canSwap && best && (
                     <button
                       onClick={() => onFillForm({
-                        // Box 1: MY run, on the day I originally searched —
-                        // driven by the candidate (that's who's covering me).
-                        box1: { crewNum: myCrewNum, date, driverNum: String(r.crew.crew) },
-                        // Box 2: the CANDIDATE's own run, on their trade day
-                        // (my search week + their dayIdx) — driven by me,
-                        // since I'm the one paying it back.
-                        box2: { crewNum: String(r.crew.crew), date: addDaysToDateStr(date, best.dist), driverNum: myCrewNum },
+                        // Box 1: MY own run, on the day I originally searched.
+                        box1: { crewNum: myCrewNum, date },
+                        // Box 2: the CANDIDATE's own run, on THEIR trade day
+                        // (my search week + their dayIdx — the day I'll be
+                        // paying it back).
+                        box2: { crewNum: String(r.crew.crew), date: addDaysToDateStr(date, best.dist) },
                       })}
                       style={{ ...styles.smallActionBtn, padding: "5px 9px", fontSize: 11.5, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}
                     >
@@ -2850,10 +2846,10 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onFillFo
 }
 
 // One box on the real TOK Transit form. Purely a controlled view over
-// {crewNum, date, driverNum} — every other field (name, Employee ID, Run #,
-// Block, Piece 1/2, Crew Value) is DERIVED by deriveExchangeBox from the
+// {crewNum, date} — every other field (name, Employee ID, Run #, Block,
+// Piece 1/2, Crew Value) is DERIVED by deriveExchangeBox from the
 // already-loaded schedule/directories, never typed in or stored separately.
-function ExchangeBoxEditor({ lang, sectionLabel, box, derived, onPickCrew, onPickDriver, onDateChange }) {
+function ExchangeBoxEditor({ lang, sectionLabel, box, derived, onPickCrew, onDateChange }) {
   return (
     <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 11px", background: "var(--card)" }}>
       <div style={{ fontWeight: 800, fontSize: 12.5, marginBottom: 8 }}>{sectionLabel}</div>
@@ -2861,7 +2857,7 @@ function ExchangeBoxEditor({ lang, sectionLabel, box, derived, onPickCrew, onPic
       <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 3 }}>{t("xchgWhichCrew", lang)}</div>
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
         <span style={{ ...styles.numInputWide, flex: 1, display: "flex", alignItems: "center" }}>
-          {box.crewNum ? `${t("crewWord", lang)} ${box.crewNum}` : "—"}
+          {derived.driverName || (box.crewNum ? `${t("crewWord", lang)} ${box.crewNum}` : "—")}
         </span>
         <button onClick={onPickCrew} style={{ ...styles.smallActionBtn, padding: "6px 9px" }}>
           <Search size={13} /> {t("xchgPickCrewBtn", lang)}
@@ -2874,16 +2870,6 @@ function ExchangeBoxEditor({ lang, sectionLabel, box, derived, onPickCrew, onPic
         />
       </div>
       {derived.weekdayLabel && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: -6, marginBottom: 8 }}>{derived.weekdayLabel}</div>}
-
-      <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 3 }}>{t("xchgWhoDrives", lang)}</div>
-      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
-        <span style={{ ...styles.numInputWide, flex: 1, display: "flex", alignItems: "center" }}>
-          {derived.driverName || (box.driverNum ? `${t("crewWord", lang)} ${box.driverNum}` : "—")}
-        </span>
-        <button onClick={onPickDriver} style={{ ...styles.smallActionBtn, padding: "6px 9px" }}>
-          <Search size={13} /> {t("xchgPickDriverBtn", lang)}
-        </button>
-      </div>
 
       {!derived.hasCrewAndDate ? (
         <p style={styles.hint}>{t("xchgPickCrewFirst", lang)}</p>
@@ -2968,14 +2954,14 @@ function ExchangeFormPreview({ lang, derived1, derived2 }) {
 // SwapFinderPanel (which searches for who's free to trade): this is the
 // paperwork itself, reachable either pre-filled from a Replacement Finder
 // result (Method B, via its "Fill exchange form" button) or filled in
-// directly by searching and picking both crews/drivers (Method A). Both
-// paths share the exact same derivation (deriveExchangeBox) from the one
+// directly by searching and picking both employees (Method A). Both paths
+// share the exact same derivation (deriveExchangeBox) from the one
 // already-loaded schedule/name/Employee-ID data — nothing here is a second
 // copy of that data.
 function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefill, onClose }) {
-  const [box1, setBox1] = useState(prefill?.box1 || { crewNum: profile?.crewNumber ? String(profile.crewNumber) : "", date: localDateStr(), driverNum: "" });
-  const [box2, setBox2] = useState(prefill?.box2 || { crewNum: "", date: localDateStr(), driverNum: "" });
-  // Which crew/driver picker (if any) is open — {box: 1|2, field: "crew"|"driver"}.
+  const [box1, setBox1] = useState(prefill?.box1 || { crewNum: profile?.crewNumber ? String(profile.crewNumber) : "", date: localDateStr() });
+  const [box2, setBox2] = useState(prefill?.box2 || { crewNum: "", date: localDateStr() });
+  // Which box's crew/employee picker (if any) is open — 1 or 2.
   const [picker, setPicker] = useState(null);
 
   const derived1 = useMemo(() => deriveExchangeBox(box1, crews, crewNames, crewEmployeeIds, profile, lang), [box1, crews, crewNames, crewEmployeeIds, profile, lang]);
@@ -2991,14 +2977,12 @@ function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefi
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <ExchangeBoxEditor
           lang={lang} sectionLabel={t("xchgSection1", lang)} box={box1} derived={derived1}
-          onPickCrew={() => setPicker({ box: 1, field: "crew" })}
-          onPickDriver={() => setPicker({ box: 1, field: "driver" })}
+          onPickCrew={() => setPicker(1)}
           onDateChange={(v) => setBox1((b) => ({ ...b, date: v }))}
         />
         <ExchangeBoxEditor
           lang={lang} sectionLabel={t("xchgSection2", lang)} box={box2} derived={derived2}
-          onPickCrew={() => setPicker({ box: 2, field: "crew" })}
-          onPickDriver={() => setPicker({ box: 2, field: "driver" })}
+          onPickCrew={() => setPicker(2)}
           onDateChange={(v) => setBox2((b) => ({ ...b, date: v }))}
         />
       </div>
@@ -3016,9 +3000,8 @@ function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefi
           crews={crews}
           crewNames={crewNames}
           onPick={(crewNumber) => {
-            const setBox = picker.box === 1 ? setBox1 : setBox2;
-            const field = picker.field === "crew" ? "crewNum" : "driverNum";
-            setBox((b) => ({ ...b, [field]: String(crewNumber) }));
+            const setBox = picker === 1 ? setBox1 : setBox2;
+            setBox((b) => ({ ...b, crewNum: String(crewNumber) }));
             setPicker(null);
           }}
           onClose={() => setPicker(null)}
@@ -3806,33 +3789,36 @@ function splitDateParts(dateStr) {
 }
 
 // Builds the printable page as a literal, field-for-field reproduction of
-// the real "TOK Transit — Shift Exchange Request Form" paper form (the
-// exact wording/layout of the two driver boxes and the Operations
-// Supervisor box below is copied from that form) — NOT a redesigned
-// summary. Every blank is either filled from deriveExchangeBox's output or
-// left genuinely blank (a real blank line, never a placeholder), so a
-// printed/PDF copy is the same document a supervisor already recognizes.
-// The Supervisor box's Yes/No boxes, reason, name, ID and both signature
-// lines are always left unfilled/unchecked — an approval only ever happens
-// on paper, by a person, never fabricated here.
+// the real "TOK Transit — Shift Exchange Request Form" paper form — same
+// header, same wording, same two driver boxes and the same "Operations
+// Supervisor Use Only" box below, in the same order, on one page. Nothing
+// is added, removed, reordered or redesigned; only the existing blanks are
+// filled. Each box is ONE driver's own record (deriveExchangeBox), and the
+// form's "for ___ ID#___" phrase names the OTHER box's driver — so `box()`
+// takes the partner box purely to read its name/ID, not a second data set.
+// Piece 2 and its Block are always left genuinely blank (no split-shift
+// data exists to put there — never "N/A" typed in on the person's behalf;
+// the form's own instructions already tell the driver to write that in by
+// hand). The Supervisor box's Yes/No boxes, reason, name, ID and both
+// signature lines are always left blank/unchecked — an approval only ever
+// happens on paper, by a person, never fabricated here.
 function buildSwapFormHtml({ box1, box2 }, lang, timestamp) {
   const submitted = splitDateParts(localDateStr());
-  const na = "N/A";
   // An inline fill-in blank: a bottom-border line with the value centered
   // on it, or a genuinely empty line (no placeholder text) when unknown.
-  const blank = (value, minWidth) => `<span style="display:inline-block; min-width:${minWidth}px; border-bottom:1.3px solid #333; padding:0 3px 1px; text-align:center; font-weight:600;">${value ? value : "&nbsp;"}</span>`;
-  const box = (num, d) => {
+  const blank = (value, minWidth) => `<span style="display:inline-block; min-width:${minWidth}px; border-bottom:1.2px solid #333; padding:0 3px; text-align:center; font-weight:600;">${value ? value : "&nbsp;"}</span>`;
+  const box = (num, d, partner) => {
     const p = splitDateParts(d.date);
     return `
     <div class="box">
       <p>
-        I ${blank(d.driverName, 190)} ID #${blank(d.employeeId, 60)} will work on ${blank(p.m, 30)} ${blank(p.d, 26)} ${blank(p.y, 55)} for ${blank(d.crewOwnerName, 190)}
+        I ${blank(d.driverName, 175)} ID #${blank(d.employeeId, 55)} will work on ${blank(p.m, 26)} ${blank(p.d, 22)} ${blank(p.y, 48)} for ${blank(partner.driverName, 175)}
       </p>
       <p>
-        ID #${blank(d.crewOwnerEmployeeId, 60)}. It is run #${blank(d.code, 60)}. Piece 1 is from ${blank(d.pieceStart, 60)} to ${blank(d.pieceEnd, 60)} on block ${blank(d.block, 120)}. Piece 2 is from ${blank(na, 50)} to ${blank(na, 50)}
+        ID #${blank(partner.employeeId, 55)}. It is run #${blank(d.code, 55)}. Piece 1 is from ${blank(d.pieceStart, 55)} to ${blank(d.pieceEnd, 55)} on block ${blank(d.block, 110)}. Piece 2 is from ${blank("", 46)} to ${blank("", 46)}
       </p>
       <p>
-        on block ${blank(na, 120)}. &nbsp; Crew value ${blank(d.hoursDecimal, 55)}. &nbsp; Signature ${num} ${blank("", 200)}
+        on block ${blank("", 110)}. &nbsp; Crew value ${blank(d.hoursDecimal, 50)}. &nbsp; Signature ${num} ${blank("", 180)}
       </p>
     </div>`;
   };
@@ -3840,28 +3826,30 @@ function buildSwapFormHtml({ box1, box2 }, lang, timestamp) {
   return `<!doctype html><html lang="en" dir="ltr"><head><meta charset="UTF-8" />
   <title>Shift Exchange Request Form</title>
   <style>
-    body { font-family: Arial, Helvetica, sans-serif; margin: 26px; color:#111; font-size: 13.5px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .toolbar { position: sticky; top: 0; background: #fff; padding: 10px 0 16px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; margin-bottom: 18px; z-index: 10; }
-    .toolbar button { font-size:14px; padding:10px 16px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
+    @page { size: letter; margin: 0.35in; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, Helvetica, sans-serif; margin: 18px 22px; color:#111; font-size: 12px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .toolbar { position: sticky; top: 0; background: #fff; padding: 8px 0 14px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; margin-bottom: 14px; z-index: 10; }
+    .toolbar button { font-size:14px; padding:9px 15px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
     .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
     .toolbar .print-btn { background:#111; color:#fff; font-weight:700; border-color:#111; }
-    .ts { text-align:right; font-size:11px; color:#888; margin-bottom: 6px; }
-    .hdr { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 6px; }
-    .logo { font-weight:900; font-size:20px; letter-spacing:0.02em; }
-    .logo small { display:block; font-weight:700; font-size:10px; letter-spacing:0.25em; color:#444; }
-    .submitted { font-size:12px; text-align:right; }
-    h1 { text-align:center; font-size:19px; margin: 2px 0 14px; }
-    .intro p { font-size:11.5px; line-height:1.45; margin: 0 0 7px; }
-    .box { border:2px solid #111; border-radius: 4px; padding: 10px 14px 12px; margin-bottom: 12px; }
-    .box p { margin: 0 0 10px; line-height: 2.1; }
-    .sup { border:2px solid #111; border-radius: 4px; padding: 10px 14px 12px; }
-    .sup h2 { font-size: 13.5px; margin: 0 0 10px; }
-    .supq { display:flex; justify-content:space-between; align-items:center; gap: 10px; font-size:12.5px; margin-bottom: 8px; max-width: 640px; }
-    .yn { display:flex; gap: 18px; flex-shrink:0; }
-    .ynopt { display:flex; align-items:center; gap: 5px; }
-    .ckbox { width:13px; height:13px; border:1.4px solid #111; display:inline-block; }
-    .sup p { font-size:12.5px; margin: 10px 0; line-height: 2; }
-    .footer { margin-top: 14px; font-size: 10.5px; color:#666; }
+    .hdr { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 2px; }
+    .logo { font-weight:900; font-size:18px; letter-spacing:0.02em; }
+    .logo small { display:block; font-weight:700; font-size:9px; letter-spacing:0.22em; color:#444; }
+    .submitted { font-size:11px; text-align:right; }
+    h1 { text-align:center; font-size:17px; margin: 0 0 8px; }
+    .intro p { font-size:10.5px; line-height:1.32; margin: 0 0 5px; }
+    .box { border:1.6px solid #111; border-radius: 3px; padding: 7px 12px 8px; margin-bottom: 8px; }
+    .box p { margin: 0 0 6px; line-height: 1.85; }
+    .box p:last-child { margin-bottom: 0; }
+    .sup { border:1.6px solid #111; border-radius: 3px; padding: 8px 12px 9px; }
+    .sup h2 { font-size: 12.5px; margin: 0 0 7px; }
+    .supq { display:flex; justify-content:space-between; align-items:center; gap: 10px; font-size:11.5px; margin-bottom: 5px; max-width: 660px; }
+    .yn { display:flex; gap: 16px; flex-shrink:0; }
+    .ynopt { display:flex; align-items:center; gap: 4px; }
+    .ckbox { width:11px; height:11px; border:1.3px solid #111; display:inline-block; }
+    .sup p { font-size:11.5px; margin: 6px 0; line-height: 1.7; }
+    .footer { margin-top: 8px; font-size: 9.5px; color:#666; }
     @media print { .toolbar { display: none !important; } .box, .sup { break-inside: avoid; } }
   </style></head>
   <body>
@@ -3869,10 +3857,9 @@ function buildSwapFormHtml({ box1, box2 }, lang, timestamp) {
       <button class="print-btn" onclick="window.print()">🖨️ Print / PDF</button>
       <button class="close-btn" onclick="window.close()">✕ Close</button>
     </div>
-    <div class="ts">${timestamp}</div>
     <div class="hdr">
       <div class="logo">TOK<small>TRANSIT</small></div>
-      <div class="submitted">Date Request Submitted:&nbsp; M${blank(submitted.m, 26)} D${blank(submitted.d, 22)} Y${blank(submitted.y, 44)}</div>
+      <div class="submitted">Date Request Submitted:&nbsp; M${blank(submitted.m, 24)} D${blank(submitted.d, 20)} Y${blank(submitted.y, 40)}</div>
     </div>
     <h1>Shift Exchange Request Form</h1>
     <div class="intro">
@@ -3882,8 +3869,8 @@ function buildSwapFormHtml({ box1, box2 }, lang, timestamp) {
       <p>*Request must be made at least five (5) days in advance of the Shift Exchange, and be compliant with Employment Standards, the Collective Agreement and other legislation.</p>
       <p>*This agreement is between the two drivers involved and it is expected that each driver will fulfill their commitment.</p>
     </div>
-    ${box(1, box1)}
-    ${box(2, box2)}
+    ${box(1, box1, box2)}
+    ${box(2, box2, box1)}
     <div class="sup">
       <h2>Operations Supervisor Use Only</h2>
       <div class="supq"><span>Is the shift information above correct?</span><span class="yn">${yesNo()}</span></div>
@@ -3891,11 +3878,11 @@ function buildSwapFormHtml({ box1, box2 }, lang, timestamp) {
       <div class="supq"><span>Is this switch taking place within the same pay period?</span><span class="yn">${yesNo()}</span></div>
       <div class="supq"><span>Is the switch approved?</span><span class="yn">${yesNo()}</span></div>
       <p>If approved, record switch on Dispatch Sheet</p>
-      <p>If <u>not</u> approved, state reason ${blank("", 260)} &nbsp; Date: ${blank("", 120)}</p>
-      <p>Operations Supervisor Name ${blank("", 220)} ID ${blank("", 70)} Signature ${blank("", 200)}</p>
-      <p>Entered in Trapeze by ${blank("", 160)} &nbsp;&nbsp; Entered on Dispatch Sheet by ${blank("", 160)}</p>
+      <p>If <u>not</u> approved, state reason ${blank("", 250)} &nbsp; Date: ${blank("", 110)}</p>
+      <p>Operations Supervisor Name ${blank("", 210)} ID ${blank("", 65)} Signature ${blank("", 190)}</p>
+      <p>Entered in Trapeze by ${blank("", 150)} &nbsp;&nbsp; Entered on Dispatch Sheet by ${blank("", 150)}</p>
     </div>
-    <div class="footer">Reproduces TOK Transit's own "Shift Exchange Request Form" (rev. January 23, 2020) — pre-filled by Shift Priority from your loaded schedule; nothing in the Supervisor box above is filled in.</div>
+    <div class="footer">Revised January 23, 2020 &nbsp;·&nbsp; pre-filled by Shift Priority from your loaded schedule (${timestamp}) — nothing in the Supervisor box above is filled in.</div>
   </body></html>`;
 }
 
