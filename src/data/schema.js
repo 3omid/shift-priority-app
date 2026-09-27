@@ -29,8 +29,9 @@ export function upgrade(db, oldVersion) {
 }
 
 export const DEFAULTS = {
-  profile: null, // { firstName, crewNumber }
+  profile: null, // { firstName, crewNumber, employeeId }
   crewNames: {}, // { [crewNumber]: name }
+  crewEmployeeIds: {}, // { [crewNumber]: employeeId } -- admin-maintained, for the Shift Exchange form
   dailyLogAccess: [], // [crewNumber, ...]
   theme: { style: "universal", mode: "light" },
   sound: { enabled: false, type: "pop" },

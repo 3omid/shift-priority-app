@@ -7,6 +7,7 @@
 export {
   loadProfile, saveProfile, clearProfileStorage,
   loadCrewNames, saveCrewNames,
+  loadCrewEmployeeIds, saveCrewEmployeeIds,
   loadThemePrefs, saveThemePrefs,
   loadDailyLogEntries, saveDailyLogEntries,
   loadDailyLogAccess, saveDailyLogAccess,

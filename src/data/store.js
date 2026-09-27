@@ -137,6 +137,10 @@ export function clearProfileStorage() { return setKv("profile", DEFAULTS.profile
 export function loadCrewNames() { return getKv("crewNames") || {}; }
 export function saveCrewNames(map) { return setKv("crewNames", map); }
 
+// ---- crew employee-ID directory (admin-maintained, for the Shift Exchange form) ----
+export function loadCrewEmployeeIds() { return getKv("crewEmployeeIds") || {}; }
+export function saveCrewEmployeeIds(map) { return setKv("crewEmployeeIds", map); }
+
 // ---- theme ----
 export function loadThemePrefs() { return getKv("theme") || DEFAULTS.theme; }
 export function saveThemePrefs(style, mode) { return setKv("theme", { style, mode }); }
