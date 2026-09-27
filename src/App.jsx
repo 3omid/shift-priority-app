@@ -98,6 +98,57 @@ const CREW_NAME_DEFAULTS = {
   "42": "Morteza Hosseini",
 };
 
+// Built-in default crew-number -> employee/badge-number directory, seeded
+// from the same printed crew list as CREW_NAME_DEFAULTS above (real badge
+// numbers, one per crew, given directly by the user — never guessed). This
+// is the lowest-priority Employee ID source: the admin-maintained
+// crewEmployeeIds directory (Admin panel) wins over it, and the driver's own
+// saved Profile wins over both — see resolveEmployeeId(). Crew numbers left
+// OUT of this list (2, 4, 11, 19, ...) are open/unassigned runs — no badge
+// number should be guessed for them. To update later, either edit this list
+// and redeploy, or fix it per-crew from the Admin panel (which always
+// overrides this list).
+const CREW_EMPLOYEE_ID_DEFAULTS = {
+  "1": "1583",
+  "3": "1611",
+  "5": "1597",
+  "6": "1516",
+  "7": "1570",
+  "8": "1595",
+  "9": "7413",
+  "10": "1593",
+  "12": "1618",
+  "13": "1581",
+  "14": "1561",
+  "15": "1617",
+  "16": "1542",
+  "17": "1547",
+  "18": "1574",
+  "20": "1613",
+  "21": "7424",
+  "22": "7412",
+  "23": "1533",
+  "24": "1532",
+  "25": "1530",
+  "26": "1507",
+  "27": "7411",
+  "28": "7409",
+  "29": "1537",
+  "30": "1572",
+  "31": "1602",
+  "32": "1609",
+  "33": "7422",
+  "34": "1525",
+  "35": "7423",
+  "36": "1577",
+  "37": "1579",
+  "38": "1604",
+  "39": "1557",
+  "40": "1599",
+  "41": "1607",
+  "42": "1596",
+};
+
 // ---------- Excel parsing ----------
 
 function normalize(v) {
@@ -1618,14 +1669,16 @@ function resolveCrewName(crewNumber, crews, manualNames) {
 }
 
 // Employee ID (badge #) for the Shift Exchange form — a real person
-// identifier, distinct from the crew/run number above. Not present anywhere
-// in the Excel schedule, so it comes from either the person's own saved
-// Profile (when this crew # is their own) or the admin-maintained
-// crewEmployeeIds directory. Blank when neither has it — never invented.
+// identifier, distinct from the crew/run number above. Not present in the
+// weekly Excel schedule, so priority is: the driver's own saved Profile
+// (when this crew # is their own) > the admin-maintained crewEmployeeIds
+// directory (Admin panel manual entry) > the built-in CREW_EMPLOYEE_ID_DEFAULTS
+// list above. Blank when none of the three has it — never invented.
 function resolveEmployeeId(crewNumber, profile, crewEmployeeIds) {
   const key = String(crewNumber);
   if (profile?.crewNumber && String(profile.crewNumber) === key && profile.employeeId) return profile.employeeId;
-  return (crewEmployeeIds && crewEmployeeIds[key]) || "";
+  if (crewEmployeeIds && Object.prototype.hasOwnProperty.call(crewEmployeeIds, key) && crewEmployeeIds[key]) return crewEmployeeIds[key];
+  return CREW_EMPLOYEE_ID_DEFAULTS[key] || "";
 }
 
 // The calendar date of `dayIdx`, `daysForward` days after `dateStr`
@@ -3203,7 +3256,12 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, crewEmployeeIds, set
             ? (crewNames[num] === "" ? t("adminBlankBadge", lang) : t("adminManualBadge", lang))
             : auto ? t("adminAutoBadge", lang) : def ? t("adminDefaultBadge", lang) : t("adminBlankBadge", lang);
           const dup = dupWarning[num];
-          const eidValue = eidDrafts[num] !== undefined ? eidDrafts[num] : ((crewEmployeeIds || {})[num] || "");
+          const hasEidOverride = Object.prototype.hasOwnProperty.call(crewEmployeeIds || {}, num);
+          const eidDefault = CREW_EMPLOYEE_ID_DEFAULTS[num] || "";
+          const eidValue = eidDrafts[num] !== undefined ? eidDrafts[num] : (hasEidOverride ? crewEmployeeIds[num] : eidDefault);
+          const eidBadge = hasEidOverride
+            ? (crewEmployeeIds[num] === "" ? t("adminBlankBadge", lang) : t("adminManualBadge", lang))
+            : eidDefault ? t("adminDefaultBadge", lang) : t("adminBlankBadge", lang);
           return (
             <div key={num} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px" }}>
@@ -3225,6 +3283,9 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, crewEmployeeIds, set
                 />
                 <span style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap" }}>
                   {badge}
+                </span>
+                <span style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap" }}>
+                  {eidBadge}
                 </span>
                 <button onClick={() => clearRow(num)} title={t("adminClearTooltip", lang)} style={{ ...styles.smallActionBtn, padding: "5px 7px" }}>
                   <X size={13} />
