@@ -537,6 +537,21 @@ const STRINGS = {
   swapBefore: { fa: "قبل:", en: "before:", hi: "पहले:" },
   swapAfter: { fa: "بعد:", en: "after:", hi: "बाद:" },
   swapViewSchedule: { fa: "برنامهٔ هفتگی", en: "Weekly schedule", hi: "साप्ताहिक शेड्यूल" },
+  swapFillFormBtn: { fa: "تکمیل فرم جابجایی", en: "Fill swap form", hi: "स्वैप फ़ॉर्म भरें" },
+  swapFormTitle: { fa: "فرم جابجایی شیفت", en: "Shift swap form", hi: "शिफ्ट स्वैप फ़ॉर्म" },
+  swapFormIntro: {
+    fa: "این فرم رو برای درخواست رسمی جابجایی/پوشش شیفت پر و پرینت کن (یا PDF بگیر) و تحویل بده.",
+    en: "Fill this in for a formal shift swap/cover request, then print it (or save as PDF) and hand it in.",
+    hi: "औपचारिक शिफ्ट स्वैप/कवर अनुरोध के लिए इसे भरें, फिर प्रिंट या PDF के रूप में सेव करें।",
+  },
+  swapFormMyName: { fa: "اسم من", en: "My name", hi: "मेरा नाम" },
+  swapFormMyCrew: { fa: "شمارهٔ گروه من", en: "My crew #", hi: "मेरा क्रू #" },
+  swapFormDate: { fa: "تاریخ شیفت", en: "Shift date", hi: "शिफ्ट तारीख" },
+  swapFormMyShift: { fa: "ساعت شیفت من", en: "My shift hours", hi: "मेरी शिफ्ट के घंटे" },
+  swapFormCoverName: { fa: "اسم جایگزین", en: "Cover's name", hi: "कवर का नाम" },
+  swapFormCoverCrew: { fa: "شمارهٔ گروه جایگزین", en: "Cover's crew #", hi: "कवर का क्रू #" },
+  swapFormNotes: { fa: "توضیح (اختیاری)", en: "Notes (optional)", hi: "टिप्पणी (वैकल्पिक)" },
+  swapFormSignLine: { fa: "امضا / تأیید", en: "Signature / approval", hi: "हस्ताक्षर / अनुमोदन" },
   swapMatch: { fa: "تطابق با برنامهٔ تو", en: "match with your schedule", hi: "आपके शेड्यूल से मेल" },
   myShiftHomeTitle: { fa: "شیفت من", en: "My Shift", hi: "मेरी शिफ्ट" },
   myShiftHomeNoCrew: { fa: "شمارهٔ گروهت رو توی پروفایل وارد کن", en: "Add your crew # in Profile", hi: "प्रोफ़ाइल में क्रू # जोड़ें" },
@@ -1311,7 +1326,7 @@ function themeVars(style, mode) {
 const ACTIVE_THEME = { style: "universal" };
 function exportTheme(kind) {
   const th = getTheme(ACTIVE_THEME.style);
-  const main = kind === "results" ? th.flow[0] : kind === "compare" ? th.tiles.compare[0] : th.tiles.log[0];
+  const main = kind === "results" ? th.flow[0] : kind === "compare" ? th.tiles.compare[0] : kind === "swap" ? th.tiles.swap[0] : th.tiles.log[0];
   return {
     main, sub: th.light.accent2,
     head: mixHex(main, "#FFFFFF", 0.86), headText: mixHex(main, "#000000", 0.35),
@@ -2576,7 +2591,7 @@ function localDateStr(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose }) {
+function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onFillForm, onClose }) {
   const [myCrewNum, setMyCrewNum] = useState(profile?.crewNumber ? String(profile.crewNumber) : "");
   const [date, setDate] = useState(localDateStr());
   const [startTime, setStartTime] = useState("");
@@ -2685,9 +2700,24 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose 
                     </span>
                   )}
                 </div>
-                <button onClick={() => onViewCrew(r.crew)} style={{ ...styles.smallActionBtn, marginTop: 7, padding: "5px 9px", fontSize: 11.5 }}>
-                  <CalendarOff size={13} /> {t("swapViewSchedule", lang)}
-                </button>
+                <div style={{ display: "flex", gap: 6, marginTop: 7, flexWrap: "wrap" }}>
+                  <button onClick={() => onViewCrew(r.crew)} style={{ ...styles.smallActionBtn, padding: "5px 9px", fontSize: 11.5 }}>
+                    <CalendarOff size={13} /> {t("swapViewSchedule", lang)}
+                  </button>
+                  {onFillForm && (
+                    <button
+                      onClick={() => onFillForm({
+                        date, weekday,
+                        myCrewNum, myName: profile?.firstName || "",
+                        startTime, endTime,
+                        coverCrewNum: String(r.crew.crew), coverName: name || "",
+                      })}
+                      style={{ ...styles.smallActionBtn, padding: "5px 9px", fontSize: 11.5, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}
+                    >
+                      <FileSpreadsheet size={13} /> {t("swapFillFormBtn", lang)}
+                    </button>
+                  )}
+                </div>
               </Reveal>
             );
           })}
@@ -2696,6 +2726,66 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose 
           )}
         </div>
       )}
+    </Modal>
+  );
+}
+
+// A plain fill-in form for a formal shift swap/cover request — distinct from
+// SwapFinderPanel (which searches for who's free to cover a shift): this is
+// just the paperwork, optionally pre-filled from a SwapFinderPanel result via
+// its "Fill swap form" button, but also reachable and usable completely empty.
+function SwapFormPanel({ lang, profile, prefill, onClose }) {
+  const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
+  const [myName, setMyName] = useState(prefill?.myName || profile?.firstName || "");
+  const [myCrewNum, setMyCrewNum] = useState(prefill?.myCrewNum || (profile?.crewNumber ? String(profile.crewNumber) : ""));
+  const [date, setDate] = useState(prefill?.date || localDateStr());
+  const [startTime, setStartTime] = useState(prefill?.startTime || "");
+  const [endTime, setEndTime] = useState(prefill?.endTime || "");
+  const [coverName, setCoverName] = useState(prefill?.coverName || "");
+  const [coverCrewNum, setCoverCrewNum] = useState(prefill?.coverCrewNum || "");
+  const [notes, setNotes] = useState("");
+
+  const weekday = date ? new Date(date + "T00:00:00").getDay() : null;
+
+  const doPrint = () => {
+    printSwapForm({
+      myName, myCrewNum, date, weekdayLabel: weekday !== null ? weekdayNames[weekday] : "",
+      startTime, endTime, coverName, coverCrewNum, notes,
+    }, lang);
+  };
+
+  return (
+    <Modal title={t("swapFormTitle", lang)} onClose={onClose} headerGradient="var(--t-swap-g)" accent="var(--t-swap)">
+      <p style={styles.hint}>{t("swapFormIntro", lang)}</p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 6 }}>
+        <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapFormMyName", lang)}
+          <input type="text" value={myName} onChange={(e) => setMyName(e.target.value)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
+        </label>
+        <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapFormMyCrew", lang)}
+          <input type="number" value={myCrewNum} onChange={(e) => setMyCrewNum(e.target.value)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
+        </label>
+        <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapFormDate", lang)}{weekday !== null ? ` · ${weekdayNames[weekday]}` : ""}
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
+        </label>
+        <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapFormMyShift", lang)}
+          <span style={{ display: "flex", gap: 4 }}>
+            <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
+            <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
+          </span>
+        </label>
+        <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapFormCoverName", lang)}
+          <input type="text" value={coverName} onChange={(e) => setCoverName(e.target.value)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
+        </label>
+        <label style={{ fontSize: 12, fontWeight: 700 }}>{t("swapFormCoverCrew", lang)}
+          <input type="number" value={coverCrewNum} onChange={(e) => setCoverCrewNum(e.target.value)} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box" }} />
+        </label>
+      </div>
+      <label style={{ fontSize: 12, fontWeight: 700, display: "block", marginTop: 8 }}>{t("swapFormNotes", lang)}
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} style={{ ...styles.numInputWide, width: "100%", minWidth: 0, marginTop: 4, boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }} />
+      </label>
+      <button onClick={doPrint} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)", marginTop: 10 }}>
+        <Printer size={14} /> {t("printBtn", lang)}
+      </button>
     </Modal>
   );
 }
@@ -3447,6 +3537,59 @@ function printCompareTable(matched, lang) {
   openPrintableReport(buildCompareHtml(matched, lang, timestamp), lang);
 }
 
+function buildSwapFormHtml(f, lang, timestamp) {
+  const dir = lang === "fa" ? "rtl" : "ltr";
+  const th = exportTheme("swap");
+  const row = (label, value) => `<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:${th.headText};text-transform:uppercase;letter-spacing:0.03em;margin-bottom:3px;">${label}</div><div style="border-bottom:1.5px solid #999;min-height:22px;font-size:15px;padding-bottom:2px;">${value || "&nbsp;"}</div></div>`;
+  const shiftHours = (f.startTime || f.endTime) ? `${f.startTime || "—"}–${f.endTime || "—"}` : "";
+  return `<!doctype html><html lang="${lang}" dir="${dir}"><head><meta charset="UTF-8" />
+  <title>${t("swapFormTitle", lang)}</title>
+  <style>
+    body { font-family: Tahoma, 'Vazirmatn', sans-serif; margin: 24px; color:#20242B; }
+    .hdr { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
+    .hdr h1 { font-size:20px; margin:0 0 4px; }
+    .ts { text-align:left; font-size:12px; color:#666; }
+    .toolbar { position: sticky; top: 0; background: #fff; padding: 10px 0 16px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; margin-bottom: 16px; z-index: 10; }
+    .toolbar button { font-size:14px; padding:10px 16px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
+    .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
+    .toolbar .print-btn { color:#fff; font-weight:700; }
+    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+    .sign { display:grid; grid-template-columns: 1fr 1fr; gap: 0 24px; margin-top: 40px; }
+    ${exportCss(th)}
+    @media print { .toolbar { display: none !important; } }
+  </style></head>
+  <body>
+    <div class="toolbar">
+      <button class="print-btn" onclick="window.print()">🖨️ ${t("printBtn", lang)}</button>
+      <button class="close-btn" onclick="window.close()">✕ ${t("close", lang)}</button>
+    </div>
+    <div class="hdr">
+      <div><h1>${t("swapFormTitle", lang)}</h1></div>
+      <div class="ts">${timestamp}</div>
+    </div>
+    <div class="rainbow"></div>
+    <div class="grid2">
+      ${row(t("swapFormMyName", lang), f.myName)}
+      ${row(t("swapFormMyCrew", lang), f.myCrewNum)}
+      ${row(t("swapFormDate", lang), f.date ? `${f.date}${f.weekdayLabel ? " · " + f.weekdayLabel : ""}` : "")}
+      ${row(t("swapFormMyShift", lang), shiftHours)}
+      ${row(t("swapFormCoverName", lang), f.coverName)}
+      ${row(t("swapFormCoverCrew", lang), f.coverCrewNum)}
+    </div>
+    ${row(t("swapFormNotes", lang), (f.notes || "").replace(/\n/g, "<br/>"))}
+    <div class="sign">
+      ${row(t("swapFormSignLine", lang), "")}
+      ${row(t("swapFormSignLine", lang), "")}
+    </div>
+  </body></html>`;
+}
+
+function printSwapForm(f, lang) {
+  const now = new Date();
+  const timestamp = `${formatJalaliDate(now)} — ${new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric" }).format(now)} — ${now.toLocaleTimeString("en-GB")}`;
+  openPrintableReport(buildSwapFormHtml(f, lang, timestamp), lang);
+}
+
 function hexNoHash(h) { return h.replace("#", "").toUpperCase(); }
 
 function applyBorderCenterToRange(ws) {
@@ -3775,6 +3918,9 @@ export default function ShiftPriorityRanker() {
   // The crew picked from the "Browse crews" lookup panel, or null.
   const [lookupCrew, setLookupCrew] = useState(null);
   const [swapViewCrew, setSwapViewCrew] = useState(null);
+  // Pre-fill payload handed from SwapFinderPanel's "Fill swap form" button to
+  // SwapFormPanel; null when Swap Form is opened directly (empty form).
+  const [swapFormPrefill, setSwapFormPrefill] = useState(null);
 
   // Daily Log -- see loadDailyLogAccess/saveDailyLogAccess above.
   const [dailyLogAccess, setDailyLogAccess] = useState(() => loadDailyLogAccess());
@@ -4169,7 +4315,16 @@ export default function ShiftPriorityRanker() {
           crewNames={crewNames}
           profile={profile}
           onViewCrew={(c) => setSwapViewCrew(c)}
+          onFillForm={(data) => { setSwapFormPrefill(data); setActivePanel("swapForm"); }}
           onClose={() => setActivePanel(null)}
+        />
+      )}
+      {activePanel === "swapForm" && (
+        <SwapFormPanel
+          lang={lang}
+          profile={profile}
+          prefill={swapFormPrefill}
+          onClose={() => { setActivePanel(null); setSwapFormPrefill(null); }}
         />
       )}
       {swapViewCrew && (
@@ -4284,7 +4439,7 @@ export default function ShiftPriorityRanker() {
                 : !myCrew ? t("crewNumberNotInFile", lang)
                 : null;
               return (
-                <button className="sp-myshift sp-shine" onClick={onCardClick} style={styles.myShiftHomeCard}>
+                <button className="sp-myshift sp-shine" onClick={onCardClick} style={{ "--sp-shine-delay": "1.0s", ...styles.myShiftHomeCard }}>
                   <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 14 }}>
                       <Star size={14} color="#fff" /> {t("myShiftHomeTitle", lang)}
@@ -4328,21 +4483,21 @@ export default function ShiftPriorityRanker() {
                   )}
 
                   <span style={styles.myShiftActionsRow}>
-                    {/* "Swap form" doesn't exist as its own feature yet — it opens
-                        the same leave-replacement finder as "Leave cover" for now. */}
                     <span
                       role="button" tabIndex={0}
-                      onClick={(e) => { e.stopPropagation(); tap(); setActivePanel("swapFinder"); }}
+                      onClick={(e) => { e.stopPropagation(); tap(); setSwapFormPrefill(null); setActivePanel("swapForm"); }}
                       style={styles.myShiftActionBtn}
                     >
-                      <FileSpreadsheet size={16} /> {t("quickSwapForm", lang)}
+                      <span style={{ ...styles.myShiftActionIconBadge, color: "var(--my)" }}><FileSpreadsheet size={16} /></span>
+                      {t("quickSwapForm", lang)}
                     </span>
                     <span
                       role="button" tabIndex={0}
                       onClick={(e) => { e.stopPropagation(); tap(); setActivePanel("swapFinder"); }}
                       style={styles.myShiftActionBtn}
                     >
-                      <CalendarOff size={16} /> {t("quickCover", lang)}
+                      <span style={{ ...styles.myShiftActionIconBadge, color: "var(--my)" }}><CalendarOff size={16} /></span>
+                      {t("quickCover", lang)}
                     </span>
                     {dailyLogVisible && (
                       <span
@@ -4350,7 +4505,8 @@ export default function ShiftPriorityRanker() {
                         onClick={(e) => { e.stopPropagation(); tap(); setActivePanel("dailyLog"); }}
                         style={styles.myShiftActionBtn}
                       >
-                        <ClipboardList size={16} /> {t("quickLog", lang)}
+                        <span style={{ ...styles.myShiftActionIconBadge, color: "var(--my)" }}><ClipboardList size={16} /></span>
+                        {t("quickLog", lang)}
                       </span>
                     )}
                   </span>
@@ -4380,27 +4536,27 @@ export default function ShiftPriorityRanker() {
             </div>
 
             <div style={styles.hubGrid}>
-              <button className="sp-hero sp-shine" onClick={() => { tap(); setShowPriorityFlow(true); }} style={{ "--sp-shine-delay": "1.2s", ...styles.hubTile, gridColumn: "span 2", flexDirection: "row", alignItems: "center", gap: 10, background: "var(--hero-g)" }}>
+              <button className="sp-hero sp-shine" onClick={() => { tap(); setShowPriorityFlow(true); }} style={{ "--sp-shine-delay": "1.5s", ...styles.hubTile, gridColumn: "span 2", flexDirection: "row", alignItems: "center", gap: 10, background: "var(--hero-g)" }}>
                 <Trophy size={20} color="#fff" />
                 <span style={{ ...styles.hubTileLabel, marginTop: 0, fontSize: 12 }}>{t("title", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("compare2"); }} style={{ "--sp-shine-delay": "2.4s", animationDelay: "80ms", ...styles.hubTile, background: "var(--t-compare-g)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("compare2"); }} style={{ "--sp-shine-delay": "2.0s", animationDelay: "80ms", ...styles.hubTile, background: "var(--t-compare-g)" }}>
                 <GitCompare size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("compare2Title", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("crewLookup"); }} style={{ "--sp-shine-delay": "2.9s", animationDelay: "135ms", ...styles.hubTile, background: "var(--t-browse-g)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("crewLookup"); }} style={{ "--sp-shine-delay": "2.5s", animationDelay: "135ms", ...styles.hubTile, background: "var(--t-browse-g)" }}>
                 <Users size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("crewLookupTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("settings"); }} style={{ "--sp-shine-delay": "4.9s", animationDelay: "355ms", ...styles.hubTile, background: "var(--t-settings-g)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("settings"); }} style={{ "--sp-shine-delay": "3.0s", animationDelay: "355ms", ...styles.hubTile, background: "var(--t-settings-g)" }}>
                 <Palette size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("settingsTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("helpMenu"); }} style={{ "--sp-shine-delay": "5.4s", animationDelay: "410ms", ...styles.hubTile, background: "linear-gradient(135deg, #6B7280, #9CA3AF)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("helpMenu"); }} style={{ "--sp-shine-delay": "3.5s", animationDelay: "410ms", ...styles.hubTile, background: "linear-gradient(135deg, #6B7280, #9CA3AF)" }}>
                 <HelpCircle size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("helpMenuLabel", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
@@ -4744,12 +4900,13 @@ const styles = {
   hubListCard: { border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--card)", padding: 6, display: "flex", flexDirection: "column", gap: 1, marginBottom: 14 },
   myShiftHomeCard: { display: "flex", flexDirection: "column", gap: 8, width: "100%", textAlign: "start", border: "none", borderRadius: "var(--radius)", padding: "14px 16px", marginBottom: 10, background: "var(--my-g)", color: "#fff", cursor: "pointer", boxShadow: "0 6px 16px var(--my-glow-soft)", fontFamily: "inherit", position: "relative" },
   myShiftQuickBtn: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 700, padding: "5px 10px", borderRadius: 999, background: "rgba(255,255,255,0.2)", color: "#fff", cursor: "pointer" },
-  myShiftActionsRow: { display: "flex", gap: 8, marginTop: 4 },
-  myShiftActionBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 4px", borderRadius: 10, border: "none", background: "rgba(255,255,255,0.16)", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 10.5, fontWeight: 700, lineHeight: 1.15, textAlign: "center" },
-  dayChipRow: { display: "flex", gap: 5, marginTop: 2 },
+  myShiftActionsRow: { display: "flex", gap: 6, marginTop: 6 },
+  myShiftActionBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "2px 2px", borderRadius: 10, border: "none", background: "transparent", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 10, fontWeight: 700, lineHeight: 1.15, textAlign: "center" },
+  myShiftActionIconBadge: { width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.94)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.18)", flexShrink: 0 },
+  dayChipRow: { display: "flex", gap: 5, marginTop: 4 },
   dayChipCol: { display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flex: 1, minWidth: 0 },
-  dayChip: { width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#fff", flexShrink: 0 },
-  dayChipToday: { boxShadow: "0 0 0 2px #fff", border: "2px solid #fff" },
+  dayChip: { width: 30, height: 30, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: "#fff", flexShrink: 0, overflow: "hidden", whiteSpace: "nowrap", letterSpacing: "-0.2px", boxSizing: "border-box" },
+  dayChipToday: { boxShadow: "0 0 0 1.5px var(--accent2)" },
   dayChipLabel: { fontSize: 9, fontWeight: 700, opacity: 0.85 },
   homeTopCards: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10, alignItems: "stretch" },
   weekRingCard: { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: "var(--radius)", background: "var(--t-log-g)", color: "#fff", boxShadow: "0 4px 10px rgba(0,0,0,0.14)" },
