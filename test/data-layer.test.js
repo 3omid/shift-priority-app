@@ -125,4 +125,27 @@ describe("data layer: migration + storage (run in order, one shared IndexedDB)",
     expect(merged.find((e) => e.id === id).description).toBe("local edit");
     expect(merged.some((e) => e.id === "new-from-backup")).toBe(true);
   });
+
+  it("backups include the admin Employee-ID directory and restore it", async () => {
+    await Store.saveCrewEmployeeIds({ "40": "1599" });
+    const file = await Backup.buildBackupFile();
+    expect(file.data.crewEmployeeIds).toEqual({ "40": "1599" });
+    await Store.saveCrewEmployeeIds({});
+    const res = await Backup.restoreBackup(file.data, { mode: "replace" });
+    expect(res.ok).toBe(true);
+    await Store.init();
+    expect(Store.loadCrewEmployeeIds()["40"]).toBe("1599");
+  });
+
+  it("restores the pre-migration snapshot (raw legacy data) without crashing", async () => {
+    const snap = (await Backup.listSnapshots()).find((s) => s.reason === "pre-migration");
+    expect(snap).toBeTruthy();
+    await Store.saveProfile({ firstName: "changed", crewNumber: "1" });
+    const res = await Backup.restoreSnapshotById(snap.id);
+    expect(res.ok).toBe(true);
+    await Store.init();
+    expect(Store.loadProfile()).toEqual({ firstName: "Omid", crewNumber: "40" });
+    expect(Store.loadCrewNames()["10"]).toBe("Elahe Alamdar");
+    expect(Store.loadDailyLogEntries().map((e) => e.date).sort()).toEqual(["2026-09-01", "2026-09-02"]);
+  });
 });
