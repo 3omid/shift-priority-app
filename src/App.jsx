@@ -1695,15 +1695,14 @@ function addDaysToDateStr(dateStr, daysForward) {
 }
 
 // ---------- Shift Exchange Request Form (the real TOK Transit paper form) ----------
-// Confirmed reading of the real form: each of its two boxes is ONE driver's
-// OWN complete record — their own name, their own real Employee ID, their
-// own crew's run/Block/Piece/Crew Value on a given date. The form's "for
-// ___ ID#___" phrase just names the OTHER driver in the exchange (rendered
-// by cross-referencing the two boxes in buildSwapFormHtml) — it is not a
-// second data source. So a box only ever needs (crewNum, date):
-//   crewNum -> whose own crew/run this box is about (also identifies the
-//              driver: resolveCrewName/resolveEmployeeId of this same #)
-//   date    -> the calendar date that run falls on
+// deriveExchangeBox() computes ONE driver's own shift record — the shift
+// they are giving away in the exchange: their name, real Employee ID, and
+// their own crew's run/Block/times/hours on the given date. The printed
+// form then combines the two drivers' records field-by-field (see
+// buildSwapFormHtml's box() for the exact mapping). Input is just:
+//   crewNum -> whose shift this is (also identifies the driver:
+//              resolveCrewName/resolveEmployeeId of this same #)
+//   date    -> the calendar date that shift falls on
 // Every displayed field is DERIVED here from the already-loaded Excel data
 // (parsed.crews) plus the admin/profile name & Employee-ID directories —
 // nothing is stored twice or invented. Both entry paths (manual search+pick
@@ -1731,10 +1730,9 @@ function deriveExchangeBox({ crewNum, date }, crews, crewNames, crewEmployeeIds,
     pieceStart: day ? formatExcelTime(day.start) : "",
     pieceEnd: day ? formatExcelTime(day.end) : "",
     hoursLabel: day ? formatDuration(day.hours, lang) : "",
-    // Plain decimal hours (e.g. "8.5") for the printed form's "Crew Value"
-    // field, matching how transit scheduling systems record it — separate
-    // from the friendlier hoursLabel shown in the in-app editor/preview.
-    hoursDecimal: day ? String(Math.round(day.hours * 100) / 100) : "",
+    // Hours for the printed (always-English) form's "Crew Value" field, in
+    // the same hours+minutes style drivers write by hand (e.g. "10h 15m").
+    hoursPrint: day ? formatDuration(day.hours, "en") : "",
     // In-app-only reference (never printed) — lets the person sanity-check
     // the auto-fill against the crew's usual AM/PM shift before printing.
     shiftInternal: crewObj ? `${crewObj.type || ""} ${crewObj.shiftRaw || ""}`.trim() : "",
@@ -2961,27 +2959,23 @@ function ExchangeFormPreview({ lang, derived1, derived2 }) {
       <div style={{ borderBottom: "1.5px solid var(--border)", minHeight: 18, fontSize: 13, paddingBottom: 2 }}>{value || " "}</div>
     </div>
   );
-  // A box's DRIVER identity (name/ID/signature) is always the person
-  // performing the shift — but the shift being described (date, run #,
-  // block, piece times, crew value) is the ORIGINAL owner of that shift,
-  // i.e. the OTHER driver being covered for. So `self` supplies identity and
-  // `partner` supplies every shift/date field — never the other way around.
-  // See buildSwapFormHtml's box() for the exact same mapping in the printed
-  // form.
+  // Same field-by-field mapping as the printed form (see buildSwapFormHtml's
+  // box()), per the user's hand-annotated form:
+  //   self    -> name, ID, Piece 1 (own shift + block), Crew value, signature
+  //   partner -> date worked, "for" name/ID, Run #, Piece 2 (their shift + block)
+  const pieceText = (d) => (d.pieceStart || d.pieceEnd ? `${d.pieceStart}–${d.pieceEnd}${d.block ? " · " + d.block : ""}` : "");
   const section = (label, self, partner) => (
     <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px", flex: 1, minWidth: 220 }}>
       <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 8 }}>{label}</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 12px" }}>
         {row(t("xchgDriverLabel", lang), self.driverName)}
         {row(t("employeeIdLabel", lang), self.employeeId)}
-        {row(t("xchgForLabel", lang), partner.driverName)}
-        {row(t("crewNumberLabel", lang), partner.crewNum)}
         {row(t("xchgDateLabel", lang), partner.date ? `${partner.date}${partner.weekdayLabel ? " · " + partner.weekdayLabel : ""}` : "")}
+        {row(t("xchgForLabel", lang), partner.driverName ? `${partner.driverName}${partner.employeeId ? " · ID " + partner.employeeId : ""}` : "")}
         {row(t("xchgRunLabel", lang), partner.code)}
-        {row(t("xchgBlockLabel", lang), partner.block)}
-        {row(t("xchgPiece1Label", lang), partner.pieceStart || partner.pieceEnd ? `${partner.pieceStart}–${partner.pieceEnd}` : "")}
-        {row(t("xchgPiece2Label", lang), "")}
-        {row(t("xchgCrewValueLabel", lang), partner.hoursLabel)}
+        {row(t("xchgCrewValueLabel", lang), self.hoursLabel)}
+        {row(t("xchgPiece1Label", lang), pieceText(self))}
+        {row(t("xchgPiece2Label", lang), pieceText(partner))}
       </div>
       {row(t("xchgEmployeeSignLabel", lang), "")}
     </div>
@@ -3863,19 +3857,18 @@ function splitDateParts(dateStr) {
 // header, same wording, same two driver boxes and the same "Operations
 // Supervisor Use Only" box below, in the same order, on one page. Nothing
 // is added, removed, reordered or redesigned; only the existing blanks are
-// filled. A box's DRIVER identity (name/ID, Signature) is the person
-// PERFORMING the shift; the shift being described (date, run #, block,
-// piece times, crew value) belongs to the ORIGINAL owner of that shift —
-// i.e. the OTHER driver they're covering for. So `box(num, self, partner)`
-// reads name/ID/signature from `self`, and date/run/block/piece/crew-value
-// from `partner` — never the other way around (see the matching mapping in
-// ExchangeFormPreview's section()). Piece 2 and its Block are always left
-// genuinely blank (the current schedule data has no split-shift/Piece-2
-// values to put there — never "N/A" typed in on the person's behalf; the
-// form's own instructions already tell the driver to write that in by
-// hand). The Supervisor box's Yes/No boxes, reason, name, ID and both
-// signature lines are always left blank/unchecked — an approval only ever
-// happens on paper, by a person, never fabricated here.
+// filled. Field mapping for `box(num, self, partner)` — taken exactly from
+// the user's hand-annotated copy of the real form (Driver 1 = self in box 1,
+// Driver 2 = self in box 2; box 2 is the mirror of box 1):
+//   I [self name] ID# [self ID] will work on [date self works = partner's
+//   original shift date] for [partner name] ID# [partner ID]. It is run #
+//   [partner's run]. Piece 1 = SELF's own shift (from/to/block). Piece 2 =
+//   PARTNER's shift (from/to/block). Crew value = SELF's hours.
+//   Signature N = self (left blank, signed by hand).
+// So the two boxes list the same two shifts, in opposite order. The
+// Supervisor box's Yes/No boxes, reason, name, ID and both signature lines
+// are always left blank/unchecked — an approval only ever happens on paper,
+// by a person, never fabricated here.
 function buildSwapFormHtml({ box1, box2 }, lang, timestamp) {
   const submitted = splitDateParts(localDateStr());
   // An inline fill-in blank: a bottom-border line with the value centered
@@ -3889,10 +3882,10 @@ function buildSwapFormHtml({ box1, box2 }, lang, timestamp) {
         I ${blank(self.driverName, 175)} ID #${blank(self.employeeId, 55)} will work on ${blank(p.m, 26)} ${blank(p.d, 22)} ${blank(p.y, 48)} for ${blank(partner.driverName, 175)}
       </p>
       <p>
-        ID #${blank(partner.employeeId, 55)}. It is run #${blank(partner.code, 55)}. Piece 1 is from ${blank(partner.pieceStart, 55)} to ${blank(partner.pieceEnd, 55)} on block ${blank(partner.block, 110)}. Piece 2 is from ${blank("", 46)} to ${blank("", 46)}
+        ID #${blank(partner.employeeId, 55)}. It is run #${blank(partner.code, 55)}. Piece 1 is from ${blank(self.pieceStart, 55)} to ${blank(self.pieceEnd, 55)} on block ${blank(self.block, 110)}. Piece 2 is from ${blank(partner.pieceStart, 46)} to ${blank(partner.pieceEnd, 46)}
       </p>
       <p>
-        on block ${blank("", 110)}. &nbsp; Crew value ${blank(partner.hoursDecimal, 50)}. &nbsp; Signature ${num} ${blank("", 180)}
+        on block ${blank(partner.block, 110)}. &nbsp; Crew value ${blank(self.hoursPrint, 60)}. &nbsp; Signature ${num} ${blank("", 180)}
       </p>
     </div>`;
   };
