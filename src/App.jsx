@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import pkg from "../package.json";
 import { exportBackup, validateBackupFile, restoreBackup, daysSinceLastExport, listSnapshots, restoreSnapshotById } from "./data/backup.js";
@@ -650,6 +650,8 @@ const STRINGS = {
   xchgTrapezeLabel: { fa: "ثبت‌شده در Trapeze توسط", en: "Entered in Trapeze by", hi: "Trapeze में दर्ज किया गया" },
   xchgDispatchLabel: { fa: "ثبت‌شده در برگهٔ دیسپاچ توسط", en: "Entered on Dispatch Sheet by", hi: "डिस्पैच शीट पर दर्ज किया गया" },
   xchgPrintBtn: { fa: "پرینت", en: "Print", hi: "प्रिंट" },
+  xchgPrintIosHint: { fa: "روی آیفون، «پرینت» صفحه‌ی اشتراک‌گذاری رو باز می‌کنه — اونجا گزینه‌ی Print رو بزن.", en: "On iPhone, Print opens the share sheet — choose Print there.", hi: "iPhone पर, प्रिंट शेयर शीट खोलता है — वहाँ Print चुनें।" },
+  printIosHint: { fa: "اگه روی آیفون دکمه‌ی پرینت کار نکرد: دکمه‌ی اشتراک‌گذاری (⬆) رو بزن و Print رو انتخاب کن.", en: "If Print does nothing on iPhone: tap the Share button (⬆) and choose Print.", hi: "अगर iPhone पर प्रिंट काम न करे: शेयर बटन (⬆) दबाएँ और Print चुनें।" },
   swapFillThisDay: { fa: "فرم با همین روز", en: "Form with this day", hi: "इसी दिन के साथ फ़ॉर्म" },
   swapFillThisDayShort: { fa: "فرم", en: "Form", hi: "फ़ॉर्म" },
   swapMatch: { fa: "تطابق با برنامهٔ تو", en: "match with your schedule", hi: "आपके शेड्यूल से मेल" },
@@ -805,10 +807,12 @@ const WEEKDAY_LABELS = {
 
 // ---------- Theme palettes ----------
 
-// Seven complete palettes. Each theme sets the page surfaces (light + dark),
-// the primary/secondary colours, and every coloured section of the app:
-// hero banner + priority flow, My Shift, the six hub tiles (and their
-// modals), the clock, priority score colours, and the PDF/Excel exports.
+// Twelve complete palettes. Every theme gives each block its own cheerful
+// colour (never one hue for everything) and sets the page surfaces (light +
+// dark), the primary/secondary colours, and every coloured section of the
+// app: hero banner + priority flow, My Shift, the hub tiles incl. Help (and
+// their modals), the clock, priority score colours, and the PDF/Excel
+// exports. Tile colours keep white text readable (≥3.3:1 at the dark end).
 const THEME_PALETTES = {
   "universal": {
     "name": {
@@ -871,7 +875,11 @@ const THEME_PALETTES = {
       ],
       "settings": [
         "#C9700F",
-        "#E8A020"
+        "#E39916"
+      ],
+      "help": [
+        "#0E7FA8",
+        "#35AFD6"
       ]
     },
     "clock": [
@@ -921,48 +929,53 @@ const THEME_PALETTES = {
       "radius": "10px"
     },
     "hero": [
-      "#E11D48",
-      "#F97316"
+      "#F25552",
+      "#FF8324"
     ],
     "flow": [
-      "#C2410C",
-      "#EA6A1F"
+      "#D9434A",
+      "#EE6C4D"
     ],
     "my": [
-      "#D9480F",
-      "#EA8A0C"
+      "#E4572E",
+      "#F2953D"
     ],
     "tiles": {
       "compare": [
-        "#BE185D",
-        "#F43F5E"
+        "#8E44AD",
+        "#C06FD8"
       ],
       "browse": [
-        "#C2410C",
-        "#FB923C"
+        "#D1495B",
+        "#EF7A85"
       ],
       "swap": [
-        "#B91C1C",
-        "#F97316"
+        "#D4741C",
+        "#F48425"
       ],
       "profile": [
-        "#DB2777",
-        "#FB7185"
+        "#C2185B",
+        "#EC6A9C"
       ],
       "log": [
-        "#9A3412",
-        "#EA580C"
+        "#6A4C93",
+        "#9D7CC7"
       ],
       "settings": [
-        "#B45309",
-        "#E08A0B"
+        "#B5651D",
+        "#DE9151"
+      ],
+      "help": [
+        "#3D5A80",
+        "#6C8EBF"
       ]
     },
     "clock": [
-      "#E11D48",
-      "#F97316",
-      "#F59E0B",
-      "#DB2777"
+      "#F25F5C",
+      "#FF7A24",
+      "#E0447F",
+      "#B05CC8",
+      "#6A4C93"
     ],
     "score": {
       "light": [
@@ -1004,48 +1017,53 @@ const THEME_PALETTES = {
       "radius": "10px"
     },
     "hero": [
-      "#0E7490",
-      "#06B6D4"
+      "#0077B6",
+      "#00B4D8"
     ],
     "flow": [
-      "#0E7490",
-      "#0E93B5"
-    ],
-    "my": [
       "#0369A1",
       "#0EA5E9"
     ],
+    "my": [
+      "#0F9D8A",
+      "#24B3A7"
+    ],
     "tiles": {
       "compare": [
-        "#1D4ED8",
-        "#3B82F6"
+        "#4361EE",
+        "#6F8BFF"
       ],
       "browse": [
-        "#0F766E",
-        "#14B8A6"
+        "#0F9D8A",
+        "#24B89E"
       ],
       "swap": [
-        "#0369A1",
-        "#0EA5E9"
+        "#F05D32",
+        "#FF7B53"
       ],
       "profile": [
-        "#155E75",
-        "#0891B2"
+        "#7B61FF",
+        "#A594FF"
       ],
       "log": [
-        "#3730A3",
-        "#6366F1"
+        "#0077B6",
+        "#48A9E6"
       ],
       "settings": [
-        "#115E59",
-        "#0D9488"
+        "#D57405",
+        "#E98B0A"
+      ],
+      "help": [
+        "#5B7083",
+        "#8AA1B5"
       ]
     },
     "clock": [
-      "#1D4ED8",
-      "#0EA5E9",
-      "#06B6D4",
-      "#14B8A6"
+      "#0077B6",
+      "#00ACCE",
+      "#23AFA4",
+      "#F0714B",
+      "#7B61FF"
     ],
     "score": {
       "light": [
@@ -1087,48 +1105,53 @@ const THEME_PALETTES = {
       "radius": "10px"
     },
     "hero": [
-      "#166534",
-      "#65A30D"
+      "#2D6A4F",
+      "#52B788"
     ],
     "flow": [
-      "#2F7D32",
-      "#3E9B45"
+      "#1B4332",
+      "#40916C"
     ],
     "my": [
-      "#15803D",
-      "#65A30D"
+      "#40916C",
+      "#5CC08B"
     ],
     "tiles": {
       "compare": [
-        "#3F6212",
-        "#65A30D"
+        "#7B4B94",
+        "#A77DC2"
       ],
       "browse": [
-        "#047857",
-        "#10B981"
+        "#2D6A4F",
+        "#52B788"
       ],
       "swap": [
-        "#854D0E",
-        "#CA8A04"
+        "#BC6C25",
+        "#DDA15E"
       ],
       "profile": [
-        "#166534",
-        "#22C55E"
+        "#9C4A5A",
+        "#C97B89"
       ],
       "log": [
-        "#115E59",
-        "#0D9488"
+        "#386FA4",
+        "#6A9FD4"
       ],
       "settings": [
-        "#4D7C0F",
-        "#6B9A1A"
+        "#6A8532",
+        "#97B356"
+      ],
+      "help": [
+        "#5E6C5B",
+        "#8A9A86"
       ]
     },
     "clock": [
-      "#166534",
-      "#65A30D",
-      "#CA8A04",
-      "#0D9488"
+      "#2D6A4F",
+      "#48B281",
+      "#DD8F31",
+      "#BC6C25",
+      "#7B4B94"
     ],
     "score": {
       "light": [
@@ -1174,44 +1197,49 @@ const THEME_PALETTES = {
       "#8B5CF6"
     ],
     "flow": [
-      "#6D28D9",
-      "#8B5CF6"
+      "#4C1D95",
+      "#7C3AED"
     ],
     "my": [
       "#4338CA",
-      "#8B5CF6"
+      "#818CF8"
     ],
     "tiles": {
       "compare": [
-        "#6D28D9",
+        "#7C3AED",
         "#A78BFA"
       ],
       "browse": [
-        "#4338CA",
-        "#818CF8"
+        "#0F766E",
+        "#2DD4BF"
       ],
       "swap": [
-        "#7E22CE",
-        "#C084FC"
+        "#B45309",
+        "#E0A030"
       ],
       "profile": [
-        "#9D174D",
-        "#EC4899"
+        "#BE185D",
+        "#F472B6"
       ],
       "log": [
-        "#3730A3",
-        "#6366F1"
+        "#1D4ED8",
+        "#60A5FA"
       ],
       "settings": [
-        "#86198F",
-        "#D946EF"
+        "#9333EA",
+        "#C084FC"
+      ],
+      "help": [
+        "#475569",
+        "#8492A6"
       ]
     },
     "clock": [
-      "#4338CA",
-      "#7C3AED",
-      "#C026D3",
-      "#EC4899"
+      "#5B21B6",
+      "#8B5CF6",
+      "#EC4899",
+      "#DE8C04",
+      "#12B09E"
     ],
     "score": {
       "light": [
@@ -1253,48 +1281,53 @@ const THEME_PALETTES = {
       "radius": "10px"
     },
     "hero": [
-      "#DB2777",
-      "#F472B6"
+      "#E75A7C",
+      "#F77E99"
     ],
     "flow": [
-      "#BE185D",
-      "#DB2777"
+      "#C43D63",
+      "#E75A7C"
     ],
     "my": [
-      "#BE123C",
-      "#FB7185"
+      "#D6457A",
+      "#F08DB0"
     ],
     "tiles": {
       "compare": [
-        "#A21CAF",
-        "#D946EF"
+        "#9D6BD6",
+        "#C09AF0"
       ],
       "browse": [
-        "#BE185D",
-        "#F472B6"
+        "#279C7E",
+        "#23B988"
       ],
       "swap": [
-        "#E11D48",
-        "#FB7185"
+        "#EE5F32",
+        "#F88257"
       ],
       "profile": [
-        "#9D174D",
-        "#DB2777"
+        "#E0447F",
+        "#F48FB1"
       ],
       "log": [
-        "#7E22CE",
-        "#C084FC"
+        "#578AEB",
+        "#75A3F5"
       ],
       "settings": [
-        "#C2410C",
-        "#FB923C"
+        "#C9608E",
+        "#E593B6"
+      ],
+      "help": [
+        "#8C7A9B",
+        "#B5A6C2"
       ]
     },
     "clock": [
-      "#DB2777",
-      "#F472B6",
-      "#C084FC",
-      "#FB7185"
+      "#E75A7C",
+      "#F77491",
+      "#B78BF0",
+      "#22B585",
+      "#F87A4D"
     ],
     "score": {
       "light": [
@@ -1321,7 +1354,7 @@ const THEME_PALETTES = {
       "border": "#E4E4E7",
       "text": "#18181B",
       "muted": "#63636B",
-      "accent": "#3F3F46",
+      "accent": "#4F46E5",
       "accent2": "#2563EB",
       "radius": "10px"
     },
@@ -1331,53 +1364,58 @@ const THEME_PALETTES = {
       "border": "#2E2E33",
       "text": "#F4F4F5",
       "muted": "#A1A1AA",
-      "accent": "#71717A",
+      "accent": "#818CF8",
       "accent2": "#60A5FA",
       "radius": "10px"
     },
     "hero": [
-      "#27272A",
-      "#52525B"
+      "#4F46E5",
+      "#0EA5E9"
     ],
     "flow": [
-      "#2563EB",
-      "#3B82F6"
+      "#3730A3",
+      "#4F46E5"
     ],
     "my": [
-      "#1D4ED8",
-      "#3B82F6"
+      "#2563EB",
+      "#60A5FA"
     ],
     "tiles": {
       "compare": [
-        "#334155",
-        "#64748B"
+        "#6366F1",
+        "#818CF8"
       ],
       "browse": [
-        "#3F3F46",
-        "#71717A"
+        "#0AA16F",
+        "#21B780"
       ],
       "swap": [
-        "#1E3A8A",
-        "#3B82F6"
+        "#EC6200",
+        "#FF7D15"
       ],
       "profile": [
-        "#44403C",
-        "#78716C"
+        "#EC4899",
+        "#F472B6"
       ],
       "log": [
-        "#374151",
-        "#6B7280"
+        "#0996D5",
+        "#00A9F2"
       ],
       "settings": [
-        "#52525B",
-        "#71717A"
+        "#8B5CF6",
+        "#A78BFA"
+      ],
+      "help": [
+        "#64748B",
+        "#94A3B8"
       ]
     },
     "clock": [
-      "#27272A",
-      "#52525B",
-      "#2563EB",
-      "#71717A"
+      "#6366F1",
+      "#EC4899",
+      "#F97316",
+      "#0FB57E",
+      "#0EA5E9"
     ],
     "score": {
       "light": [
@@ -1389,6 +1427,446 @@ const THEME_PALETTES = {
         "#FACC15",
         "#4ADE80",
         "#8A8A93"
+      ]
+    }
+  },
+  "candy": {
+    "name": {
+      "fa": "آبنباتی",
+      "en": "Candy",
+      "hi": "कैंडी"
+    },
+    "light": {
+      "bg": "#FFF7FB",
+      "card": "#FFFFFF",
+      "border": "#F4DCEB",
+      "text": "#2A1E2E",
+      "muted": "#86708C",
+      "accent": "#A041F7",
+      "accent2": "#FF6FA8",
+      "radius": "14px"
+    },
+    "dark": {
+      "bg": "#171220",
+      "card": "#221B2D",
+      "border": "#3A2F48",
+      "text": "#F8EEFB",
+      "muted": "#C3AFCB",
+      "accent": "#C084FC",
+      "accent2": "#FF8FBF",
+      "radius": "14px"
+    },
+    "hero": [
+      "#FF3D8C",
+      "#FC8B00"
+    ],
+    "flow": [
+      "#E85897",
+      "#FF71A6"
+    ],
+    "my": [
+      "#8B7CF6",
+      "#A495FF"
+    ],
+    "tiles": {
+      "compare": [
+        "#8B76FB",
+        "#A696FF"
+      ],
+      "browse": [
+        "#299E85",
+        "#18B599"
+      ],
+      "swap": [
+        "#FF4E1A",
+        "#FF7F55"
+      ],
+      "profile": [
+        "#F04E96",
+        "#FF71AD"
+      ],
+      "log": [
+        "#1E91E6",
+        "#44A8F5"
+      ],
+      "settings": [
+        "#C07C13",
+        "#E09000"
+      ],
+      "help": [
+        "#9183B2",
+        "#AC9BD1"
+      ]
+    },
+    "clock": [
+      "#FF6AA7",
+      "#ED8200",
+      "#DB8D00",
+      "#17B196",
+      "#A090FF"
+    ],
+    "score": {
+      "light": [
+        "#A16207",
+        "#15803D",
+        "#7B8494"
+      ],
+      "dark": [
+        "#FACC15",
+        "#4ADE80",
+        "#7D8796"
+      ]
+    }
+  },
+  "tropical": {
+    "name": {
+      "fa": "استوایی",
+      "en": "Tropical",
+      "hi": "उष्णकटिबंधीय"
+    },
+    "light": {
+      "bg": "#F1FBF8",
+      "card": "#FFFFFF",
+      "border": "#CFEDE4",
+      "text": "#12302A",
+      "muted": "#557A71",
+      "accent": "#098572",
+      "accent2": "#FF6B6B",
+      "radius": "12px"
+    },
+    "dark": {
+      "bg": "#0A1917",
+      "card": "#112522",
+      "border": "#1F3D38",
+      "text": "#E6F7F3",
+      "muted": "#93BDB3",
+      "accent": "#2EC4B6",
+      "accent2": "#FF8A8A",
+      "radius": "12px"
+    },
+    "hero": [
+      "#FF4848",
+      "#F69100"
+    ],
+    "flow": [
+      "#E84A5F",
+      "#FF847C"
+    ],
+    "my": [
+      "#049F77",
+      "#1AB972"
+    ],
+    "tiles": {
+      "compare": [
+        "#7B5CE6",
+        "#A78BFA"
+      ],
+      "browse": [
+        "#049F77",
+        "#1AB972"
+      ],
+      "swap": [
+        "#EC5D00",
+        "#FF8216"
+      ],
+      "profile": [
+        "#FF4082",
+        "#FF76A6"
+      ],
+      "log": [
+        "#118AB2",
+        "#29BCE6"
+      ],
+      "settings": [
+        "#BF7C00",
+        "#D59600"
+      ],
+      "help": [
+        "#4E7D78",
+        "#7FB0A9"
+      ]
+    },
+    "clock": [
+      "#FF6B6B",
+      "#E78800",
+      "#19B56F",
+      "#118AB2",
+      "#7B5CE6"
+    ],
+    "score": {
+      "light": [
+        "#A16207",
+        "#15803D",
+        "#7B8494"
+      ],
+      "dark": [
+        "#FACC15",
+        "#4ADE80",
+        "#7D8796"
+      ]
+    }
+  },
+  "aurora": {
+    "name": {
+      "fa": "شفق قطبی",
+      "en": "Aurora",
+      "hi": "ध्रुवीय ज्योति"
+    },
+    "light": {
+      "bg": "#F2F4FD",
+      "card": "#FFFFFF",
+      "border": "#D9DEF5",
+      "text": "#171B35",
+      "muted": "#62698F",
+      "accent": "#4361EE",
+      "accent2": "#F72585",
+      "radius": "12px"
+    },
+    "dark": {
+      "bg": "#0B0D1C",
+      "card": "#141730",
+      "border": "#272B4D",
+      "text": "#ECEEFF",
+      "muted": "#A0A6D0",
+      "accent": "#6C8BFF",
+      "accent2": "#FF5CA8",
+      "radius": "12px"
+    },
+    "hero": [
+      "#3A0CA3",
+      "#4CC9F0"
+    ],
+    "flow": [
+      "#3A0CA3",
+      "#7209B7"
+    ],
+    "my": [
+      "#0B8FAC",
+      "#0DBAEB"
+    ],
+    "tiles": {
+      "compare": [
+        "#7209B7",
+        "#B15EFF"
+      ],
+      "browse": [
+        "#049F77",
+        "#1FB87F"
+      ],
+      "swap": [
+        "#F72585",
+        "#FF77B4"
+      ],
+      "profile": [
+        "#4361EE",
+        "#7C95FF"
+      ],
+      "log": [
+        "#3A0CA3",
+        "#6A3FD1"
+      ],
+      "settings": [
+        "#0B8FAC",
+        "#19BBDC"
+      ],
+      "help": [
+        "#4A4E69",
+        "#7D8199"
+      ]
+    },
+    "clock": [
+      "#3A0CA3",
+      "#7209B7",
+      "#F72585",
+      "#4361EE",
+      "#08AAD7"
+    ],
+    "score": {
+      "light": [
+        "#A16207",
+        "#15803D",
+        "#7B8494"
+      ],
+      "dark": [
+        "#FACC15",
+        "#4ADE80",
+        "#7D8796"
+      ]
+    }
+  },
+  "spring": {
+    "name": {
+      "fa": "بهاری",
+      "en": "Spring",
+      "hi": "वसंत"
+    },
+    "light": {
+      "bg": "#F6FAF1",
+      "card": "#FFFFFF",
+      "border": "#DDEBD0",
+      "text": "#1D2A17",
+      "muted": "#667A5C",
+      "accent": "#298364",
+      "accent2": "#F3722C",
+      "radius": "12px"
+    },
+    "dark": {
+      "bg": "#10160C",
+      "card": "#1A2214",
+      "border": "#2F3D25",
+      "text": "#EEF6E8",
+      "muted": "#A9BE9C",
+      "accent": "#5CC6A2",
+      "accent2": "#F9A26C",
+      "radius": "12px"
+    },
+    "hero": [
+      "#399B7C",
+      "#78B64D"
+    ],
+    "flow": [
+      "#2F8A6E",
+      "#43AA8B"
+    ],
+    "my": [
+      "#EF5E09",
+      "#F48400"
+    ],
+    "tiles": {
+      "compare": [
+        "#577590",
+        "#86A6C0"
+      ],
+      "browse": [
+        "#399B7C",
+        "#2FB986"
+      ],
+      "swap": [
+        "#EF5E09",
+        "#F38600"
+      ],
+      "profile": [
+        "#E55C96",
+        "#F479AB"
+      ],
+      "log": [
+        "#4D7EC8",
+        "#86ACE3"
+      ],
+      "settings": [
+        "#6A994E",
+        "#83AE29"
+      ],
+      "help": [
+        "#7D8DA9",
+        "#93A3C0"
+      ]
+    },
+    "clock": [
+      "#43AA8B",
+      "#71AF45",
+      "#D19400",
+      "#EE8300",
+      "#E56B9F"
+    ],
+    "score": {
+      "light": [
+        "#A16207",
+        "#15803D",
+        "#7B8494"
+      ],
+      "dark": [
+        "#FACC15",
+        "#4ADE80",
+        "#7D8796"
+      ]
+    }
+  },
+  "berry": {
+    "name": {
+      "fa": "میوه‌ای",
+      "en": "Berry",
+      "hi": "बेरी"
+    },
+    "light": {
+      "bg": "#FBF3F8",
+      "card": "#FFFFFF",
+      "border": "#EED6E4",
+      "text": "#2B1426",
+      "muted": "#80617A",
+      "accent": "#A4286A",
+      "accent2": "#5B5BD6",
+      "radius": "12px"
+    },
+    "dark": {
+      "bg": "#170C14",
+      "card": "#23141F",
+      "border": "#3E2537",
+      "text": "#FBEAF4",
+      "muted": "#CBA3BD",
+      "accent": "#D0529A",
+      "accent2": "#8C8CF0",
+      "radius": "12px"
+    },
+    "hero": [
+      "#8E2DE2",
+      "#E94057"
+    ],
+    "flow": [
+      "#7B1FA2",
+      "#C2185B"
+    ],
+    "my": [
+      "#C2185B",
+      "#EC6A9C"
+    ],
+    "tiles": {
+      "compare": [
+        "#6A1B9A",
+        "#9C4DCC"
+      ],
+      "browse": [
+        "#D81B60",
+        "#F06292"
+      ],
+      "swap": [
+        "#E65100",
+        "#FB8C00"
+      ],
+      "profile": [
+        "#AD1457",
+        "#E35D98"
+      ],
+      "log": [
+        "#3949AB",
+        "#7986CB"
+      ],
+      "settings": [
+        "#00897B",
+        "#4DB6AC"
+      ],
+      "help": [
+        "#6D4C63",
+        "#9C7C93"
+      ]
+    },
+    "clock": [
+      "#8E2DE2",
+      "#C2185B",
+      "#E94057",
+      "#EC8300",
+      "#3949AB"
+    ],
+    "score": {
+      "light": [
+        "#A16207",
+        "#15803D",
+        "#7B8494"
+      ],
+      "dark": [
+        "#FACC15",
+        "#4ADE80",
+        "#7D8796"
       ]
     }
   }
@@ -1584,9 +2062,32 @@ function formatJalaliDate(date) {
   return `${weekday} ${toFaDigits(jd)} ${FA_MONTHS[jm - 1]} ${toFaDigits(jy)}`;
 }
 
-function AnalogClock({ hourAngle, minuteAngle, secondAngle, size = 64 }) {
+// The hands sweep smoothly (like a real quartz-sweep clock) instead of
+// ticking once a second: a requestAnimationFrame loop turns them from the
+// current time including milliseconds. The hands are moved through refs, so
+// this never re-renders the rest of the page 60 times a second. With
+// "reduce motion" switched on, it falls back to one tick per second.
+function AnalogClock({ size = 64 }) {
   const c = size / 2;
   const rad = (deg) => (deg * Math.PI) / 180;
+  const hourRef = useRef(null), minuteRef = useRef(null), secondRef = useRef(null);
+  useEffect(() => {
+    let raf = 0, timer = 0;
+    const draw = () => {
+      const now = new Date();
+      const s = now.getSeconds() + (PREFERS_REDUCED_MOTION ? 0 : now.getMilliseconds() / 1000);
+      const m = now.getMinutes() + s / 60;
+      const h = (now.getHours() % 12) + m / 60;
+      const turn = (el, deg) => el && el.setAttribute("transform", `rotate(${deg.toFixed(2)} ${c} ${c})`);
+      turn(hourRef.current, h * 30);
+      turn(minuteRef.current, m * 6);
+      turn(secondRef.current, s * 6);
+    };
+    const loop = () => { draw(); raf = requestAnimationFrame(loop); };
+    if (PREFERS_REDUCED_MOTION) { draw(); timer = setInterval(draw, 1000); }
+    else loop();
+    return () => { cancelAnimationFrame(raf); clearInterval(timer); };
+  }, [c]);
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
       <circle cx={c} cy={c} r={c - 2} fill="var(--card)" stroke="var(--border)" strokeWidth="2" />
@@ -1596,9 +2097,9 @@ function AnalogClock({ hourAngle, minuteAngle, secondAngle, size = 64 }) {
         const x2 = c + Math.sin(a) * (c - 3), y2 = c - Math.cos(a) * (c - 3);
         return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--border)" strokeWidth="1.5" />;
       })}
-      <line x1={c} y1={c} x2={c + Math.sin(rad(hourAngle)) * (c * 0.45)} y2={c - Math.cos(rad(hourAngle)) * (c * 0.45)} stroke="var(--text)" strokeWidth="3" strokeLinecap="round" />
-      <line x1={c} y1={c} x2={c + Math.sin(rad(minuteAngle)) * (c * 0.68)} y2={c - Math.cos(rad(minuteAngle)) * (c * 0.68)} stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1={c} y1={c} x2={c + Math.sin(rad(secondAngle)) * (c * 0.75)} y2={c - Math.cos(rad(secondAngle)) * (c * 0.75)} stroke="var(--accent2)" strokeWidth="1" strokeLinecap="round" />
+      <line ref={hourRef} x1={c} y1={c} x2={c} y2={c - c * 0.45} stroke="var(--text)" strokeWidth="3" strokeLinecap="round" />
+      <line ref={minuteRef} x1={c} y1={c} x2={c} y2={c - c * 0.68} stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" />
+      <line ref={secondRef} x1={c} y1={c + c * 0.14} x2={c} y2={c - c * 0.75} stroke="var(--accent2)" strokeWidth="1.2" strokeLinecap="round" />
       <circle cx={c} cy={c} r="2.5" fill="var(--text)" />
     </svg>
   );
@@ -1618,21 +2119,16 @@ function DateTimeWidget({ lang, compact }) {
     : enDate;
   const digital = now.toLocaleTimeString("en-GB");
 
-  const hours = now.getHours() % 12;
-  const minutes = now.getMinutes();
-  const seconds = now.getSeconds();
-  const hourAngle = (hours + minutes / 60) * 30;
-  const minuteAngle = (minutes + seconds / 60) * 6;
-  const secondAngle = seconds * 6;
 
   return (
-    <div style={{ ...styles.dtWidget, ...(compact ? { marginTop: 0, width: "100%", boxSizing: "border-box" } : {}), background: "var(--clock-g)", border: "none", boxShadow: "0 6px 14px rgba(0,0,0,0.18)", "--card": "rgba(255,255,255,0.16)", "--border": "rgba(255,255,255,0.55)", "--text": "#fff", "--muted": "rgba(255,255,255,0.85)", "--accent": "#fff", "--accent2": "#FFE9A8" }}>
-      <AnalogClock hourAngle={hourAngle} minuteAngle={minuteAngle} secondAngle={secondAngle} />
+    <div className="sp-shine" style={{ "--sp-shine-delay": "0.6s", ...styles.dtWidget, ...(compact ? { marginTop: 0, width: "100%", boxSizing: "border-box" } : {}), background: "var(--clock-g)", border: "none", boxShadow: "0 6px 14px rgba(0,0,0,0.18)", "--card": "rgba(255,255,255,0.16)", "--border": "rgba(255,255,255,0.55)", "--text": "#fff", "--muted": "rgba(255,255,255,0.85)", "--accent": "#fff", "--accent2": "#FFE9A8" }}>
+      <AnalogClock />
       <div style={styles.dtTextCol}>
         <div style={styles.dtDigital}>{digital}</div>
         <div style={styles.dtDateLine}>{primaryDate}</div>
         {lang !== "en" && <div style={styles.dtDateLine}>{enDate}</div>}
       </div>
+      <span className="sp-shine-layer" aria-hidden="true" />
     </div>
   );
 }
@@ -3181,7 +3677,14 @@ function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefi
     return () => { cancelled = true; clearTimeout(timer); };
   }, [formHtml]);
 
-  const doPrint = () => printSwapForm({ box1: final1, box2: final2, submittedDate }, lang);
+  const ios = isIOSDevice();
+  const doPrint = () => {
+    if (ios && files) {
+      shareOrDownloadFile(files.pdf, exchangeFileName(final1, final2, "pdf"), "Shift Exchange Request Form");
+      return;
+    }
+    printSwapForm({ box1: final1, box2: final2, submittedDate }, lang);
+  };
   const doShare = (kind) => {
     if (!files) return;
     const blob = kind === "pdf" ? files.pdf : files.png;
@@ -3229,6 +3732,7 @@ function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefi
           <Printer size={15} /> {t("xchgPrintBtn", lang)}
         </button>
       </div>
+      {ios && <p style={{ ...styles.hint, marginTop: 6 }}>{t("xchgPrintIosHint", lang)}</p>}
       {exportState === "preparing" && <p style={{ ...styles.hint, marginTop: 6 }}>{t("xchgPreparing", lang)}</p>}
       {exportState === "error" && <div style={styles.errorBox}><AlertCircle size={15} /><span>{t("xchgExportFail", lang)}</span></div>}
 
@@ -3941,7 +4445,23 @@ function buildResultsHtml(results, priorityList, lang, timestamp) {
 // A direct window.open(url, "_blank") is a real link-like navigation the
 // browser is far less likely to block. Returns false if the popup was
 // blocked so the caller can tell the person what to do.
+// iPhone / iPad (iPadOS reports itself as a Mac, but with touch). In a web
+// app added to the iPhone home screen, window.print() does nothing, so the
+// Print buttons there need another route.
+function isIOSDevice() {
+  if (typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 function openPrintableReport(html, lang) {
+  // On iPhone the printable page's own Print button may do nothing, so the
+  // page also shows how to print from the Share button.
+  if (isIOSDevice()) {
+    const esc = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const hint = `<div class="ios-print-hint" style="flex-basis:100%;text-align:end;font-size:12.5px;color:#555;margin-top:2px;">${esc(t("printIosHint", lang))}</div>`;
+    html = html.replace(/(<div class="toolbar"[^>]*>)/, `$1${hint}`);
+    html = html.replace("</head>", "<style>.toolbar{flex-wrap:wrap}@media print{.ios-print-hint{display:none!important}}</style></head>");
+  }
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
   const win = window.open(url, "_blank");
@@ -5109,7 +5629,7 @@ export default function ShiftPriorityRanker() {
             <div style={{ ...styles.homeTopCards, gridTemplateColumns: weekProgress ? "1fr 1fr" : "1fr" }}>
               <DateTimeWidget lang={lang} compact />
               {weekProgress && (
-                <div style={styles.weekRingCard}>
+                <div className="sp-shine" style={{ "--sp-shine-delay": "1.2s", ...styles.weekRingCard }}>
                   <div style={{ position: "relative", width: 48, height: 48 }}>
                     <WeekRing percent={weekProgress.percent} size={48} stroke={5} />
                     <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff" }}>
@@ -5122,6 +5642,7 @@ export default function ShiftPriorityRanker() {
                       {weekProgress.loggedHours.toFixed(1)}/{weekProgress.scheduledHours.toFixed(1)} {t("hoursWord", lang)}
                     </bdi>
                   </div>
+                  <span className="sp-shine-layer" aria-hidden="true" />
                 </div>
               )}
             </div>
@@ -5147,7 +5668,7 @@ export default function ShiftPriorityRanker() {
                 <span style={styles.hubTileLabel}>{t("settingsTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("helpMenu"); }} style={{ "--sp-shine-delay": "3.5s", animationDelay: "410ms", ...styles.hubTile, background: "linear-gradient(135deg, #6B7280, #9CA3AF)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("helpMenu"); }} style={{ "--sp-shine-delay": "3.5s", animationDelay: "410ms", ...styles.hubTile, background: "var(--t-help-g)" }}>
                 <HelpCircle size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("helpMenuLabel", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
