@@ -18,7 +18,9 @@ import {
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, ArrowLeft, Plus,
   Menu, Sun, Moon, HelpCircle, Trash2, Users, Info, Mail, LogOut,
   Star, CalendarOff, Shield, Lock, Search, ClipboardList, Pencil, Palette, History,
+  Share2, Image as ImageIcon,
 } from "lucide-react";
+import { buildExchangeFormFiles, shareOrDownloadFile } from "./exchangeExport.js";
 
 const APP_VERSION = pkg.version;
 const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -599,9 +601,26 @@ const STRINGS = {
   },
   xchgMethodA: { fa: "روش دستی: جستجو و انتخاب", en: "Manual: search & pick", hi: "मैनुअल: खोजें और चुनें" },
   xchgMethodB: { fa: "پرشده از یابنده جایگزین", en: "Filled from Replacement Finder", hi: "रिप्लेसमेंट फ़ाइंडर से भरा गया" },
-  xchgSection1: { fa: "بخش ۱", en: "Section 1", hi: "सेक्शन १" },
-  xchgSection2: { fa: "بخش ۲", en: "Section 2", hi: "सेक्शन २" },
-  xchgWhichCrew: { fa: "این بخش برای کدوم راننده/گروهه", en: "Which employee (crew)", hi: "कौन सा कर्मचारी (क्रू)" },
+  xchgSection1: { fa: "راننده ۱", en: "Driver 1", hi: "ड्राइवर १" },
+  xchgSection2: { fa: "راننده ۲", en: "Driver 2", hi: "ड्राइवर २" },
+  xchgWhichCrew: { fa: "راننده (گروه) و تاریخ شیفتی که واگذار می‌کنه", en: "Driver (crew) and the date of the shift they're giving away", hi: "ड्राइवर (क्रू) और वह तारीख़ जिसकी शिफ़्ट वे दे रहे हैं" },
+  xchgShiftLabel: { fa: "شیفت", en: "Shift", hi: "शिफ़्ट" },
+  xchgEditTitle: { fa: "ویرایش دستی (اختیاری)", en: "Manual edit (optional)", hi: "मैनुअल बदलाव (वैकल्पिक)" },
+  xchgEditHint: {
+    fa: "هر چیزی اینجا عوض کنی فقط روی فرم نهایی (PDF/عکس/پرینت) عوض می‌شه. با دکمهٔ پایین همه برمی‌گرده به حالت خودکار.",
+    en: "Anything you change here only changes the final form (PDF / image / print). The button below puts everything back to automatic.",
+    hi: "यहाँ किया गया बदलाव केवल अंतिम फ़ॉर्म (PDF / चित्र / प्रिंट) पर लागू होता है। नीचे का बटन सब कुछ स्वचालित पर लौटा देता है।",
+  },
+  xchgEditReset: { fa: "برگرداندن همه به حالت خودکار", en: "Reset all to automatic", hi: "सब कुछ स्वचालित पर लौटाएँ" },
+  xchgWorkDateLabel: { fa: "تاریخ شیفتش", en: "Date of their shift", hi: "उनकी शिफ़्ट की तारीख़" },
+  xchgStartLabel: { fa: "شروع", en: "Start", hi: "शुरू" },
+  xchgEndLabel: { fa: "پایان", en: "End", hi: "अंत" },
+  xchgSubmittedLabel: { fa: "تاریخ ثبت درخواست (بالای فرم)", en: "Date request submitted (top of form)", hi: "अनुरोध की तारीख़ (फ़ॉर्म के ऊपर)" },
+  xchgExportTitle: { fa: "گرفتن فرم", en: "Get the form", hi: "फ़ॉर्म पाएँ" },
+  xchgSharePdfBtn: { fa: "ذخیره / ارسال PDF", en: "Save / send PDF", hi: "PDF सहेजें / भेजें" },
+  xchgShareImgBtn: { fa: "ذخیره / ارسال عکس", en: "Save / send image", hi: "चित्र सहेजें / भेजें" },
+  xchgPreparing: { fa: "در حال آماده‌سازی…", en: "Preparing…", hi: "तैयार हो रहा है…" },
+  xchgExportFail: { fa: "ساخت فایل نشد — از دکمهٔ پرینت استفاده کن.", en: "Couldn't create the file — use Print instead.", hi: "फ़ाइल नहीं बन सकी — प्रिंट का उपयोग करें।" },
   xchgDriverLabel: { fa: "نام راننده", en: "Employee name", hi: "कर्मचारी का नाम" },
   xchgForLabel: { fa: "این شیفت را به‌جای چه کسی کار می‌کند", en: "Covering shift for", hi: "किसकी शिफ़्ट के बदले" },
   xchgDateLabel: { fa: "تاریخ", en: "Date", hi: "तारीख़" },
@@ -612,7 +631,7 @@ const STRINGS = {
   xchgCrewValueLabel: { fa: "Crew Value", en: "Crew Value", hi: "Crew Value" },
   xchgPickCrewBtn: { fa: "انتخاب گروه", en: "Pick crew", hi: "क्रू चुनें" },
   xchgNoShiftThatDay: { fa: "این گروه در این تاریخ شیفتی ندارد.", en: "This crew has no shift on this date.", hi: "इस तारीख़ पर इस क्रू की कोई शिफ्ट नहीं है।" },
-  xchgPickCrewFirst: { fa: "اول یک گروه انتخاب کن.", en: "Pick a crew first.", hi: "पहले एक क्रू चुनें।" },
+  xchgPickCrewFirst: { fa: "اول راننده و تاریخ رو انتخاب کن.", en: "Pick a crew and a date first.", hi: "पहले क्रू और तारीख़ चुनें।" },
   xchgNA: { fa: "—", en: "N/A", hi: "N/A" },
   xchgInternalShiftNote: {
     fa: "فقط داخل برنامه (روی فرم چاپ نمی‌شه): شیفت معمول",
@@ -630,7 +649,9 @@ const STRINGS = {
   xchgSupervisorSignLabel: { fa: "امضای سرپرست", en: "Supervisor signature", hi: "सुपरवाइज़र हस्ताक्षर" },
   xchgTrapezeLabel: { fa: "ثبت‌شده در Trapeze توسط", en: "Entered in Trapeze by", hi: "Trapeze में दर्ज किया गया" },
   xchgDispatchLabel: { fa: "ثبت‌شده در برگهٔ دیسپاچ توسط", en: "Entered on Dispatch Sheet by", hi: "डिस्पैच शीट पर दर्ज किया गया" },
-  xchgPrintBtn: { fa: "پرینت / PDF", en: "Print / PDF", hi: "प्रिंट / PDF" },
+  xchgPrintBtn: { fa: "پرینت", en: "Print", hi: "प्रिंट" },
+  swapFillThisDay: { fa: "فرم با همین روز", en: "Form with this day", hi: "इसी दिन के साथ फ़ॉर्म" },
+  swapFillThisDayShort: { fa: "فرم", en: "Form", hi: "फ़ॉर्म" },
   swapMatch: { fa: "تطابق با برنامهٔ تو", en: "match with your schedule", hi: "आपके शेड्यूल से मेल" },
   myShiftHomeTitle: { fa: "شیفت من", en: "My Shift", hi: "मेरी शिफ्ट" },
   myShiftHomeNoCrew: { fa: "شمارهٔ گروهت رو توی پروفایل وارد کن", en: "Add your crew # in Profile", hi: "प्रोफ़ाइल में क्रू # जोड़ें" },
@@ -1726,7 +1747,9 @@ function deriveExchangeBox({ crewNum, date }, crews, crewNames, crewEmployeeIds,
     hasShift: !!day,
     hasCrewAndDate,
     code: day?.code || "",
-    block: day ? regionLabel(day.regionKey, lang) : "",
+    // Always the English place name — the form itself is the English
+    // company form, whatever language the app is shown in.
+    block: day ? regionLabel(day.regionKey, "en") : "",
     pieceStart: day ? formatExcelTime(day.start) : "",
     pieceEnd: day ? formatExcelTime(day.end) : "",
     hoursLabel: day ? formatDuration(day.hours, lang) : "",
@@ -1737,6 +1760,22 @@ function deriveExchangeBox({ crewNum, date }, crews, crewNames, crewEmployeeIds,
     // the auto-fill against the crew's usual AM/PM shift before printing.
     shiftInternal: crewObj ? `${crewObj.type || ""} ${crewObj.shiftRaw || ""}`.trim() : "",
   };
+}
+
+// Fields of one driver's record the person may hand-correct before
+// printing (the "Manual edit" section). An override is used exactly as typed
+// — even an empty one — until "Reset all to automatic" clears it.
+const EXCHANGE_EDIT_FIELDS = ["driverName", "employeeId", "date", "code", "pieceStart", "pieceEnd", "block", "hoursPrint"];
+function applyExchangeOverrides(derived, ov, lang) {
+  if (!ov) return derived;
+  const out = { ...derived };
+  for (const k of EXCHANGE_EDIT_FIELDS) if (ov[k] !== undefined) out[k] = ov[k];
+  if (ov.hoursPrint !== undefined) out.hoursLabel = ov.hoursPrint;
+  if (ov.date !== undefined) {
+    const wd = ov.date ? new Date(ov.date + "T00:00:00").getDay() : NaN;
+    out.weekdayLabel = Number.isNaN(wd) ? "" : (WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en)[wd];
+  }
+  return out;
 }
 
 // ---------- Admin session ----------
@@ -2830,6 +2869,14 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onFillFo
           {shown.map((r, i) => {
             const name = resolveCrewName(r.crew.crew, crews, crewNames);
             const best = r.swapOptions[0];
+            // Driver 1 = me, giving away MY shift on the searched date.
+            // Driver 2 = this candidate, giving away THEIR shift on the trade
+            // day (my search week + their dayIdx — the day I pay it back).
+            // With no trade day, Driver 2's date is left for the person to pick.
+            const fillWith = (opt) => onFillForm({
+              box1: { crewNum: myCrewNum.trim(), date },
+              box2: { crewNum: String(r.crew.crew), date: opt ? addDaysToDateStr(date, opt.dist) : "" },
+            });
             return (
               <Reveal key={r.crew.crew} className="sp-card" style={{ animationDelay: `${i * 90}ms`, border: "1px solid var(--border)", borderInlineStart: `4px solid ${r.canSwap ? "#0EA37E" : "#C9A227"}`, borderRadius: 10, padding: "9px 11px", background: "var(--card)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -2850,6 +2897,11 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onFillFo
                           <bdi dir="ltr">{formatExcelTime(o.start)}–{formatExcelTime(o.end)}</bdi>
                           {o.myRest.ok ? null : <span style={{ color: "#B3432A" }}>⚠</span>}
                           <span style={{ marginInlineStart: "auto", fontSize: 11, color: "var(--muted)" }}>{t("swapMatch", lang)} {o.match}%</span>
+                          {onFillForm && (
+                            <button onClick={() => fillWith(o)} title={t("swapFillThisDay", lang)} aria-label={t("swapFillThisDay", lang)} style={{ ...styles.smallActionBtn, padding: "3px 8px", fontSize: 11 }}>
+                              <FileSpreadsheet size={12} /> {t("swapFillThisDayShort", lang)}
+                            </button>
+                          )}
                         </span>
                       ))}
                     </span>
@@ -2869,16 +2921,9 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onFillFo
                   <button onClick={() => onViewCrew(r.crew)} style={{ ...styles.smallActionBtn, padding: "5px 9px", fontSize: 11.5 }}>
                     <CalendarOff size={13} /> {t("swapViewSchedule", lang)}
                   </button>
-                  {onFillForm && r.canSwap && best && (
+                  {onFillForm && (
                     <button
-                      onClick={() => onFillForm({
-                        // Box 1: MY own run, on the day I originally searched.
-                        box1: { crewNum: myCrewNum, date },
-                        // Box 2: the CANDIDATE's own run, on THEIR trade day
-                        // (my search week + their dayIdx — the day I'll be
-                        // paying it back).
-                        box2: { crewNum: String(r.crew.crew), date: addDaysToDateStr(date, best.dist) },
-                      })}
+                      onClick={() => fillWith(best || null)}
                       style={{ ...styles.smallActionBtn, padding: "5px 9px", fontSize: 11.5, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}
                     >
                       <FileSpreadsheet size={13} /> {t("swapFillFormBtn", lang)}
@@ -2907,8 +2952,8 @@ function ExchangeBoxEditor({ lang, sectionLabel, box, derived, onPickCrew, onDat
       <div style={{ fontWeight: 800, fontSize: 12.5, marginBottom: 8 }}>{sectionLabel}</div>
 
       <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 3 }}>{t("xchgWhichCrew", lang)}</div>
-      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
-        <span style={{ ...styles.numInputWide, flex: 1, display: "flex", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+        <span style={{ ...styles.numInputWide, flex: "1 1 140px", minWidth: 0, display: "flex", alignItems: "center" }}>
           {derived.driverName || (box.crewNum ? `${t("crewWord", lang)} ${box.crewNum}` : "—")}
         </span>
         <button onClick={onPickCrew} style={{ ...styles.smallActionBtn, padding: "6px 9px" }}>
@@ -2918,7 +2963,7 @@ function ExchangeBoxEditor({ lang, sectionLabel, box, derived, onPickCrew, onDat
           type="date"
           value={box.date || ""}
           onChange={(e) => onDateChange(e.target.value)}
-          style={{ ...styles.numInputWide, width: 140, flex: "none" }}
+          style={{ ...styles.numInputWide, flex: "1 1 140px", minWidth: 0, boxSizing: "border-box" }}
         />
       </div>
       {derived.weekdayLabel && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: -6, marginBottom: 8 }}>{derived.weekdayLabel}</div>}
@@ -2931,12 +2976,9 @@ function ExchangeBoxEditor({ lang, sectionLabel, box, derived, onPickCrew, onDat
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: 12, marginTop: 4 }}>
           <div><b>{t("employeeIdLabel", lang)}:</b> {derived.employeeId || t("xchgNA", lang)}</div>
           <div><b>{t("xchgRunLabel", lang)}:</b> {derived.code || t("xchgNA", lang)}</div>
+          <div><b>{t("xchgShiftLabel", lang)}:</b> <bdi dir="ltr">{derived.pieceStart}–{derived.pieceEnd}</bdi></div>
           <div><b>{t("xchgBlockLabel", lang)}:</b> {derived.block || t("xchgNA", lang)}</div>
           <div><b>{t("xchgCrewValueLabel", lang)}:</b> {derived.hoursLabel || t("xchgNA", lang)}</div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <b>{t("xchgPiece1Label", lang)}:</b> <bdi dir="ltr">{derived.pieceStart}–{derived.pieceEnd}</bdi>
-            {"  ·  "}<b>{t("xchgPiece2Label", lang)}:</b> {t("xchgNA", lang)}
-          </div>
           {derived.shiftInternal && (
             <div style={{ gridColumn: "1 / -1", color: "var(--muted)", fontSize: 11 }}>
               {t("xchgInternalShiftNote", lang)}: {derived.shiftInternal}
@@ -2956,7 +2998,7 @@ function ExchangeFormPreview({ lang, derived1, derived2 }) {
   const row = (label, value) => (
     <div style={{ marginBottom: 10 }}>
       <div style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 2 }}>{label}</div>
-      <div style={{ borderBottom: "1.5px solid var(--border)", minHeight: 18, fontSize: 13, paddingBottom: 2 }}>{value || " "}</div>
+      <div style={{ borderBottom: "1.5px solid var(--border)", minHeight: 18, fontSize: 13, paddingBottom: 2 }}><bdi>{value || " "}</bdi></div>
     </div>
   );
   // Same field-by-field mapping as the printed form (see buildSwapFormHtml's
@@ -3006,6 +3048,75 @@ function ExchangeFormPreview({ lang, derived1, derived2 }) {
   );
 }
 
+// "Manual edit" — every printed value of both drivers' records, pre-filled
+// with the automatic value and freely correctable. Editing a driver here
+// updates every place that value appears on the form (e.g. Driver 1's ID
+// shows in box 1 and in box 2's "for … ID #").
+function ExchangeManualEdit({ lang, final1, final2, overrides, setOverrides, submittedDate, setSubmittedDate }) {
+  const set = (n, key, value) => setOverrides((prev) => ({ ...prev, [n]: { ...prev[n], [key]: value } }));
+  const input = (n, key, label, type = "text", width) => {
+    const fin = n === 1 ? final1 : final2;
+    return (
+      <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", display: "flex", flexDirection: "column", gap: 3, minWidth: 0, gridColumn: width === "full" ? "1 / -1" : undefined }}>
+        {label}
+        <input
+          type={type}
+          value={fin[key] || ""}
+          onChange={(e) => set(n, key, e.target.value)}
+          dir="ltr"
+          style={{ ...styles.numInputWide, width: "100%", minWidth: 0, boxSizing: "border-box", padding: "6px 8px", fontSize: 13 }}
+        />
+      </label>
+    );
+  };
+  const column = (n, title) => (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "9px 10px", flex: 1, minWidth: 230 }}>
+      <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 7 }}>{title}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+        {input(n, "driverName", t("xchgDriverLabel", lang), "text", "full")}
+        {input(n, "employeeId", t("employeeIdLabel", lang))}
+        {input(n, "date", t("xchgWorkDateLabel", lang), "date")}
+        {input(n, "code", t("xchgRunLabel", lang))}
+        {input(n, "block", t("xchgBlockLabel", lang))}
+        {input(n, "pieceStart", t("xchgStartLabel", lang))}
+        {input(n, "pieceEnd", t("xchgEndLabel", lang))}
+        {input(n, "hoursPrint", t("xchgCrewValueLabel", lang), "text", "full")}
+      </div>
+    </div>
+  );
+  const edited = Object.keys(overrides[1] || {}).length + Object.keys(overrides[2] || {}).length > 0 || submittedDate !== localDateStr();
+  return (
+    <details style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px", marginTop: 10, background: "var(--card)" }}>
+      <summary style={{ fontWeight: 800, fontSize: 12.5, cursor: "pointer" }}>
+        <Pencil size={13} style={{ verticalAlign: "-2px" }} /> {t("xchgEditTitle", lang)}{edited ? " •" : ""}
+      </summary>
+      <p style={{ ...styles.hint, marginTop: 8 }}>{t("xchgEditHint", lang)}</p>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {column(1, t("xchgSection1", lang))}
+        {column(2, t("xchgSection2", lang))}
+      </div>
+      <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", display: "flex", flexDirection: "column", gap: 3, marginTop: 9, maxWidth: 240 }}>
+        {t("xchgSubmittedLabel", lang)}
+        <input type="date" value={submittedDate} onChange={(e) => setSubmittedDate(e.target.value)} style={{ ...styles.numInputWide, width: "100%", boxSizing: "border-box" }} />
+      </label>
+      {edited && (
+        <button
+          onClick={() => { setOverrides({ 1: {}, 2: {} }); setSubmittedDate(localDateStr()); }}
+          style={{ ...styles.smallActionBtn, marginTop: 9 }}
+        >
+          <RotateCcw size={13} /> {t("xchgEditReset", lang)}
+        </button>
+      )}
+    </details>
+  );
+}
+
+function exchangeFileName(f1, f2, ext) {
+  const clean = (s) => String(s || "").trim().replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const parts = ["Shift-Exchange", clean(f1.driverName), clean(f2.driverName), clean(f1.date || f2.date)].filter(Boolean);
+  return `${parts.join("_")}.${ext}`;
+}
+
 // The real "TOK Transit — Shift Exchange Request Form" — distinct from
 // SwapFinderPanel (which searches for who's free to trade): this is the
 // paperwork itself, reachable either pre-filled from a Replacement Finder
@@ -3013,17 +3124,61 @@ function ExchangeFormPreview({ lang, derived1, derived2 }) {
 // directly by searching and picking both employees (Method A). Both paths
 // share the exact same derivation (deriveExchangeBox) from the one
 // already-loaded schedule/name/Employee-ID data — nothing here is a second
-// copy of that data.
+// copy of that data. Manual edits sit on top as overrides, and the final
+// form can be printed or saved/sent as a PDF or an image.
 function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefill, onClose }) {
   const [box1, setBox1] = useState(prefill?.box1 || { crewNum: profile?.crewNumber ? String(profile.crewNumber) : "", date: localDateStr() });
   const [box2, setBox2] = useState(prefill?.box2 || { crewNum: "", date: localDateStr() });
   // Which box's crew/employee picker (if any) is open — 1 or 2.
   const [picker, setPicker] = useState(null);
+  // Manual-edit overrides per driver; cleared for a driver whenever their
+  // crew or date is re-picked (the automatic values changed underneath).
+  const [overrides, setOverrides] = useState({ 1: {}, 2: {} });
+  const [submittedDate, setSubmittedDate] = useState(localDateStr());
+  const [files, setFiles] = useState(null); // { pdf, png } ready to save/send
+  const [exportState, setExportState] = useState("preparing"); // preparing | ready | error
 
   const derived1 = useMemo(() => deriveExchangeBox(box1, crews, crewNames, crewEmployeeIds, profile, lang), [box1, crews, crewNames, crewEmployeeIds, profile, lang]);
   const derived2 = useMemo(() => deriveExchangeBox(box2, crews, crewNames, crewEmployeeIds, profile, lang), [box2, crews, crewNames, crewEmployeeIds, profile, lang]);
+  const final1 = useMemo(() => applyExchangeOverrides(derived1, overrides[1], lang), [derived1, overrides, lang]);
+  const final2 = useMemo(() => applyExchangeOverrides(derived2, overrides[2], lang), [derived2, overrides, lang]);
 
-  const doPrint = () => printSwapForm({ box1: derived1, box2: derived2 }, lang);
+  const changeBox = (n, patch) => {
+    (n === 1 ? setBox1 : setBox2)((b) => ({ ...b, ...patch }));
+    setOverrides((prev) => ({ ...prev, [n]: {} }));
+  };
+
+  const formHtml = useMemo(
+    () => buildSwapFormHtml({ box1: final1, box2: final2, submittedDate }, lang, ""),
+    [final1, final2, submittedDate, lang]
+  );
+
+  // Build the PDF + image in the background as soon as the form settles, so
+  // tapping Save/Send opens the phone's share sheet instantly (iPhone only
+  // allows the share sheet right after a tap, not after a long wait).
+  useEffect(() => {
+    let cancelled = false;
+    setExportState("preparing");
+    const timer = setTimeout(async () => {
+      try {
+        const out = await buildExchangeFormFiles(formHtml);
+        if (!cancelled) { setFiles(out); setExportState("ready"); }
+      } catch (e) {
+        console.error("exchange form export failed", e);
+        if (!cancelled) { setFiles(null); setExportState("error"); }
+      }
+    }, 600);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [formHtml]);
+
+  const doPrint = () => printSwapForm({ box1: final1, box2: final2, submittedDate }, lang);
+  const doShare = (kind) => {
+    if (!files) return;
+    const blob = kind === "pdf" ? files.pdf : files.png;
+    shareOrDownloadFile(blob, exchangeFileName(final1, final2, kind), "Shift Exchange Request Form");
+  };
+  const ready = exportState === "ready" && files;
+  const actionBtn = { ...styles.smallActionBtn, justifyContent: "center", padding: "9px 12px", fontSize: 13 };
 
   return (
     <Modal title={t("xchgFormTitle", lang)} onClose={onClose} headerGradient="var(--t-swap-g)" accent="var(--t-swap)">
@@ -3034,21 +3189,38 @@ function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefi
         <ExchangeBoxEditor
           lang={lang} sectionLabel={t("xchgSection1", lang)} box={box1} derived={derived1}
           onPickCrew={() => setPicker(1)}
-          onDateChange={(v) => setBox1((b) => ({ ...b, date: v }))}
+          onDateChange={(v) => changeBox(1, { date: v })}
         />
         <ExchangeBoxEditor
           lang={lang} sectionLabel={t("xchgSection2", lang)} box={box2} derived={derived2}
           onPickCrew={() => setPicker(2)}
-          onDateChange={(v) => setBox2((b) => ({ ...b, date: v }))}
+          onDateChange={(v) => changeBox(2, { date: v })}
         />
       </div>
 
       <div style={{ fontWeight: 800, fontSize: 12.5, margin: "14px 0 6px" }}>{t("xchgPreviewTitle", lang)}</div>
-      <ExchangeFormPreview lang={lang} derived1={derived1} derived2={derived2} />
+      <ExchangeFormPreview lang={lang} derived1={final1} derived2={final2} />
 
-      <button onClick={doPrint} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)", marginTop: 10 }}>
-        <Printer size={14} /> {t("xchgPrintBtn", lang)}
-      </button>
+      <ExchangeManualEdit
+        lang={lang} final1={final1} final2={final2}
+        overrides={overrides} setOverrides={setOverrides}
+        submittedDate={submittedDate} setSubmittedDate={setSubmittedDate}
+      />
+
+      <div style={{ fontWeight: 800, fontSize: 12.5, margin: "14px 0 6px" }}>{t("xchgExportTitle", lang)}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+        <button onClick={() => doShare("pdf")} disabled={!ready} style={{ ...actionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)", opacity: ready ? 1 : 0.55 }}>
+          <Share2 size={15} /> {t("xchgSharePdfBtn", lang)}
+        </button>
+        <button onClick={() => doShare("png")} disabled={!ready} style={{ ...actionBtn, opacity: ready ? 1 : 0.55 }}>
+          <ImageIcon size={15} /> {t("xchgShareImgBtn", lang)}
+        </button>
+        <button onClick={doPrint} style={actionBtn}>
+          <Printer size={15} /> {t("xchgPrintBtn", lang)}
+        </button>
+      </div>
+      {exportState === "preparing" && <p style={{ ...styles.hint, marginTop: 6 }}>{t("xchgPreparing", lang)}</p>}
+      {exportState === "error" && <div style={styles.errorBox}><AlertCircle size={15} /><span>{t("xchgExportFail", lang)}</span></div>}
 
       {picker && (
         <CrewLookupPanel
@@ -3056,8 +3228,7 @@ function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefi
           crews={crews}
           crewNames={crewNames}
           onPick={(crewNumber) => {
-            const setBox = picker === 1 ? setBox1 : setBox2;
-            setBox((b) => ({ ...b, crewNum: String(crewNumber) }));
+            changeBox(picker, { crewNum: String(crewNumber) });
             setPicker(null);
           }}
           onClose={() => setPicker(null)}
@@ -3869,8 +4040,8 @@ function splitDateParts(dateStr) {
 // Supervisor box's Yes/No boxes, reason, name, ID and both signature lines
 // are always left blank/unchecked — an approval only ever happens on paper,
 // by a person, never fabricated here.
-function buildSwapFormHtml({ box1, box2 }, lang, timestamp) {
-  const submitted = splitDateParts(localDateStr());
+function buildSwapFormHtml({ box1, box2, submittedDate }, lang, timestamp) {
+  const submitted = splitDateParts(submittedDate === undefined ? localDateStr() : submittedDate);
   const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   // A fill-in blank exactly like the paper form's: an underline of fixed
   // width with the value printed on it, and the form's own small grey
@@ -4694,7 +4865,9 @@ export default function ShiftPriorityRanker() {
       {activePanel === "compare2" && parsed && (
         <CompareTwoPanel lang={lang} crews={parsed.crews} onClose={() => setActivePanel(null)} />
       )}
-      {activePanel === "swapFinder" && parsed && (
+      {/* Kept mounted underneath when its "Fill form" opened the exchange form,
+          so closing the form returns to the same search results. */}
+      {(activePanel === "swapFinder" || (activePanel === "swapForm" && swapFormPrefill)) && parsed && (
         <SwapFinderPanel
           lang={lang}
           crews={parsed.crews}
@@ -4707,13 +4880,14 @@ export default function ShiftPriorityRanker() {
       )}
       {activePanel === "swapForm" && (
         <SwapFormPanel
+          key={swapFormPrefill ? JSON.stringify(swapFormPrefill) : "manual"}
           lang={lang}
           crews={parsed?.crews}
           crewNames={crewNames}
           crewEmployeeIds={crewEmployeeIds}
           profile={profile}
           prefill={swapFormPrefill}
-          onClose={() => { setActivePanel(null); setSwapFormPrefill(null); }}
+          onClose={() => { setActivePanel(swapFormPrefill ? "swapFinder" : null); setSwapFormPrefill(null); }}
         />
       )}
       {swapViewCrew && (
