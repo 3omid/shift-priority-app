@@ -34,7 +34,7 @@ export const DEFAULTS = {
   crewEmployeeIds: {}, // { [crewNumber]: employeeId } -- admin-maintained, for the Shift Exchange form
   dailyLogAccess: [], // [crewNumber, ...]
   theme: { style: "universal", mode: "light" },
-  sound: { enabled: false, type: "pop" },
+  sound: { enabled: false, type: "keyboard", pitch: 1 },
   lang: "en",
 };
 
