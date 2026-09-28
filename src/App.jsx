@@ -4088,7 +4088,7 @@ const BACKUP_STRINGS = {
   soundPop: { fa: "پاپ", en: "Pop", hi: "पॉप" },
   soundBubble: { fa: "حباب", en: "Bubble", hi: "बबल" },
   soundClick: { fa: "کلیک", en: "Click", hi: "क्लिक" },
-  soundKeyboard: { fa: "کیبورد آیفون", en: "iPhone keyboard", hi: "iPhone कीबोर्ड" },
+  soundKeyboard: { fa: "کلیک صفحه‌کلید", en: "Keyboard clicks", hi: "कीबोर्ड क्लिक" },
   soundDrop: { fa: "قطره", en: "Drop", hi: "बूँद" },
   soundPitch: { fa: "زیر و بمی", en: "Pitch", hi: "पिच" },
   soundPitchLow: { fa: "بم", en: "Low", hi: "नीचा" },

@@ -103,7 +103,8 @@ function click(c, p, volume) {
   o.start(t); o.stop(t + 0.03);
 }
 
-// Soft "tock" like the iPhone keyboard: a very short band-passed noise
+// "Keyboard clicks" (the name the phone's own sound settings use): a soft
+// "tock" like a phone's on-screen keyboard — a very short band-passed noise
 // tick over a tiny low body, ~15 ms. (The real system sound can't be used
 // by a web page, so this is a close synthesized match.)
 function keyboard(c, p, volume) {
