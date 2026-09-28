@@ -1,27 +1,36 @@
 import React, { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import pkg from "../package.json";
+import { exportBackup, validateBackupFile, restoreBackup, daysSinceLastExport, listSnapshots, restoreSnapshotById } from "./data/backup.js";
+import { playTap, testSound } from "./data/sound.js";
+import {
+  loadProfile, saveProfile, clearProfileStorage,
+  loadCrewNames, saveCrewNames,
+  loadCrewEmployeeIds, saveCrewEmployeeIds,
+  loadThemePrefs, saveThemePrefs,
+  loadDailyLogEntries, saveDailyLogEntries,
+  loadDailyLogAccess, saveDailyLogAccess,
+  loadLastFile, saveLastFile, clearLastFileStorage,
+  loadSoundSettings, saveSoundSettings,
+} from "./data/legacyApiShim.js";
 import {
   Upload, RotateCcw, ListChecks, AlertCircle, Check, Printer,
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, ArrowLeft, Plus,
   Menu, Sun, Moon, HelpCircle, Trash2, Users, Info, Mail, LogOut,
-  User, Star, CalendarOff, Shield, Lock, Search, ClipboardList, Pencil,
+  Star, CalendarOff, Shield, Lock, Search, ClipboardList, Pencil, Palette, History,
+  Share2, Image as ImageIcon,
 } from "lucide-react";
+import { buildExchangeFormFiles, shareOrDownloadFile } from "./exchangeExport.js";
 
 const APP_VERSION = pkg.version;
 const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const CATCHALL = "OTHER";
 const OFFICE_THEME = ["000000", "FFFFFF", "44546A", "E7E6E6", "4472C4", "ED7D31", "A5A5A5", "FFC000", "5B9BD5", "70AD47"];
-// Personal profile (name + "my crew number") — lives only in this
-// browser/device's localStorage. Nothing here is ever sent anywhere, so one
-// person's saved profile can never show up for anyone else who opens this
-// same app/build.
-const PROFILE_KEY = "shiftPriorityProfile";
-// Crew-number -> driver-name directory. A manually-entered/edited name
-// (added or fixed from the Admin panel) always wins over a name auto-read
-// from an uploaded file's "Driver Name" column — see resolveCrewName().
-// Also per-device localStorage only, same as PROFILE_KEY above.
-const CREW_NAMES_KEY = "shiftPriorityCrewNames";
+// Profile, crew names, theme, sound, and the daily log all now live in
+// IndexedDB via src/data/store.js (see legacyApiShim.js above) — the
+// localStorage key constants that used to sit here (PROFILE_KEY,
+// CREW_NAMES_KEY, LAST_FILE_KEY, THEME_KEY) are gone; schema.js is the one
+// place that now knows those key names.
 // Whether this browser tab is currently unlocked as Admin. Deliberately
 // sessionStorage (not localStorage): it clears itself when the tab/app
 // closes, instead of leaving Admin unlocked forever on a shared device.
@@ -91,12 +100,56 @@ const CREW_NAME_DEFAULTS = {
   "42": "Morteza Hosseini",
 };
 
-// The last successfully-parsed schedule (already-parsed crew data, not the
-// raw Excel file) so re-opening the app — closing and reopening the tab,
-// relaunching the installed PWA, restarting the Electron app — shows the
-// same schedule again instead of forcing a re-upload every single time.
-// Also localStorage-only: same one-device-only rule as everything above.
-const LAST_FILE_KEY = "shiftPriorityLastFile";
+// Built-in default crew-number -> employee/badge-number directory, seeded
+// from the same printed crew list as CREW_NAME_DEFAULTS above (real badge
+// numbers, one per crew, given directly by the user — never guessed). This
+// is the lowest-priority Employee ID source: the admin-maintained
+// crewEmployeeIds directory (Admin panel) wins over it, and the driver's own
+// saved Profile wins over both — see resolveEmployeeId(). Crew numbers left
+// OUT of this list (2, 4, 11, 19, ...) are open/unassigned runs — no badge
+// number should be guessed for them. To update later, either edit this list
+// and redeploy, or fix it per-crew from the Admin panel (which always
+// overrides this list).
+const CREW_EMPLOYEE_ID_DEFAULTS = {
+  "1": "1583",
+  "3": "1611",
+  "5": "1597",
+  "6": "1516",
+  "7": "1570",
+  "8": "1595",
+  "9": "7413",
+  "10": "1593",
+  "12": "1618",
+  "13": "1581",
+  "14": "1561",
+  "15": "1617",
+  "16": "1542",
+  "17": "1547",
+  "18": "1574",
+  "20": "1613",
+  "21": "7424",
+  "22": "7412",
+  "23": "1533",
+  "24": "1532",
+  "25": "1530",
+  "26": "1507",
+  "27": "7411",
+  "28": "7409",
+  "29": "1537",
+  "30": "1572",
+  "31": "1602",
+  "32": "1609",
+  "33": "7422",
+  "34": "1525",
+  "35": "7423",
+  "36": "1577",
+  "37": "1579",
+  "38": "1604",
+  "39": "1557",
+  "40": "1599",
+  "41": "1607",
+  "42": "1596",
+};
 
 // ---------- Excel parsing ----------
 
@@ -410,6 +463,8 @@ const REGION_LABELS = {
 const STRINGS = {
   title: { fa: "اولویت‌بندی شیفت", en: "Shift Prioritizer", hi: "शिफ्ट प्राथमिकता" },
   subtitle: { fa: "جدول شیفت رو آپلود کن، اولویت‌هاتو بچین", en: "Upload your shift sheet and build your priorities", hi: "अपनी शिफ्ट शीट अपलोड करें और प्राथमिकताएँ तय करें" },
+  hiGreeting: { fa: "سلام،", en: "Hi,", hi: "नमस्ते," },
+  weekHoursBadge: { fa: "ساعت", en: "h", hi: "घं" },
   uploadStep: { fa: "۱. فایل اکسل شیفت‌ها", en: "1. Shift Excel File", hi: "१. शिफ्ट एक्सेल फ़ाइल" },
   uploadPlaceholder: { fa: "برای انتخاب فایل ضربه بزن (xlsx / xls)", en: "Tap to choose a file (xlsx / xls)", hi: "फ़ाइल चुनने के लिए टैप करें (xlsx / xls)" },
   changeFileLink: { fa: "تغییر", en: "Change", hi: "बदलें" },
@@ -536,10 +591,75 @@ const STRINGS = {
   swapBefore: { fa: "قبل:", en: "before:", hi: "पहले:" },
   swapAfter: { fa: "بعد:", en: "after:", hi: "बाद:" },
   swapViewSchedule: { fa: "برنامهٔ هفتگی", en: "Weekly schedule", hi: "साप्ताहिक शेड्यूल" },
+  swapFillFormBtn: { fa: "تکمیل فرم تبادل", en: "Fill exchange form", hi: "एक्सचेंज फ़ॉर्म भरें" },
+  // ---- Real "TOK Transit — Shift Exchange Request Form" (xchg*) ----
+  xchgFormTitle: { fa: "فرم درخواست تبادل شیفت", en: "Shift Exchange Request Form", hi: "शिफ्ट एक्सचेंज रिक्वेस्ट फ़ॉर्म" },
+  xchgFormIntro: {
+    fa: "این همون فرم رسمی TOK Transit است. اطلاعات هر بخش از فایل اکسل/برنامهٔ ثبت‌شده خونده می‌شه — هیچ داده‌ای ساخته نمی‌شه. بخش سرپرست همیشه خالی می‌مونه.",
+    en: "This mirrors the real TOK Transit paper form. Every field is read from your loaded schedule/profile — nothing is invented. The Supervisor section always stays blank.",
+    hi: "यह असली TOK Transit फ़ॉर्म जैसा ही है। हर फ़ील्ड आपके शेड्यूल/प्रोफ़ाइल से ली जाती है — कुछ भी बनाया नहीं जाता। सुपरवाइज़र सेक्शन हमेशा खाली रहता है।",
+  },
+  xchgMethodA: { fa: "روش دستی: جستجو و انتخاب", en: "Manual: search & pick", hi: "मैनुअल: खोजें और चुनें" },
+  xchgMethodB: { fa: "پرشده از یابنده جایگزین", en: "Filled from Replacement Finder", hi: "रिप्लेसमेंट फ़ाइंडर से भरा गया" },
+  xchgSection1: { fa: "راننده ۱", en: "Driver 1", hi: "ड्राइवर १" },
+  xchgSection2: { fa: "راننده ۲", en: "Driver 2", hi: "ड्राइवर २" },
+  xchgWhichCrew: { fa: "راننده (گروه) و تاریخ شیفتی که واگذار می‌کنه", en: "Driver (crew) and the date of the shift they're giving away", hi: "ड्राइवर (क्रू) और वह तारीख़ जिसकी शिफ़्ट वे दे रहे हैं" },
+  xchgShiftLabel: { fa: "شیفت", en: "Shift", hi: "शिफ़्ट" },
+  xchgEditTitle: { fa: "ویرایش دستی (اختیاری)", en: "Manual edit (optional)", hi: "मैनुअल बदलाव (वैकल्पिक)" },
+  xchgEditHint: {
+    fa: "هر چیزی اینجا عوض کنی فقط روی فرم نهایی (PDF/عکس/پرینت) عوض می‌شه. با دکمهٔ پایین همه برمی‌گرده به حالت خودکار.",
+    en: "Anything you change here only changes the final form (PDF / image / print). The button below puts everything back to automatic.",
+    hi: "यहाँ किया गया बदलाव केवल अंतिम फ़ॉर्म (PDF / चित्र / प्रिंट) पर लागू होता है। नीचे का बटन सब कुछ स्वचालित पर लौटा देता है।",
+  },
+  xchgEditReset: { fa: "برگرداندن همه به حالت خودکار", en: "Reset all to automatic", hi: "सब कुछ स्वचालित पर लौटाएँ" },
+  xchgWorkDateLabel: { fa: "تاریخ شیفتش", en: "Date of their shift", hi: "उनकी शिफ़्ट की तारीख़" },
+  xchgStartLabel: { fa: "شروع", en: "Start", hi: "शुरू" },
+  xchgEndLabel: { fa: "پایان", en: "End", hi: "अंत" },
+  xchgSubmittedLabel: { fa: "تاریخ ثبت درخواست (بالای فرم)", en: "Date request submitted (top of form)", hi: "अनुरोध की तारीख़ (फ़ॉर्म के ऊपर)" },
+  xchgExportTitle: { fa: "گرفتن فرم", en: "Get the form", hi: "फ़ॉर्म पाएँ" },
+  xchgSharePdfBtn: { fa: "ذخیره / ارسال PDF", en: "Save / send PDF", hi: "PDF सहेजें / भेजें" },
+  xchgShareImgBtn: { fa: "ذخیره / ارسال عکس", en: "Save / send image", hi: "चित्र सहेजें / भेजें" },
+  xchgPreparing: { fa: "در حال آماده‌سازی…", en: "Preparing…", hi: "तैयार हो रहा है…" },
+  xchgExportFail: { fa: "ساخت فایل نشد — از دکمهٔ پرینت استفاده کن.", en: "Couldn't create the file — use Print instead.", hi: "फ़ाइल नहीं बन सकी — प्रिंट का उपयोग करें।" },
+  xchgDriverLabel: { fa: "نام راننده", en: "Employee name", hi: "कर्मचारी का नाम" },
+  xchgForLabel: { fa: "این شیفت را به‌جای چه کسی کار می‌کند", en: "Covering shift for", hi: "किसकी शिफ़्ट के बदले" },
+  xchgDateLabel: { fa: "تاریخ", en: "Date", hi: "तारीख़" },
+  xchgRunLabel: { fa: "شماره ران (Run #)", en: "Run #", hi: "रन #" },
+  xchgPiece1Label: { fa: "Piece 1", en: "Piece 1", hi: "Piece 1" },
+  xchgPiece2Label: { fa: "Piece 2", en: "Piece 2", hi: "Piece 2" },
+  xchgBlockLabel: { fa: "Block", en: "Block", hi: "Block" },
+  xchgCrewValueLabel: { fa: "Crew Value", en: "Crew Value", hi: "Crew Value" },
+  xchgPickCrewBtn: { fa: "انتخاب گروه", en: "Pick crew", hi: "क्रू चुनें" },
+  xchgNoShiftThatDay: { fa: "این گروه در این تاریخ شیفتی ندارد.", en: "This crew has no shift on this date.", hi: "इस तारीख़ पर इस क्रू की कोई शिफ्ट नहीं है।" },
+  xchgPickCrewFirst: { fa: "اول راننده و تاریخ رو انتخاب کن.", en: "Pick a crew and a date first.", hi: "पहले क्रू और तारीख़ चुनें।" },
+  xchgNA: { fa: "—", en: "N/A", hi: "N/A" },
+  xchgInternalShiftNote: {
+    fa: "فقط داخل برنامه (روی فرم چاپ نمی‌شه): شیفت معمول",
+    en: "In-app only (not printed on the form): usual shift",
+    hi: "केवल ऐप में (फ़ॉर्म पर प्रिंट नहीं होता): सामान्य शिफ्ट",
+  },
+  xchgPreviewTitle: { fa: "پیش‌نمایش فرم واقعی", en: "Real-form preview", hi: "असली फ़ॉर्म पूर्वावलोकन" },
+  xchgEmployeeSignLabel: { fa: "امضای کارمند", en: "Employee signature", hi: "कर्मचारी हस्ताक्षर" },
+  xchgSupervisorTitle: { fa: "فقط برای استفادهٔ سرپرست عملیات", en: "Operations Supervisor Use Only", hi: "केवल ऑपरेशन्स सुपरवाइज़र उपयोग हेतु" },
+  xchgApprovedLabel: { fa: "تأیید شد؟", en: "Approved?", hi: "स्वीकृत?" },
+  xchgYes: { fa: "بله", en: "Yes", hi: "हाँ" },
+  xchgNo: { fa: "خیر", en: "No", hi: "नहीं" },
+  xchgReasonLabel: { fa: "دلیل (در صورت رد)", en: "Reason (if declined)", hi: "कारण (यदि अस्वीकृत)" },
+  xchgSupervisorNameLabel: { fa: "نام سرپرست", en: "Supervisor name", hi: "सुपरवाइज़र का नाम" },
+  xchgSupervisorSignLabel: { fa: "امضای سرپرست", en: "Supervisor signature", hi: "सुपरवाइज़र हस्ताक्षर" },
+  xchgTrapezeLabel: { fa: "ثبت‌شده در Trapeze توسط", en: "Entered in Trapeze by", hi: "Trapeze में दर्ज किया गया" },
+  xchgDispatchLabel: { fa: "ثبت‌شده در برگهٔ دیسپاچ توسط", en: "Entered on Dispatch Sheet by", hi: "डिस्पैच शीट पर दर्ज किया गया" },
+  xchgPrintBtn: { fa: "پرینت", en: "Print", hi: "प्रिंट" },
+  swapFillThisDay: { fa: "فرم با همین روز", en: "Form with this day", hi: "इसी दिन के साथ फ़ॉर्म" },
+  swapFillThisDayShort: { fa: "فرم", en: "Form", hi: "फ़ॉर्म" },
   swapMatch: { fa: "تطابق با برنامهٔ تو", en: "match with your schedule", hi: "आपके शेड्यूल से मेल" },
   myShiftHomeTitle: { fa: "شیفت من", en: "My Shift", hi: "मेरी शिफ्ट" },
   myShiftHomeNoCrew: { fa: "شمارهٔ گروهت رو توی پروفایل وارد کن", en: "Add your crew # in Profile", hi: "प्रोफ़ाइल में क्रू # जोड़ें" },
   myShiftHomeNoFile: { fa: "اول فایل برنامه رو بارگذاری کن", en: "Load the schedule file first", hi: "पहले शेड्यूल फ़ाइल लोड करें" },
+  quickSwapForm: { fa: "فرم تبادل شیفت", en: "Exchange form", hi: "एक्सचेंज फ़ॉर्म" },
+  quickCover: { fa: "پوشش مرخصی", en: "Leave cover", hi: "छुट्टी कवर" },
+  quickLog: { fa: "دفترچه شیفت", en: "Shift log", hi: "शिफ्ट लॉग" },
+  weekRingLabel: { fa: "این هفته", en: "This week", hi: "यह हफ़्ता" },
   swapShowMore: { fa: "نمایش بیشتر", en: "Show more", hi: "और दिखाएं" },
   crewLookupSearch: { fa: "جستجوی شماره یا اسم...", en: "Search number or name…", hi: "नंबर या नाम खोजें…" },
 
@@ -565,6 +685,12 @@ const STRINGS = {
   adminLogoutBtn: { fa: "خروج از حالت ادمین", en: "Log out of Admin", hi: "एडमिन से लॉग आउट" },
   crewNumberLabel: { fa: "شماره گروه", en: "Crew number", hi: "क्रू नंबर" },
   driverNameLabel: { fa: "نام راننده", en: "Driver name", hi: "ड्राइवर का नाम" },
+  employeeIdLabel: { fa: "شماره پرسنلی (Employee ID)", en: "Employee ID", hi: "एम्प्लॉई आईडी" },
+  employeeIdHint: {
+    fa: "برای پر شدن خودکار فرم تبادل شیفت — اختیاری",
+    en: "Used to auto-fill the Shift Exchange form — optional",
+    hi: "शिफ्ट एक्सचेंज फ़ॉर्म को ऑटो-फ़िल करने के लिए — वैकल्पिक",
+  },
   dailyLogMenuLabel: { fa: "دفترچه شیفت روزانه", en: "Daily Shift Log", hi: "दैनिक शिफ्ट लॉग" },
   dailyLogTitle: { fa: "دفترچه شیفت روزانه", en: "Daily Shift Log", hi: "दैनिक शिफ्ट लॉग" },
   dailyLogHint: {
@@ -1268,7 +1394,6 @@ const THEME_PALETTES = {
   }
 };
 const THEME_ORDER = Object.keys(THEME_PALETTES);
-const THEME_KEY = "shiftPriorityTheme";
 
 function getTheme(style) {
   return THEME_PALETTES[style] || THEME_PALETTES.universal;
@@ -1302,22 +1427,12 @@ function themeVars(style, mode) {
   Object.entries(th.tiles).forEach(([k, pair]) => { vars[`--t-${k}-g`] = g(pair); vars[`--t-${k}`] = pair[0]; });
   return vars;
 }
-function loadThemePrefs() {
-  try {
-    const v = JSON.parse(localStorage.getItem(THEME_KEY) || "null");
-    return { style: v && THEME_PALETTES[v.style] ? v.style : "universal", mode: v && v.mode === "dark" ? "dark" : "light" };
-  } catch { return { style: "universal", mode: "light" }; }
-}
-function saveThemePrefs(style, mode) {
-  try { localStorage.setItem(THEME_KEY, JSON.stringify({ style, mode })); } catch { /* ignore storage errors */ }
-}
-
 // Exports (PDF/print + Excel) follow the active theme too. The report
 // builders are plain functions, so the app records the active style here.
 const ACTIVE_THEME = { style: "universal" };
 function exportTheme(kind) {
   const th = getTheme(ACTIVE_THEME.style);
-  const main = kind === "results" ? th.flow[0] : kind === "compare" ? th.tiles.compare[0] : th.tiles.log[0];
+  const main = kind === "results" ? th.flow[0] : kind === "compare" ? th.tiles.compare[0] : kind === "swap" ? th.tiles.swap[0] : th.tiles.log[0];
   return {
     main, sub: th.light.accent2,
     head: mixHex(main, "#FFFFFF", 0.86), headText: mixHex(main, "#000000", 0.35),
@@ -1489,7 +1604,7 @@ function AnalogClock({ hourAngle, minuteAngle, secondAngle, size = 64 }) {
   );
 }
 
-function DateTimeWidget({ lang }) {
+function DateTimeWidget({ lang, compact }) {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -1511,7 +1626,7 @@ function DateTimeWidget({ lang }) {
   const secondAngle = seconds * 6;
 
   return (
-    <div style={{ ...styles.dtWidget, background: "var(--clock-g)", border: "none", boxShadow: "0 6px 14px rgba(0,0,0,0.18)", "--card": "rgba(255,255,255,0.16)", "--border": "rgba(255,255,255,0.55)", "--text": "#fff", "--muted": "rgba(255,255,255,0.85)", "--accent": "#fff", "--accent2": "#FFE9A8" }}>
+    <div style={{ ...styles.dtWidget, ...(compact ? { marginTop: 0, width: "100%", boxSizing: "border-box" } : {}), background: "var(--clock-g)", border: "none", boxShadow: "0 6px 14px rgba(0,0,0,0.18)", "--card": "rgba(255,255,255,0.16)", "--border": "rgba(255,255,255,0.55)", "--text": "#fff", "--muted": "rgba(255,255,255,0.85)", "--accent": "#fff", "--accent2": "#FFE9A8" }}>
       <AnalogClock hourAngle={hourAngle} minuteAngle={minuteAngle} secondAngle={secondAngle} />
       <div style={styles.dtTextCol}>
         <div style={styles.dtDigital}>{digital}</div>
@@ -1519,6 +1634,24 @@ function DateTimeWidget({ lang }) {
         {lang !== "en" && <div style={styles.dtDateLine}>{enDate}</div>}
       </div>
     </div>
+  );
+}
+
+// This week's logged-vs-scheduled hours, as a coloured progress ring (the
+// track is a soft translucent white, but the progress arc itself uses
+// --accent2 so it always reads as a colour, never a plain white ring).
+function WeekRing({ percent, size = 56, stroke = 6 }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(100, percent));
+  const offset = c * (1 - clamped / 100);
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)", flexShrink: 0 }}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth={stroke} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--accent2)" strokeWidth={stroke}
+        strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
+        style={{ transition: "stroke-dashoffset 0.4s ease" }} />
+    </svg>
   );
 }
 
@@ -1548,21 +1681,101 @@ function Modal({ title, onClose, onBack, children, headerGradient, accent }) {
 }
 
 // ---------- Crew name directory ----------
-// crewNumber (string) -> driver name. A manual entry here always wins over
-// a name auto-read from the uploaded file's "Driver Name" column — see
-// resolveCrewName() below. That's how Admin fixes a typo, or adds a name
-// for a crew number the current file has no name column for at all.
-function loadCrewNames() {
-  try { return JSON.parse(localStorage.getItem(CREW_NAMES_KEY) || "{}"); } catch { return {}; }
-}
-function saveCrewNames(map) {
-  try { localStorage.setItem(CREW_NAMES_KEY, JSON.stringify(map)); } catch { /* ignore storage errors */ }
-}
+// loadCrewNames/saveCrewNames now come from ./data/legacyApiShim.js (backed
+// by IndexedDB) — see the import block at the top of this file.
 function resolveCrewName(crewNumber, crews, manualNames) {
   const key = String(crewNumber);
   if (manualNames && Object.prototype.hasOwnProperty.call(manualNames, key)) return manualNames[key];
   const c = crews?.find((cc) => String(cc.crew) === key);
   return c?.driverName || CREW_NAME_DEFAULTS[key] || "";
+}
+
+// Employee ID (badge #) for the Shift Exchange form — a real person
+// identifier, distinct from the crew/run number above. Not present in the
+// weekly Excel schedule, so priority is: the driver's own saved Profile
+// (when this crew # is their own) > the admin-maintained crewEmployeeIds
+// directory (Admin panel manual entry) > the built-in CREW_EMPLOYEE_ID_DEFAULTS
+// list above. Blank when none of the three has it — never invented.
+function resolveEmployeeId(crewNumber, profile, crewEmployeeIds) {
+  const key = String(crewNumber);
+  if (profile?.crewNumber && String(profile.crewNumber) === key && profile.employeeId) return profile.employeeId;
+  if (crewEmployeeIds && Object.prototype.hasOwnProperty.call(crewEmployeeIds, key) && crewEmployeeIds[key]) return crewEmployeeIds[key];
+  return CREW_EMPLOYEE_ID_DEFAULTS[key] || "";
+}
+
+// The calendar date of `dayIdx`, `daysForward` days after `dateStr`
+// (0-6, wrapping within the week) — used to turn a trade day's weekday
+// index into an actual Month/Day/Year for the Shift Exchange form's second
+// box. Local date math (no UTC shift), matching how dates are read elsewhere.
+function addDaysToDateStr(dateStr, daysForward) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return "";
+  d.setDate(d.getDate() + daysForward);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// ---------- Shift Exchange Request Form (the real TOK Transit paper form) ----------
+// deriveExchangeBox() computes ONE driver's own shift record — the shift
+// they are giving away in the exchange: their name, real Employee ID, and
+// their own crew's run/Block/times/hours on the given date. The printed
+// form then combines the two drivers' records field-by-field (see
+// buildSwapFormHtml's box() for the exact mapping). Input is just:
+//   crewNum -> whose shift this is (also identifies the driver:
+//              resolveCrewName/resolveEmployeeId of this same #)
+//   date    -> the calendar date that shift falls on
+// Every displayed field is DERIVED here from the already-loaded Excel data
+// (parsed.crews) plus the admin/profile name & Employee-ID directories —
+// nothing is stored twice or invented. Both entry paths (manual search+pick
+// and "Fill Form" from the Replacement Finder) share this one function, so
+// they can never drift apart.
+function deriveExchangeBox({ crewNum, date }, crews, crewNames, crewEmployeeIds, profile, lang) {
+  const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
+  const crewObj = crewNum ? (crews || []).find((c) => String(c.crew) === String(crewNum)) : null;
+  const weekday = date ? new Date(date + "T00:00:00").getDay() : null;
+  const day = crewObj && weekday !== null ? crewObj.days.find((x) => x.dayIdx === weekday) : null;
+  const hasCrewAndDate = !!(crewNum && date);
+  return {
+    crewNum: crewNum || "",
+    date: date || "",
+    weekdayLabel: weekday !== null ? weekdayNames[weekday] : "",
+    driverName: crewNum ? resolveCrewName(crewNum, crews, crewNames) : "",
+    // Real Employee ID only — from the person's own Profile (when this crew
+    // # is their own) or the admin-maintained directory. Blank/unknown when
+    // neither has it; never fabricated.
+    employeeId: crewNum ? resolveEmployeeId(crewNum, profile, crewEmployeeIds) : "",
+    hasShift: !!day,
+    hasCrewAndDate,
+    code: day?.code || "",
+    // Always the English place name — the form itself is the English
+    // company form, whatever language the app is shown in.
+    block: day ? regionLabel(day.regionKey, "en") : "",
+    pieceStart: day ? formatExcelTime(day.start) : "",
+    pieceEnd: day ? formatExcelTime(day.end) : "",
+    hoursLabel: day ? formatDuration(day.hours, lang) : "",
+    // Hours for the printed (always-English) form's "Crew Value" field, in
+    // the same hours+minutes style drivers write by hand (e.g. "10h 15m").
+    hoursPrint: day ? formatDuration(day.hours, "en") : "",
+    // In-app-only reference (never printed) — lets the person sanity-check
+    // the auto-fill against the crew's usual AM/PM shift before printing.
+    shiftInternal: crewObj ? `${crewObj.type || ""} ${crewObj.shiftRaw || ""}`.trim() : "",
+  };
+}
+
+// Fields of one driver's record the person may hand-correct before
+// printing (the "Manual edit" section). An override is used exactly as typed
+// — even an empty one — until "Reset all to automatic" clears it.
+const EXCHANGE_EDIT_FIELDS = ["driverName", "employeeId", "date", "code", "pieceStart", "pieceEnd", "block", "hoursPrint"];
+function applyExchangeOverrides(derived, ov, lang) {
+  if (!ov) return derived;
+  const out = { ...derived };
+  for (const k of EXCHANGE_EDIT_FIELDS) if (ov[k] !== undefined) out[k] = ov[k];
+  if (ov.hoursPrint !== undefined) out.hoursLabel = ov.hoursPrint;
+  if (ov.date !== undefined) {
+    const wd = ov.date ? new Date(ov.date + "T00:00:00").getDay() : NaN;
+    out.weekdayLabel = Number.isNaN(wd) ? "" : (WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en)[wd];
+  }
+  return out;
 }
 
 // ---------- Admin session ----------
@@ -1577,46 +1790,12 @@ function saveAdminSession(isAdmin) {
   } catch { /* ignore storage errors */ }
 }
 
-// ---------- Profile (name + "my crew number") ----------
-// Same storage mechanism as history above — plain localStorage, private to
-// this browser/device. Kept as its own key so clearing history never
-// touches the saved profile and vice versa.
-function loadProfile() {
-  try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || "null"); } catch { return null; }
-}
-function saveProfile(profile) {
-  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch { /* ignore storage errors */ }
-}
-function clearProfileStorage() {
-  try { localStorage.removeItem(PROFILE_KEY); } catch { /* ignore */ }
-}
-
-// ---------- Last parsed schedule (avoids re-uploading every visit) ----------
-function loadLastFile() {
-  try { return JSON.parse(localStorage.getItem(LAST_FILE_KEY) || "null"); } catch { return null; }
-}
-function saveLastFile(entry) {
-  try { localStorage.setItem(LAST_FILE_KEY, JSON.stringify(entry)); } catch { /* ignore storage errors, e.g. quota */ }
-}
-function clearLastFileStorage() {
-  try { localStorage.removeItem(LAST_FILE_KEY); } catch { /* ignore */ }
-}
-
-// ---------- Daily Log (per-device only, not synced anywhere) ----------
-const DAILY_LOG_ENTRIES_KEY = "shiftPriorityDailyLogEntries";
-const DAILY_LOG_ACCESS_KEY = "shiftPriorityDailyLogAccess";
-function loadDailyLogEntries() {
-  try { const v = JSON.parse(localStorage.getItem(DAILY_LOG_ENTRIES_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
-}
-function saveDailyLogEntries(list) {
-  try { localStorage.setItem(DAILY_LOG_ENTRIES_KEY, JSON.stringify(list)); } catch { /* ignore storage errors */ }
-}
-function loadDailyLogAccess() {
-  try { const v = JSON.parse(localStorage.getItem(DAILY_LOG_ACCESS_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
-}
-function saveDailyLogAccess(list) {
-  try { localStorage.setItem(DAILY_LOG_ACCESS_KEY, JSON.stringify(list)); } catch { /* ignore storage errors */ }
-}
+// ---------- Profile, last parsed schedule, Daily Log ----------
+// loadProfile/saveProfile/clearProfileStorage, loadLastFile/saveLastFile/
+// clearLastFileStorage, and loadDailyLogEntries/saveDailyLogEntries/
+// loadDailyLogAccess/saveDailyLogAccess all now come from
+// ./data/legacyApiShim.js (backed by IndexedDB) — see the import block at
+// the top of this file.
 function computeLogHours(startTime, endTime) {
   if (!startTime || !endTime) return 0;
   const [sh, sm] = startTime.split(":").map(Number);
@@ -1707,12 +1886,14 @@ function weekOfMonth(dateStr) {
 function ProfilePanel({ lang, profile, onSave, onClear, onClose }) {
   const [firstName, setFirstName] = useState(profile?.firstName || "");
   const [crewNumber, setCrewNumber] = useState(profile?.crewNumber || "");
+  const [employeeId, setEmployeeId] = useState(profile?.employeeId || "");
 
   const handleSave = () => {
     const name = firstName.trim();
     const crew = String(crewNumber).trim();
-    if (!name && !crew) { onClear(); onClose(); return; }
-    onSave({ firstName: name, crewNumber: crew });
+    const empId = employeeId.trim();
+    if (!name && !crew && !empId) { onClear(); onClose(); return; }
+    onSave({ firstName: name, crewNumber: crew, employeeId: empId });
     onClose();
   };
 
@@ -1722,7 +1903,7 @@ function ProfilePanel({ lang, profile, onSave, onClear, onClose }) {
       <input
         type="text"
         value={firstName}
-        onChange={(e) => setFirstName(e.target.value)}       
+        onChange={(e) => setFirstName(e.target.value)}
         style={styles.numInputWide}
       />
       <div style={{ ...styles.smallLabel, marginTop: 10 }}>{t("myCrewLabel", lang)}</div>
@@ -1730,6 +1911,14 @@ function ProfilePanel({ lang, profile, onSave, onClear, onClose }) {
         type="number"
         value={crewNumber}
         onChange={(e) => setCrewNumber(e.target.value)}
+        style={styles.numInputWide}
+      />
+      <div style={{ ...styles.smallLabel, marginTop: 10 }}>{t("employeeIdLabel", lang)}</div>
+      <input
+        type="text"
+        value={employeeId}
+        onChange={(e) => setEmployeeId(e.target.value)}
+        placeholder={t("employeeIdHint", lang)}
         style={styles.numInputWide}
       />
       <p style={styles.hint}>{t("profilePrivacyHint", lang)}</p>
@@ -2606,7 +2795,7 @@ function localDateStr(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose }) {
+function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onFillForm, onClose }) {
   const [myCrewNum, setMyCrewNum] = useState(profile?.crewNumber ? String(profile.crewNumber) : "");
   const [date, setDate] = useState(localDateStr());
   const [startTime, setStartTime] = useState("");
@@ -2680,6 +2869,14 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose 
           {shown.map((r, i) => {
             const name = resolveCrewName(r.crew.crew, crews, crewNames);
             const best = r.swapOptions[0];
+            // Driver 1 = me, giving away MY shift on the searched date.
+            // Driver 2 = this candidate, giving away THEIR shift on the trade
+            // day (my search week + their dayIdx — the day I pay it back).
+            // With no trade day, Driver 2's date is left for the person to pick.
+            const fillWith = (opt) => onFillForm({
+              box1: { crewNum: myCrewNum.trim(), date },
+              box2: { crewNum: String(r.crew.crew), date: opt ? addDaysToDateStr(date, opt.dist) : "" },
+            });
             return (
               <Reveal key={r.crew.crew} className="sp-card" style={{ animationDelay: `${i * 90}ms`, border: "1px solid var(--border)", borderInlineStart: `4px solid ${r.canSwap ? "#0EA37E" : "#C9A227"}`, borderRadius: 10, padding: "9px 11px", background: "var(--card)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -2700,6 +2897,11 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose 
                           <bdi dir="ltr">{formatExcelTime(o.start)}–{formatExcelTime(o.end)}</bdi>
                           {o.myRest.ok ? null : <span style={{ color: "#B3432A" }}>⚠</span>}
                           <span style={{ marginInlineStart: "auto", fontSize: 11, color: "var(--muted)" }}>{t("swapMatch", lang)} {o.match}%</span>
+                          {onFillForm && (
+                            <button onClick={() => fillWith(o)} title={t("swapFillThisDay", lang)} aria-label={t("swapFillThisDay", lang)} style={{ ...styles.smallActionBtn, padding: "3px 8px", fontSize: 11 }}>
+                              <FileSpreadsheet size={12} /> {t("swapFillThisDayShort", lang)}
+                            </button>
+                          )}
                         </span>
                       ))}
                     </span>
@@ -2715,9 +2917,19 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose 
                     </span>
                   )}
                 </div>
-                <button onClick={() => onViewCrew(r.crew)} style={{ ...styles.smallActionBtn, marginTop: 7, padding: "5px 9px", fontSize: 11.5 }}>
-                  <CalendarOff size={13} /> {t("swapViewSchedule", lang)}
-                </button>
+                <div style={{ display: "flex", gap: 6, marginTop: 7, flexWrap: "wrap" }}>
+                  <button onClick={() => onViewCrew(r.crew)} style={{ ...styles.smallActionBtn, padding: "5px 9px", fontSize: 11.5 }}>
+                    <CalendarOff size={13} /> {t("swapViewSchedule", lang)}
+                  </button>
+                  {onFillForm && (
+                    <button
+                      onClick={() => fillWith(best || null)}
+                      style={{ ...styles.smallActionBtn, padding: "5px 9px", fontSize: 11.5, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}
+                    >
+                      <FileSpreadsheet size={13} /> {t("swapFillFormBtn", lang)}
+                    </button>
+                  )}
+                </div>
               </Reveal>
             );
           })}
@@ -2725,6 +2937,302 @@ function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onClose 
             <button onClick={() => setShowAll(true)} style={styles.smallActionBtn}>{t("swapShowMore", lang)}</button>
           )}
         </div>
+      )}
+    </Modal>
+  );
+}
+
+// One box on the real TOK Transit form. Purely a controlled view over
+// {crewNum, date} — every other field (name, Employee ID, Run #, Block,
+// Piece 1/2, Crew Value) is DERIVED by deriveExchangeBox from the
+// already-loaded schedule/directories, never typed in or stored separately.
+function ExchangeBoxEditor({ lang, sectionLabel, box, derived, onPickCrew, onDateChange }) {
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 11px", background: "var(--card)" }}>
+      <div style={{ fontWeight: 800, fontSize: 12.5, marginBottom: 8 }}>{sectionLabel}</div>
+
+      <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 3 }}>{t("xchgWhichCrew", lang)}</div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+        <span style={{ ...styles.numInputWide, flex: "1 1 140px", minWidth: 0, display: "flex", alignItems: "center" }}>
+          {derived.driverName || (box.crewNum ? `${t("crewWord", lang)} ${box.crewNum}` : "—")}
+        </span>
+        <button onClick={onPickCrew} style={{ ...styles.smallActionBtn, padding: "6px 9px" }}>
+          <Search size={13} /> {t("xchgPickCrewBtn", lang)}
+        </button>
+        <input
+          type="date"
+          value={box.date || ""}
+          onChange={(e) => onDateChange(e.target.value)}
+          style={{ ...styles.numInputWide, flex: "1 1 140px", minWidth: 0, boxSizing: "border-box" }}
+        />
+      </div>
+      {derived.weekdayLabel && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: -6, marginBottom: 8 }}>{derived.weekdayLabel}</div>}
+
+      {!derived.hasCrewAndDate ? (
+        <p style={styles.hint}>{t("xchgPickCrewFirst", lang)}</p>
+      ) : !derived.hasShift ? (
+        <div style={styles.errorBox}><AlertCircle size={15} /><span>{t("xchgNoShiftThatDay", lang)}</span></div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: 12, marginTop: 4 }}>
+          <div><b>{t("employeeIdLabel", lang)}:</b> {derived.employeeId || t("xchgNA", lang)}</div>
+          <div><b>{t("xchgRunLabel", lang)}:</b> {derived.code || t("xchgNA", lang)}</div>
+          <div><b>{t("xchgShiftLabel", lang)}:</b> <bdi dir="ltr">{derived.pieceStart}–{derived.pieceEnd}</bdi></div>
+          <div><b>{t("xchgBlockLabel", lang)}:</b> {derived.block || t("xchgNA", lang)}</div>
+          <div><b>{t("xchgCrewValueLabel", lang)}:</b> {derived.hoursLabel || t("xchgNA", lang)}</div>
+          {derived.shiftInternal && (
+            <div style={{ gridColumn: "1 / -1", color: "var(--muted)", fontSize: 11 }}>
+              {t("xchgInternalShiftNote", lang)}: {derived.shiftInternal}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// A faithful visual mirror of the real TOK Transit "Shift Exchange Request
+// Form" paper form: two employee sections (each auto-filled/derived, never
+// invented) plus an "Operations Supervisor Use Only" section that is always
+// rendered blank — Claude/the app never fabricates an approval or signature.
+function ExchangeFormPreview({ lang, derived1, derived2 }) {
+  const row = (label, value) => (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 2 }}>{label}</div>
+      <div style={{ borderBottom: "1.5px solid var(--border)", minHeight: 18, fontSize: 13, paddingBottom: 2 }}><bdi>{value || " "}</bdi></div>
+    </div>
+  );
+  // Same field-by-field mapping as the printed form (see buildSwapFormHtml's
+  // box()), per the user's hand-annotated form:
+  //   self    -> name, ID, Piece 1 (own shift + block), Crew value, signature
+  //   partner -> date worked, "for" name/ID, Run #, Piece 2 (their shift + block)
+  const pieceText = (d) => (d.pieceStart || d.pieceEnd ? `${d.pieceStart}–${d.pieceEnd}${d.block ? " · " + d.block : ""}` : "");
+  const section = (label, self, partner) => (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px", flex: 1, minWidth: 220 }}>
+      <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 8 }}>{label}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 12px" }}>
+        {row(t("xchgDriverLabel", lang), self.driverName)}
+        {row(t("employeeIdLabel", lang), self.employeeId)}
+        {row(t("xchgDateLabel", lang), partner.date ? `${partner.date}${partner.weekdayLabel ? " · " + partner.weekdayLabel : ""}` : "")}
+        {row(t("xchgForLabel", lang), partner.driverName ? `${partner.driverName}${partner.employeeId ? " · ID " + partner.employeeId : ""}` : "")}
+        {row(t("xchgRunLabel", lang), partner.code)}
+        {row(t("xchgCrewValueLabel", lang), self.hoursLabel)}
+        {row(t("xchgPiece1Label", lang), pieceText(self))}
+        {row(t("xchgPiece2Label", lang), pieceText(partner))}
+      </div>
+      {row(t("xchgEmployeeSignLabel", lang), "")}
+    </div>
+  );
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12, background: "var(--bg)" }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {section(t("xchgSection1", lang), derived1, derived2)}
+        {section(t("xchgSection2", lang), derived2, derived1)}
+      </div>
+      <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "10px 12px", marginTop: 10 }}>
+        <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 8 }}>{t("xchgSupervisorTitle", lang)}</div>
+        <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 10, fontSize: 12 }}>
+          <span>{t("xchgApprovedLabel", lang)}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 13, height: 13, border: "1.5px solid var(--muted)", borderRadius: 3, display: "inline-block" }} /> {t("xchgYes", lang)}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 13, height: 13, border: "1.5px solid var(--muted)", borderRadius: 3, display: "inline-block" }} /> {t("xchgNo", lang)}</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 12px" }}>
+          {row(t("xchgReasonLabel", lang), "")}
+          {row(t("xchgSupervisorNameLabel", lang), "")}
+          {row(t("xchgSupervisorSignLabel", lang), "")}
+          {row(t("xchgDateLabel", lang), "")}
+          {row(t("xchgTrapezeLabel", lang), "")}
+          {row(t("xchgDispatchLabel", lang), "")}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// "Manual edit" — every printed value of both drivers' records, pre-filled
+// with the automatic value and freely correctable. Editing a driver here
+// updates every place that value appears on the form (e.g. Driver 1's ID
+// shows in box 1 and in box 2's "for … ID #").
+function ExchangeManualEdit({ lang, final1, final2, overrides, setOverrides, submittedDate, setSubmittedDate }) {
+  const set = (n, key, value) => setOverrides((prev) => ({ ...prev, [n]: { ...prev[n], [key]: value } }));
+  const input = (n, key, label, type = "text", width) => {
+    const fin = n === 1 ? final1 : final2;
+    return (
+      <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", display: "flex", flexDirection: "column", gap: 3, minWidth: 0, gridColumn: width === "full" ? "1 / -1" : undefined }}>
+        {label}
+        <input
+          type={type}
+          value={fin[key] || ""}
+          onChange={(e) => set(n, key, e.target.value)}
+          dir="ltr"
+          style={{ ...styles.numInputWide, width: "100%", minWidth: 0, boxSizing: "border-box", padding: "6px 8px", fontSize: 13 }}
+        />
+      </label>
+    );
+  };
+  const column = (n, title) => (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "9px 10px", flex: 1, minWidth: 230 }}>
+      <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 7 }}>{title}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+        {input(n, "driverName", t("xchgDriverLabel", lang), "text", "full")}
+        {input(n, "employeeId", t("employeeIdLabel", lang))}
+        {input(n, "date", t("xchgWorkDateLabel", lang), "date")}
+        {input(n, "code", t("xchgRunLabel", lang))}
+        {input(n, "block", t("xchgBlockLabel", lang))}
+        {input(n, "pieceStart", t("xchgStartLabel", lang))}
+        {input(n, "pieceEnd", t("xchgEndLabel", lang))}
+        {input(n, "hoursPrint", t("xchgCrewValueLabel", lang), "text", "full")}
+      </div>
+    </div>
+  );
+  const edited = Object.keys(overrides[1] || {}).length + Object.keys(overrides[2] || {}).length > 0 || submittedDate !== localDateStr();
+  return (
+    <details style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px", marginTop: 10, background: "var(--card)" }}>
+      <summary style={{ fontWeight: 800, fontSize: 12.5, cursor: "pointer" }}>
+        <Pencil size={13} style={{ verticalAlign: "-2px" }} /> {t("xchgEditTitle", lang)}{edited ? " •" : ""}
+      </summary>
+      <p style={{ ...styles.hint, marginTop: 8 }}>{t("xchgEditHint", lang)}</p>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {column(1, t("xchgSection1", lang))}
+        {column(2, t("xchgSection2", lang))}
+      </div>
+      <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", display: "flex", flexDirection: "column", gap: 3, marginTop: 9, maxWidth: 240 }}>
+        {t("xchgSubmittedLabel", lang)}
+        <input type="date" value={submittedDate} onChange={(e) => setSubmittedDate(e.target.value)} style={{ ...styles.numInputWide, width: "100%", boxSizing: "border-box" }} />
+      </label>
+      {edited && (
+        <button
+          onClick={() => { setOverrides({ 1: {}, 2: {} }); setSubmittedDate(localDateStr()); }}
+          style={{ ...styles.smallActionBtn, marginTop: 9 }}
+        >
+          <RotateCcw size={13} /> {t("xchgEditReset", lang)}
+        </button>
+      )}
+    </details>
+  );
+}
+
+function exchangeFileName(f1, f2, ext) {
+  const clean = (s) => String(s || "").trim().replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const parts = ["Shift-Exchange", clean(f1.driverName), clean(f2.driverName), clean(f1.date || f2.date)].filter(Boolean);
+  return `${parts.join("_")}.${ext}`;
+}
+
+// The real "TOK Transit — Shift Exchange Request Form" — distinct from
+// SwapFinderPanel (which searches for who's free to trade): this is the
+// paperwork itself, reachable either pre-filled from a Replacement Finder
+// result (Method B, via its "Fill exchange form" button) or filled in
+// directly by searching and picking both employees (Method A). Both paths
+// share the exact same derivation (deriveExchangeBox) from the one
+// already-loaded schedule/name/Employee-ID data — nothing here is a second
+// copy of that data. Manual edits sit on top as overrides, and the final
+// form can be printed or saved/sent as a PDF or an image.
+function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefill, onClose }) {
+  const [box1, setBox1] = useState(prefill?.box1 || { crewNum: profile?.crewNumber ? String(profile.crewNumber) : "", date: localDateStr() });
+  const [box2, setBox2] = useState(prefill?.box2 || { crewNum: "", date: localDateStr() });
+  // Which box's crew/employee picker (if any) is open — 1 or 2.
+  const [picker, setPicker] = useState(null);
+  // Manual-edit overrides per driver; cleared for a driver whenever their
+  // crew or date is re-picked (the automatic values changed underneath).
+  const [overrides, setOverrides] = useState({ 1: {}, 2: {} });
+  const [submittedDate, setSubmittedDate] = useState(localDateStr());
+  const [files, setFiles] = useState(null); // { pdf, png } ready to save/send
+  const [exportState, setExportState] = useState("preparing"); // preparing | ready | error
+
+  const derived1 = useMemo(() => deriveExchangeBox(box1, crews, crewNames, crewEmployeeIds, profile, lang), [box1, crews, crewNames, crewEmployeeIds, profile, lang]);
+  const derived2 = useMemo(() => deriveExchangeBox(box2, crews, crewNames, crewEmployeeIds, profile, lang), [box2, crews, crewNames, crewEmployeeIds, profile, lang]);
+  const final1 = useMemo(() => applyExchangeOverrides(derived1, overrides[1], lang), [derived1, overrides, lang]);
+  const final2 = useMemo(() => applyExchangeOverrides(derived2, overrides[2], lang), [derived2, overrides, lang]);
+
+  const changeBox = (n, patch) => {
+    (n === 1 ? setBox1 : setBox2)((b) => ({ ...b, ...patch }));
+    setOverrides((prev) => ({ ...prev, [n]: {} }));
+  };
+
+  const formHtml = useMemo(
+    () => buildSwapFormHtml({ box1: final1, box2: final2, submittedDate }, lang, ""),
+    [final1, final2, submittedDate, lang]
+  );
+
+  // Build the PDF + image in the background as soon as the form settles, so
+  // tapping Save/Send opens the phone's share sheet instantly (iPhone only
+  // allows the share sheet right after a tap, not after a long wait).
+  useEffect(() => {
+    let cancelled = false;
+    setExportState("preparing");
+    const timer = setTimeout(async () => {
+      try {
+        const out = await buildExchangeFormFiles(formHtml);
+        if (!cancelled) { setFiles(out); setExportState("ready"); }
+      } catch (e) {
+        console.error("exchange form export failed", e);
+        if (!cancelled) { setFiles(null); setExportState("error"); }
+      }
+    }, 600);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [formHtml]);
+
+  const doPrint = () => printSwapForm({ box1: final1, box2: final2, submittedDate }, lang);
+  const doShare = (kind) => {
+    if (!files) return;
+    const blob = kind === "pdf" ? files.pdf : files.png;
+    shareOrDownloadFile(blob, exchangeFileName(final1, final2, kind), "Shift Exchange Request Form");
+  };
+  const ready = exportState === "ready" && files;
+  const actionBtn = { ...styles.smallActionBtn, justifyContent: "center", padding: "9px 12px", fontSize: 13 };
+
+  return (
+    <Modal title={t("xchgFormTitle", lang)} onClose={onClose} headerGradient="var(--t-swap-g)" accent="var(--t-swap)">
+      <p style={styles.hint}>{t("xchgFormIntro", lang)}</p>
+      <p style={{ ...styles.hint, fontWeight: 700 }}>{prefill ? t("xchgMethodB", lang) : t("xchgMethodA", lang)}</p>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <ExchangeBoxEditor
+          lang={lang} sectionLabel={t("xchgSection1", lang)} box={box1} derived={derived1}
+          onPickCrew={() => setPicker(1)}
+          onDateChange={(v) => changeBox(1, { date: v })}
+        />
+        <ExchangeBoxEditor
+          lang={lang} sectionLabel={t("xchgSection2", lang)} box={box2} derived={derived2}
+          onPickCrew={() => setPicker(2)}
+          onDateChange={(v) => changeBox(2, { date: v })}
+        />
+      </div>
+
+      <div style={{ fontWeight: 800, fontSize: 12.5, margin: "14px 0 6px" }}>{t("xchgPreviewTitle", lang)}</div>
+      <ExchangeFormPreview lang={lang} derived1={final1} derived2={final2} />
+
+      <ExchangeManualEdit
+        lang={lang} final1={final1} final2={final2}
+        overrides={overrides} setOverrides={setOverrides}
+        submittedDate={submittedDate} setSubmittedDate={setSubmittedDate}
+      />
+
+      <div style={{ fontWeight: 800, fontSize: 12.5, margin: "14px 0 6px" }}>{t("xchgExportTitle", lang)}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+        <button onClick={() => doShare("pdf")} disabled={!ready} style={{ ...actionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)", opacity: ready ? 1 : 0.55 }}>
+          <Share2 size={15} /> {t("xchgSharePdfBtn", lang)}
+        </button>
+        <button onClick={() => doShare("png")} disabled={!ready} style={{ ...actionBtn, opacity: ready ? 1 : 0.55 }}>
+          <ImageIcon size={15} /> {t("xchgShareImgBtn", lang)}
+        </button>
+        <button onClick={doPrint} style={actionBtn}>
+          <Printer size={15} /> {t("xchgPrintBtn", lang)}
+        </button>
+      </div>
+      {exportState === "preparing" && <p style={{ ...styles.hint, marginTop: 6 }}>{t("xchgPreparing", lang)}</p>}
+      {exportState === "error" && <div style={styles.errorBox}><AlertCircle size={15} /><span>{t("xchgExportFail", lang)}</span></div>}
+
+      {picker && (
+        <CrewLookupPanel
+          lang={lang}
+          crews={crews}
+          crewNames={crewNames}
+          onPick={(crewNumber) => {
+            changeBox(picker, { crewNum: String(crewNumber) });
+            setPicker(null);
+          }}
+          onClose={() => setPicker(null)}
+        />
       )}
     </Modal>
   );
@@ -2778,13 +3286,18 @@ function AdminLoginModal({ lang, onSuccess, onClose }) {
   );
 }
 
-function AdminPanel({ lang, crews, crewNames, setCrewNames, dailyLogAccess, setDailyLogAccess, onLogout, onClose }) {
+function AdminPanel({ lang, crews, crewNames, setCrewNames, crewEmployeeIds, setCrewEmployeeIds, dailyLogAccess, setDailyLogAccess, onLogout, onClose }) {
   const [drafts, setDrafts] = useState({});
   const [newCrew, setNewCrew] = useState("");
   const [newName, setNewName] = useState("");
   const [dupWarning, setDupWarning] = useState({}); // { [crewNum]: theOtherCrewNumItClashesWith }
   const [newDup, setNewDup] = useState(null);
   const [newDailyLogCrew, setNewDailyLogCrew] = useState("");
+  // Employee-ID directory drafts — a separate, simpler parallel to the name
+  // editor above: no duplicate check (two people can't share a name, but
+  // there's no such rule for Employee IDs), and a blank value just means
+  // "unknown" (the Shift Exchange form shows N/A rather than a guess).
+  const [eidDrafts, setEidDrafts] = useState({});
 
   const addDailyLogAccess = () => {
     const num = newDailyLogCrew.trim();
@@ -2870,6 +3383,13 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, dailyLogAccess, setD
     setNewName("");
   };
 
+  const commitEid = (num, value) => {
+    const clean = value.trim();
+    const next = { ...crewEmployeeIds, [String(num)]: clean };
+    setCrewEmployeeIds(next);
+    saveCrewEmployeeIds(next);
+  };
+
   return (
     <Modal title={t("adminPanelTitle", lang)} onClose={onClose}>
       <p style={styles.hint}>{t("adminPanelHint", lang)}</p>
@@ -2910,6 +3430,12 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, dailyLogAccess, setD
             ? (crewNames[num] === "" ? t("adminBlankBadge", lang) : t("adminManualBadge", lang))
             : auto ? t("adminAutoBadge", lang) : def ? t("adminDefaultBadge", lang) : t("adminBlankBadge", lang);
           const dup = dupWarning[num];
+          const hasEidOverride = Object.prototype.hasOwnProperty.call(crewEmployeeIds || {}, num);
+          const eidDefault = CREW_EMPLOYEE_ID_DEFAULTS[num] || "";
+          const eidValue = eidDrafts[num] !== undefined ? eidDrafts[num] : (hasEidOverride ? crewEmployeeIds[num] : eidDefault);
+          const eidBadge = hasEidOverride
+            ? (crewEmployeeIds[num] === "" ? t("adminBlankBadge", lang) : t("adminManualBadge", lang))
+            : eidDefault ? t("adminDefaultBadge", lang) : t("adminBlankBadge", lang);
           return (
             <div key={num} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px" }}>
@@ -2921,8 +3447,19 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, dailyLogAccess, setD
                   onBlur={() => { if (drafts[num] !== undefined) commit(num, drafts[num]); }}
                   style={{ ...styles.numInputWide, padding: "5px 8px", fontSize: 12.5 }}
                 />
+                <input
+                  type="text"
+                  value={eidValue}
+                  placeholder={t("employeeIdLabel", lang)}
+                  onChange={(e) => setEidDrafts((prev) => ({ ...prev, [num]: e.target.value }))}
+                  onBlur={() => { if (eidDrafts[num] !== undefined) commitEid(num, eidDrafts[num]); }}
+                  style={{ ...styles.numInputWide, padding: "5px 8px", fontSize: 12.5, maxWidth: 100, flex: "none" }}
+                />
                 <span style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap" }}>
                   {badge}
+                </span>
+                <span style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap" }}>
+                  {eidBadge}
                 </span>
                 <button onClick={() => clearRow(num)} title={t("adminClearTooltip", lang)} style={{ ...styles.smallActionBtn, padding: "5px 7px" }}>
                   <X size={13} />
@@ -2982,17 +3519,138 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, dailyLogAccess, setD
 
 // ---------- Settings (theme) ----------
 
-function SettingsPanel({ lang, themeStyle, setThemeStyle, themeMode, setThemeMode, onClose }) {
+const BACKUP_STRINGS = {
+  soundTitle: { fa: "صدا", en: "Sound", hi: "ध्वनि" },
+  soundOn: { fa: "روشن", en: "On", hi: "चालू" },
+  soundOff: { fa: "خاموش", en: "Off", hi: "बंद" },
+  soundPop: { fa: "پاپ", en: "Pop", hi: "पॉप" },
+  soundBubble: { fa: "حباب", en: "Bubble", hi: "बबल" },
+  soundClick: { fa: "کلیک", en: "Click", hi: "क्लिक" },
+  soundTest: { fa: "تست", en: "Test", hi: "जाँच" },
+  backupTitle: { fa: "پشتیبان‌گیری", en: "Backup", hi: "बैकअप" },
+  backupHint: {
+    fa: "یک فایل شامل پروفایل، اسامی کروها، دفترچه شیفت و تنظیمات می‌سازد. فایل اکسل برد در آن نیست، چون قابل بارگذاری مجدد است.",
+    en: "Makes a file with your profile, crew names, daily log and settings. The Excel board isn't included — it can just be re-uploaded.",
+    hi: "आपकी प्रोफ़ाइल, क्रू नाम, दैनिक लॉग और सेटिंग्स वाली फ़ाइल बनाता है। एक्सेल शामिल नहीं है — फिर से अपलोड किया जा सकता है।",
+  },
+  exportBtn: { fa: "خروجی گرفتن", en: "Export backup", hi: "बैकअप निर्यात करें" },
+  exportedAgo: { fa: "آخرین خروجی:", en: "Last export:", hi: "आख़िरी निर्यात:" },
+  never: { fa: "هیچ‌وقت", en: "never", hi: "कभी नहीं" },
+  daysAgo: { fa: "روز پیش", en: "days ago", hi: "दिन पहले" },
+  todayWord: { fa: "امروز", en: "today", hi: "आज" },
+  reminderLine: {
+    fa: "بیش از ۳۰ روز از آخرین خروجی گذشته. یک فایل بگیر و جایی امن نگه‌دار.",
+    en: "It's been over 30 days since your last export. Take one and keep it somewhere safe.",
+    hi: "आख़िरी निर्यात को 30 दिन से ज़्यादा हो गए। एक फ़ाइल लें और सुरक्षित रखें।",
+  },
+  restoreTitle: { fa: "بازیابی از فایل", en: "Restore from a file", hi: "फ़ाइल से पुनर्स्थापित करें" },
+  chooseFile: { fa: "انتخاب فایل بکاپ...", en: "Choose backup file...", hi: "बैकअप फ़ाइल चुनें..." },
+  invalidFile: { fa: "این فایل معتبر نیست یا مال این برنامه نیست.", en: "This file isn't valid, or isn't from this app.", hi: "यह फ़ाइल मान्य नहीं है।" },
+  tooNewFile: { fa: "این فایل مال یک نسخه‌ی جدیدتر از برنامه است؛ اول برنامه را آپدیت کن.", en: "This file is from a newer version of the app — update the app first.", hi: "यह फ़ाइल ऐप के नए संस्करण से है।" },
+  summaryProfile: { fa: "پروفایل", en: "profile", hi: "प्रोफ़ाइल" },
+  summaryCrews: { fa: "اسم کرو", en: "crew names", hi: "क्रू नाम" },
+  summaryLog: { fa: "رکورد دفترچه", en: "log entries", hi: "लॉग प्रविष्टियाँ" },
+  createdOn: { fa: "ساخته‌شده در", en: "created", hi: "बनाया गया" },
+  modeReplace: { fa: "جایگزینی کامل", en: "Full replace", hi: "पूरी तरह बदलें" },
+  modeMerge: { fa: "فقط ادغام دفترچه", en: "Merge daily log only", hi: "केवल लॉग मिलाएँ" },
+  modeReplaceHint: { fa: "همه‌چیز با فایل بکاپ جایگزین می‌شود.", en: "Everything is replaced with the backup's values.", hi: "सब कुछ बैकअप से बदल दिया जाता है।" },
+  modeMergeHint: { fa: "بقیه هم جایگزین می‌شود؛ فقط دفترچه‌ی شیفت با تاریخ‌های موجود ترکیب می‌شود.", en: "Everything else is still replaced; only the daily log is combined with what's already here, by date.", hi: "बाकी सब बदल जाता है; केवल दैनिक लॉग तारीख़ के अनुसार मिलाया जाता है।" },
+  restoreBtn: { fa: "بازیابی", en: "Restore", hi: "पुनर्स्थापित करें" },
+  restoreDone: { fa: "بازیابی انجام شد. یک نسخه از قبل هم ذخیره شد.", en: "Restored. A snapshot of your previous data was saved too.", hi: "पुनर्स्थापित हो गया।" },
+  autoBackupsTitle: { fa: "بکاپ‌های خودکار", en: "Automatic backups", hi: "स्वचालित बैकअप" },
+  autoBackupsHint: {
+    fa: "علاوه بر خروجیِ دستی، برنامه هر روز و هر هفته و بعد از تغییرات مهم، به‌طور خودکار یک نسخه از اطلاعاتت را همین‌جا ذخیره می‌کند.",
+    en: "Besides a manual export, the app also automatically keeps daily, weekly, and change-triggered snapshots of your data right here.",
+    hi: "मैनुअल निर्यात के अलावा, ऐप रोज़ाना, साप्ताहिक और बदलाव के बाद अपने-आप एक स्नैपशॉट यहीं सहेजता है।",
+  },
+  noSnapshots: { fa: "هنوز بکاپ خودکاری ساخته نشده.", en: "No automatic backups yet.", hi: "अभी तक कोई स्वचालित बैकअप नहीं।" },
+  snapshotReasonAuto: { fa: "خودکار", en: "auto", hi: "स्वतः" },
+  snapshotReasonDaily: { fa: "روزانه", en: "daily", hi: "दैनिक" },
+  snapshotReasonWeekly: { fa: "هفتگی", en: "weekly", hi: "साप्ताहिक" },
+  snapshotReasonPreMigration: { fa: "پیش از مهاجرت", en: "pre-migration", hi: "माइग्रेशन-पूर्व" },
+  snapshotReasonPreRestore: { fa: "پیش از بازیابی", en: "pre-restore", hi: "पुनर्स्थापन-पूर्व" },
+  restoreSnapshotBtn: { fa: "بازگردانی این نسخه", en: "Restore this", hi: "यह पुनर्स्थापित करें" },
+  restoreSnapshotConfirm: {
+    fa: "اطلاعات فعلی با این نسخه‌ی قدیمی‌تر جایگزین می‌شود (یک نسخه از وضعیت فعلی هم قبلش ذخیره می‌شود). ادامه بدهم؟",
+    en: "This replaces your current data with this older snapshot (your current state is saved first, just in case). Continue?",
+    hi: "यह वर्तमान डेटा को इस पुराने स्नैपशॉट से बदल देगा। जारी रखें?",
+  },
+  snapshotRestored: { fa: "همین نسخه بازگردانی شد.", en: "That snapshot was restored.", hi: "वह स्नैपशॉट पुनर्स्थापित हो गया।" },
+};
+function bt(key, lang) { return BACKUP_STRINGS[key] ? (BACKUP_STRINGS[key][lang] || BACKUP_STRINGS[key].en) : key; }
+
+function SettingsPanel({
+  lang, themeStyle, setThemeStyle, themeMode, setThemeMode,
+  soundSettings, setSoundSettings, onClose,
+}) {
   const styleOptions = THEME_ORDER.map((v) => ({ v, l: THEME_PALETTES[v].name[lang] || THEME_PALETTES[v].name.en, th: THEME_PALETTES[v] }));
+
+  const [lastExportDays, setLastExportDays] = React.useState(null);
+  const [pendingFile, setPendingFile] = React.useState(null); // { data, summary }
+  const [fileError, setFileError] = React.useState("");
+  const [restoreMode, setRestoreMode] = React.useState("replace");
+  const [restoreDone, setRestoreDone] = React.useState(false);
+  const [snapshots, setSnapshots] = React.useState([]);
+  const [snapshotRestoredId, setSnapshotRestoredId] = React.useState(null);
+
+  const refreshSnapshots = () => listSnapshots().then(setSnapshots);
+  React.useEffect(() => { daysSinceLastExport().then(setLastExportDays); refreshSnapshots(); }, []);
+
+  const doExport = async () => {
+    await exportBackup();
+    setLastExportDays(0);
+  };
+
+  const snapshotReasonLabel = (reason) => bt(
+    reason === "auto" ? "snapshotReasonAuto"
+    : reason === "daily" ? "snapshotReasonDaily"
+    : reason === "weekly" ? "snapshotReasonWeekly"
+    : reason === "pre-migration" ? "snapshotReasonPreMigration"
+    : reason === "pre-restore" ? "snapshotReasonPreRestore"
+    : reason, lang);
+
+  const doRestoreSnapshot = async (id) => {
+    if (!window.confirm(bt("restoreSnapshotConfirm", lang))) return;
+    await restoreSnapshotById(id);
+    setSnapshotRestoredId(id);
+    refreshSnapshots();
+  };
+
+  const onPickFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setFileError(""); setPendingFile(null); setRestoreDone(false);
+    const text = await file.text();
+    const result = await validateBackupFile(text);
+    if (!result.ok) {
+      setFileError(result.reason === "too-new" ? bt("tooNewFile", lang) : bt("invalidFile", lang));
+      return;
+    }
+    setPendingFile(result);
+  };
+
+  const doRestore = async () => {
+    await restoreBackup(pendingFile.data, { mode: restoreMode === "merge" ? "mergeDailyLog" : "replace" });
+    setRestoreDone(true);
+    setPendingFile(null);
+    refreshSnapshots();
+  };
+
+  const exportedAgoText = lastExportDays === null ? "" :
+    lastExportDays === Infinity ? bt("never", lang) :
+    lastExportDays < 1 ? bt("todayWord", lang) :
+    `${Math.floor(lastExportDays)} ${bt("daysAgo", lang)}`;
+
   return (
     <Modal title={t("settingsTitle", lang)} onClose={onClose} headerGradient="var(--t-settings-g)" accent="var(--t-settings)">
       <div style={styles.prefGroup}>
         <div style={styles.prefTitle}>{t("themeMode", lang)}</div>
         <div style={styles.chipRow}>
-          <button key={themeMode === "light" ? "l-on" : "l"} onClick={() => setThemeMode("light")} style={{ ...styles.chip, ...(themeMode === "light" ? styles.chipActive : {}) }}>
+          <button onClick={() => setThemeMode("light")} style={{ ...styles.chip, ...(themeMode === "light" ? styles.chipActive : {}) }}>
             <Sun size={14} /> {t("light", lang)}
           </button>
-          <button key={themeMode === "dark" ? "d-on" : "d"} onClick={() => setThemeMode("dark")} style={{ ...styles.chip, ...(themeMode === "dark" ? styles.chipActive : {}) }}>
+          <button onClick={() => setThemeMode("dark")} style={{ ...styles.chip, ...(themeMode === "dark" ? styles.chipActive : {}) }}>
             <Moon size={14} /> {t("dark", lang)}
           </button>
         </div>
@@ -3001,8 +3659,7 @@ function SettingsPanel({ lang, themeStyle, setThemeStyle, themeMode, setThemeMod
         <div style={styles.prefTitle}>{t("themeStyle", lang)}</div>
         <div style={styles.chipRow}>
           {styleOptions.map((o) => (
-            <button key={o.v + (themeStyle === o.v ? "-on" : "")} onClick={() => setThemeStyle(o.v)} style={{ ...styles.chip, ...(themeStyle === o.v ? styles.chipActive : {}) }}>
-              {/* mini preview of the theme: hero, a tile and My Shift colours */}
+            <button key={o.v} onClick={() => setThemeStyle(o.v)} style={{ ...styles.chip, ...(themeStyle === o.v ? styles.chipActive : {}) }}>
               <span aria-hidden="true" style={{ display: "inline-flex", borderRadius: 999, overflow: "hidden", border: "1px solid rgba(0,0,0,0.12)" }}>
                 {[o.th.hero[0], o.th.tiles.browse[0], o.th.my[0], o.th.light.accent2].map((c, i) => <span key={i} style={{ width: 9, height: 14, background: c }} />)}
               </span>
@@ -3010,6 +3667,102 @@ function SettingsPanel({ lang, themeStyle, setThemeStyle, themeMode, setThemeMod
             </button>
           ))}
         </div>
+      </div>
+
+      {/* ---- Sound (new) ---- */}
+      <div style={styles.prefGroup}>
+        <div style={styles.prefTitle}>{bt("soundTitle", lang)}</div>
+        <div style={styles.chipRow}>
+          <button onClick={() => setSoundSettings({ ...soundSettings, enabled: false })} style={{ ...styles.chip, ...(!soundSettings.enabled ? styles.chipActive : {}) }}>{bt("soundOff", lang)}</button>
+          <button onClick={() => setSoundSettings({ ...soundSettings, enabled: true })} style={{ ...styles.chip, ...(soundSettings.enabled ? styles.chipActive : {}) }}>{bt("soundOn", lang)}</button>
+        </div>
+        <div style={{ ...styles.chipRow, marginTop: 8, opacity: soundSettings.enabled ? 1 : 0.5 }}>
+          {["pop", "bubble", "click"].map((type) => (
+            <button key={type} disabled={!soundSettings.enabled}
+              onClick={() => setSoundSettings({ ...soundSettings, type })}
+              style={{ ...styles.chip, ...(soundSettings.type === type ? styles.chipActive : {}) }}>
+              {bt(type === "pop" ? "soundPop" : type === "bubble" ? "soundBubble" : "soundClick", lang)}
+            </button>
+          ))}
+          <button onClick={() => testSound(soundSettings.type)} style={styles.chip}>🔊 {bt("soundTest", lang)}</button>
+        </div>
+      </div>
+
+      {/* ---- Backup (new) ---- */}
+      <div style={styles.prefGroup}>
+        <div style={styles.prefTitle}>{bt("backupTitle", lang)}</div>
+        <p style={styles.hint}>{bt("backupHint", lang)}</p>
+        <button onClick={doExport} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}>
+          <Printer size={14} /> {bt("exportBtn", lang)}
+        </button>
+        {lastExportDays !== null && (
+          <p style={styles.hint}>{bt("exportedAgo", lang)} {exportedAgoText}</p>
+        )}
+        {lastExportDays > 30 && (
+          <div style={styles.errorBox}><AlertCircle size={15} /><span>{bt("reminderLine", lang)}</span></div>
+        )}
+
+        <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 6 }}>{bt("restoreTitle", lang)}</div>
+          <label style={styles.uploadZone}>
+            <Upload size={18} color="var(--accent)" />
+            <span style={{ marginTop: 6, fontSize: 12.5 }}>{bt("chooseFile", lang)}</span>
+            <input type="file" accept=".json" onChange={onPickFile} style={{ display: "none" }} />
+          </label>
+          {fileError && <div style={styles.errorBox}><AlertCircle size={15} /><span>{fileError}</span></div>}
+          {restoreDone && <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, fontSize: 12, background: "#E6F4EA", color: "#1E7A45" }}>{bt("restoreDone", lang)}</div>}
+
+          {pendingFile && (
+            <div style={{ marginTop: 10, border: "1px solid var(--border)", borderRadius: 10, padding: 10 }}>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>
+                {bt("createdOn", lang)} {new Date(pendingFile.summary.createdAt).toLocaleString()}
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                {pendingFile.summary.hasProfile && <span style={styles.chip}>{bt("summaryProfile", lang)}</span>}
+                <span style={styles.chip}>{pendingFile.summary.crewNameCount} {bt("summaryCrews", lang)}</span>
+                <span style={styles.chip}>{pendingFile.summary.dailyLogCount} {bt("summaryLog", lang)}</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+                <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12.5 }}>
+                  <input type="radio" name="restoreMode" checked={restoreMode === "replace"} onChange={() => setRestoreMode("replace")} style={{ marginTop: 3 }} />
+                  <span><b>{bt("modeReplace", lang)}</b><br /><span style={{ color: "var(--muted)" }}>{bt("modeReplaceHint", lang)}</span></span>
+                </label>
+                <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12.5 }}>
+                  <input type="radio" name="restoreMode" checked={restoreMode === "merge"} onChange={() => setRestoreMode("merge")} style={{ marginTop: 3 }} />
+                  <span><b>{bt("modeMerge", lang)}</b><br /><span style={{ color: "var(--muted)" }}>{bt("modeMergeHint", lang)}</span></span>
+                </label>
+              </div>
+              <button onClick={doRestore} style={{ ...styles.smallActionBtn, background: "#B3432A", color: "#fff", borderColor: "#B3432A" }}>
+                <Check size={14} /> {bt("restoreBtn", lang)}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ---- Automatic backups (new) ---- */}
+      <div style={styles.prefGroup}>
+        <div style={styles.prefTitle}><History size={14} style={{ verticalAlign: "-2px", marginInlineEnd: 4 }} /> {bt("autoBackupsTitle", lang)}</div>
+        <p style={styles.hint}>{bt("autoBackupsHint", lang)}</p>
+        {snapshots.length === 0 ? (
+          <p style={styles.hint}>{bt("noSnapshots", lang)}</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+            {snapshots.map((s) => (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px", fontSize: 12 }}>
+                <span style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  <span style={{ fontWeight: 700 }}>{new Date(s.createdAt).toLocaleString()}</span>
+                  <span style={{ color: "var(--muted)" }}>{snapshotReasonLabel(s.reason)}</span>
+                </span>
+                {snapshotRestoredId === s.id ? (
+                  <span style={{ color: "#1E7A45", fontWeight: 700, fontSize: 11.5 }}>{bt("snapshotRestored", lang)}</span>
+                ) : (
+                  <button onClick={() => doRestoreSnapshot(s.id)} style={{ ...styles.chip, whiteSpace: "nowrap" }}>{bt("restoreSnapshotBtn", lang)}</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -3259,6 +4012,138 @@ function printCompareTable(matched, lang) {
   const now = new Date();
   const timestamp = `${formatJalaliDate(now)} — ${new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric" }).format(now)} — ${now.toLocaleTimeString("en-GB")}`;
   openPrintableReport(buildCompareHtml(matched, lang, timestamp), lang);
+}
+
+// Splits a "YYYY-MM-DD" string into the separate M / D / Y blanks the real
+// form asks for. Never guesses: an unknown/blank date just leaves all three
+// blank for the driver to write in by hand.
+function splitDateParts(dateStr) {
+  if (!dateStr) return { m: "", d: "", y: "" };
+  const [y, m, d] = dateStr.split("-");
+  return { m: String(Number(m)), d: String(Number(d)), y };
+}
+
+// Builds the printable page as a literal, field-for-field reproduction of
+// the real "TOK Transit — Shift Exchange Request Form" paper form — same
+// header, same wording, same two driver boxes and the same "Operations
+// Supervisor Use Only" box below, in the same order, on one page. Nothing
+// is added, removed, reordered or redesigned; only the existing blanks are
+// filled. Field mapping for `box(num, self, partner)` — taken exactly from
+// the user's hand-annotated copy of the real form (Driver 1 = self in box 1,
+// Driver 2 = self in box 2; box 2 is the mirror of box 1):
+//   I [self name] ID# [self ID] will work on [date self works = partner's
+//   original shift date] for [partner name] ID# [partner ID]. It is run #
+//   [partner's run]. Piece 1 = SELF's own shift (from/to/block). Piece 2 =
+//   PARTNER's shift (from/to/block). Crew value = SELF's hours.
+//   Signature N = self (left blank, signed by hand).
+// So the two boxes list the same two shifts, in opposite order. The
+// Supervisor box's Yes/No boxes, reason, name, ID and both signature lines
+// are always left blank/unchecked — an approval only ever happens on paper,
+// by a person, never fabricated here.
+function buildSwapFormHtml({ box1, box2, submittedDate }, lang, timestamp) {
+  const submitted = splitDateParts(submittedDate === undefined ? localDateStr() : submittedDate);
+  const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // A fill-in blank exactly like the paper form's: an underline of fixed
+  // width with the value printed on it, and the form's own small grey
+  // caption — "(Driver 1 name)", "(Month)", … — printed underneath.
+  // A value too long for its blank (e.g. a long run code) is printed a bit
+  // smaller rather than cut off or pushing the line onto two rows.
+  const fit = (value, w) => {
+    const need = String(value || "").length * 7.2;
+    return need > w - 4 ? ` style="font-size:${Math.max(8, (11.5 * (w - 4)) / need).toFixed(1)}px"` : "";
+  };
+  const f = (value, w, caption) =>
+    `<span class="f" style="width:${w}px"><span class="v"${fit(value, w)}>${value ? esc(value) : "&nbsp;"}</span>${caption ? `<span class="c">(${caption})</span>` : ""}</span>`;
+  const tx = (s) => `<span class="t">${s}</span>`;
+  const line = (...parts) => `<div class="ln">${parts.join("")}</div>`;
+  const box = (num, self, partner) => {
+    const p = splitDateParts(partner.date);
+    const me = `Driver ${num}`, other = `Driver ${num === 1 ? 2 : 1}`;
+    return `
+    <div class="box">
+      ${line(tx("I"), f(self.driverName, 178, `${me} name`), tx("ID #"), f(self.employeeId, 62, `${me} ID`), tx("will work on"), f(p.m, 50, "Month"), f(p.d, 34, "Day"), f(p.y, 42, "Year"), tx("for"), f(partner.driverName, 168, `${other} name`))}
+      ${line(tx("ID #"), f(partner.employeeId, 52, `${other} ID`), tx(". It is run #"), f(partner.code, 64), tx(". Piece 1 is from"), f(self.pieceStart, 37), tx("to"), f(self.pieceEnd, 37), tx("on block"), f(self.block, 88), tx(". Piece 2 is from"), f(partner.pieceStart, 37), tx("to"), f(partner.pieceEnd, 37))}
+      ${line(tx("on block"), f(partner.block, 110), tx("."), tx("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Crew value"), f(self.hoursPrint, 82), tx("."), tx(`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Signature ${num}`), f("", 210))}
+    </div>`;
+  };
+  const q = (text) => `<div class="q"><span>${text}</span><span class="ck"></span><span class="ck"></span></div>`;
+  return `<!doctype html><html lang="en" dir="ltr"><head><meta charset="UTF-8" />
+  <title>Shift Exchange Request Form</title>
+  <style>
+    @page { size: letter; margin: 0.45in 0.5in; }
+    * { box-sizing: border-box; }
+    html, body { background:#fff; }
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; color:#000; font-size: 11px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { width: 7.5in; margin: 0 auto; padding: 12px 0; }
+    .toolbar { position: sticky; top: 0; background: #fff; padding: 8px 12px 12px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; z-index: 10; }
+    .toolbar button { font-size:14px; padding:9px 15px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
+    .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
+    .toolbar .print-btn { background:#111; color:#fff; font-weight:700; border-color:#111; }
+    .hdr { display:flex; justify-content:space-between; align-items:flex-end; }
+    .logo { line-height: 0.9; }
+    .logo b { display:block; font-family: "Arial Black", Arial, sans-serif; font-weight:900; font-size:34px; letter-spacing:0.02em; }
+    .logo span { display:block; font-weight:700; font-size:12.5px; letter-spacing:0.14em; margin-top:3px; }
+    .submitted { font-size:11px; font-weight:700; display:flex; align-items:flex-end; gap:2px; padding-bottom: 2px; }
+    h1 { text-align:center; font-size:19px; margin: 10px 0 16px; }
+    .intro p { font-size:11.5px; line-height:1.35; margin: 0 0 12px; }
+    .box { border:1.3px solid #000; padding: 14px 9px 10px; margin-bottom: 14px; }
+    .ln { display:flex; align-items:flex-start; flex-wrap:nowrap; white-space:nowrap; gap:3px; margin-bottom: 13px; }
+    .ln:last-child { margin-bottom: 0; }
+    .t { line-height:17px; font-size:11.5px; }
+    .f { display:inline-flex; flex-direction:column; align-items:center; flex:none; }
+    .f .v { display:block; width:100%; height:17px; line-height:17px; border-bottom:1px solid #000; text-align:center; font-weight:700; font-size:11.5px; color:#0b2a6b; overflow:hidden; }
+    .f .c { font-size:8.5px; line-height:1.15; margin-top:1px; }
+    .sup { border:1.3px solid #000; padding: 14px 12px 16px; margin-top: 30px; }
+    .sup h2 { font-size: 12.5px; margin: 0 0 6px; display:flex; }
+    .qhead, .q { display:grid; grid-template-columns: 1fr 44px 44px; column-gap: 14px; align-items:center; }
+    .qhead { font-size:12px; margin-bottom: 4px; }
+    .qhead span { text-align:center; }
+    .q { font-size:11.5px; margin-bottom: 11px; }
+    .ck { width:18px; height:18px; border:1.2px solid #000; justify-self:center; }
+    .sup .ln { margin-top: 20px; margin-bottom: 0; }
+    .footer { margin-top: 30px; font-size: 11px; }
+    @media print { .toolbar { display: none !important; } .page { padding: 0; } .box, .sup { break-inside: avoid; } }
+  </style></head>
+  <body>
+    <div class="toolbar">
+      <button class="print-btn" onclick="window.print()">🖨️ Print / PDF</button>
+      <button class="close-btn" onclick="window.close()">✕ Close</button>
+    </div>
+    <div class="page">
+    <div class="hdr">
+      <div class="logo"><b>TOK</b><span>TRANSIT</span></div>
+      <div class="submitted"><span class="t">Date Request Submitted:&nbsp; M</span>${f(submitted.m, 50)}<span class="t">D</span>${f(submitted.d, 44)}<span class="t">Y</span>${f(submitted.y, 56)}</div>
+    </div>
+    <h1>Shift Exchange Request Form</h1>
+    <div class="intro">
+      <p>Driver 1 completes 1<sup>st</sup> box - Driver 2 completes the 2<sup>nd</sup> box. If the work only has 1 piece, enter &ldquo;N/A&rdquo; in the blanks on piece 2 - Operations Supervisor will complete the 3<sup>rd</sup> box.</p>
+      <p>All information must be completed and both drivers must sign form prior to the form being submitted to Operations Supervisor. Shift Exchanges are at the sole discretion of Management and it is each Driver&rsquo;s responsibility to ensure the request has been approved before the requested date(s).</p>
+      <p>*Shift Exchanges must take place within the same pay period.&nbsp; If approved, crew value guarantees will be voided and all hours worked due to shift exchanges are not eligible for overtime.</p>
+      <p>*Request must be made at least five (5) days in advance of the Shift Exchange, and be compliant with Employment Standards, the Collective Agreement and other legislation.</p>
+      <p>*This agreement is between the two drivers involved and it is expected that each driver will fulfill their commitment.</p>
+    </div>
+    ${box(1, box1, box2)}
+    ${box(2, box2, box1)}
+    <div class="sup">
+      <div class="qhead"><h2>Operations Supervisor Use Only</h2><span>Yes</span><span>No</span></div>
+      ${q("Is the shift information above correct?")}
+      ${q("Is there a minimum of 8 hours off before and after driver 1 and 2&rsquo;s<br>new shift, and compliant with off day requirements?")}
+      ${q("Is this switch taking place within the same pay period?")}
+      ${q("Is the switch approved?")}
+      <div class="ln" style="margin-top:14px">${tx("If approved, record switch on Dispatch Sheet")}</div>
+      ${line(tx("If <u>not</u> approved, state reason"), f("", 250), tx("&nbsp;&nbsp;&nbsp;Date:"), f("", 150))}
+      ${line(tx("Operations Supervisor Name"), f("", 185), tx("ID"), f("", 70), tx("Signature"), f("", 170))}
+      ${line(tx("Entered in Trapeze by"), f("", 150), tx("&nbsp;&nbsp;&nbsp;Entered on Dispatch Sheet by"), f("", 150))}
+    </div>
+    <div class="footer">Revised January 23, 2020</div>
+    </div>
+  </body></html>`;
+}
+
+function printSwapForm(f, lang) {
+  const now = new Date();
+  const timestamp = `Generated ${new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric" }).format(now)} — ${now.toLocaleTimeString("en-GB")}`;
+  openPrintableReport(buildSwapFormHtml(f, lang, timestamp), lang);
 }
 
 function hexNoHash(h) { return h.replace("#", "").toUpperCase(); }
@@ -3566,6 +4451,9 @@ export default function ShiftPriorityRanker() {
   const [themeMode, setThemeMode] = useState(() => loadThemePrefs().mode);
   useEffect(() => { saveThemePrefs(themeStyle, themeMode); }, [themeStyle, themeMode]);
   ACTIVE_THEME.style = themeStyle;
+  const [soundSettings, setSoundSettingsState] = useState(() => loadSoundSettings());
+  const setSoundSettings = (next) => { setSoundSettingsState(next); saveSoundSettings(next); };
+  const tap = () => playTap(soundSettings);
   const [showPriorityFlow, setShowPriorityFlow] = useState(false);
   // 'settings' | 'help' | 'about' | 'helpMenu' | 'compare2' | 'profile'
   // | 'crewLookup' | 'adminLogin' | 'admin'
@@ -3582,10 +4470,14 @@ export default function ShiftPriorityRanker() {
   // overlaid with manual Admin edits) and whether this tab is unlocked as
   // Admin — see the loadCrewNames/loadAdminSession helpers above.
   const [crewNames, setCrewNames] = useState(() => loadCrewNames());
+  const [crewEmployeeIds, setCrewEmployeeIds] = useState(() => loadCrewEmployeeIds());
   const [isAdmin, setIsAdmin] = useState(() => loadAdminSession());
   // The crew picked from the "Browse crews" lookup panel, or null.
   const [lookupCrew, setLookupCrew] = useState(null);
   const [swapViewCrew, setSwapViewCrew] = useState(null);
+  // Pre-fill payload handed from SwapFinderPanel's "Fill swap form" button to
+  // SwapFormPanel; null when Swap Form is opened directly (empty form).
+  const [swapFormPrefill, setSwapFormPrefill] = useState(null);
 
   // Daily Log -- see loadDailyLogAccess/saveDailyLogAccess above.
   const [dailyLogAccess, setDailyLogAccess] = useState(() => loadDailyLogAccess());
@@ -3658,6 +4550,36 @@ export default function ShiftPriorityRanker() {
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", themeMode === "dark" ? palette.card : palette.accent);
   }, [palette, themeMode]);
+
+  // My own crew's row in the loaded schedule, used by the home screen's
+  // "My Shift" card and the weekly-hours ring below it.
+  const myCrew = useMemo(() => (
+    parsed && profile?.crewNumber ? parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber)) : null
+  ), [parsed, profile]);
+
+  // This week's logged hours (from the Daily Shift Log) vs. this week's
+  // scheduled hours (from the loaded board), as a 0-100 percent. null when
+  // there's nothing to show it against (no crew, or a 0-hour week).
+  // Recomputed whenever activePanel changes so it picks up log edits made
+  // in the Daily Shift Log panel as soon as the person returns home.
+  const weekProgress = useMemo(() => {
+    if (!myCrew) return null;
+    const scheduledMinutes = myCrew.days.reduce((sum, d) => sum + Math.round((Number(d.hours) || 0) * 60), 0);
+    if (scheduledMinutes <= 0) return null;
+    const now = new Date();
+    const sunday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+    const saturday = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() + 6);
+    const toKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const startKey = toKey(sunday), endKey = toKey(saturday);
+    let loggedMinutes = 0;
+    for (const e of loadDailyLogEntries()) {
+      if (!e?.date || e.date < startKey || e.date > endKey) continue;
+      loggedMinutes += Math.round((Number(e.totalHours) || 0) * 60);
+    }
+    const percent = Math.max(0, Math.min(100, Math.round((loggedMinutes / scheduledMinutes) * 100)));
+    return { percent, loggedHours: loggedMinutes / 60, scheduledHours: scheduledMinutes / 60 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myCrew, activePanel]);
 
   const handleFile = (e) => {
     const file = e.target.files?.[0];
@@ -3921,7 +4843,12 @@ export default function ShiftPriorityRanker() {
         />
       )}
       {activePanel === "settings" && (
-        <SettingsPanel lang={lang} themeStyle={themeStyle} setThemeStyle={setThemeStyle} themeMode={themeMode} setThemeMode={setThemeMode} onClose={() => setActivePanel(null)} />
+        <SettingsPanel
+          lang={lang} themeStyle={themeStyle} setThemeStyle={setThemeStyle}
+          themeMode={themeMode} setThemeMode={setThemeMode}
+          soundSettings={soundSettings} setSoundSettings={setSoundSettings}
+          onClose={() => setActivePanel(null)}
+        />
       )}
       {activePanel === "help" && <HelpPanel lang={lang} onClose={() => setActivePanel(null)} />}
       {activePanel === "about" && <AboutPanel lang={lang} onClose={() => setActivePanel(null)} />}
@@ -3938,14 +4865,29 @@ export default function ShiftPriorityRanker() {
       {activePanel === "compare2" && parsed && (
         <CompareTwoPanel lang={lang} crews={parsed.crews} onClose={() => setActivePanel(null)} />
       )}
-      {activePanel === "swapFinder" && parsed && (
+      {/* Kept mounted underneath when its "Fill form" opened the exchange form,
+          so closing the form returns to the same search results. */}
+      {(activePanel === "swapFinder" || (activePanel === "swapForm" && swapFormPrefill)) && parsed && (
         <SwapFinderPanel
           lang={lang}
           crews={parsed.crews}
           crewNames={crewNames}
           profile={profile}
           onViewCrew={(c) => setSwapViewCrew(c)}
+          onFillForm={(data) => { setSwapFormPrefill(data); setActivePanel("swapForm"); }}
           onClose={() => setActivePanel(null)}
+        />
+      )}
+      {activePanel === "swapForm" && (
+        <SwapFormPanel
+          key={swapFormPrefill ? JSON.stringify(swapFormPrefill) : "manual"}
+          lang={lang}
+          crews={parsed?.crews}
+          crewNames={crewNames}
+          crewEmployeeIds={crewEmployeeIds}
+          profile={profile}
+          prefill={swapFormPrefill}
+          onClose={() => { setActivePanel(swapFormPrefill ? "swapFinder" : null); setSwapFormPrefill(null); }}
         />
       )}
       {swapViewCrew && (
@@ -3996,6 +4938,8 @@ export default function ShiftPriorityRanker() {
           crews={parsed?.crews}
           crewNames={crewNames}
           setCrewNames={setCrewNames}
+          crewEmployeeIds={crewEmployeeIds}
+          setCrewEmployeeIds={setCrewEmployeeIds}
           dailyLogAccess={dailyLogAccess}
           setDailyLogAccess={setDailyLogAccess}
           onLogout={() => { setIsAdmin(false); saveAdminSession(false); setActivePanel(null); }}
@@ -4016,110 +4960,175 @@ export default function ShiftPriorityRanker() {
       })()}
 
       <div>
-        <header className="no-print" style={styles.header}>
-          <img src="./logo.png" alt="" style={styles.headerLogo} />
-          <div style={styles.routeDots}>
-            <span className="sp-dot" style={styles.dot} /><span style={styles.routeLine} /><span className="sp-dot" style={{ ...styles.dot, animationDelay: ".35s" }} /><span style={styles.routeLine} /><span className="sp-dot" style={{ ...styles.dot, background: "var(--accent2)", animationDelay: ".7s" }} />
-          </div>
-          <h1 style={styles.title}>{t("title", lang)}</h1>
-          <p style={styles.subtitle}>{t("subtitle", lang)}</p>
-          {profile?.firstName && (
-            <p style={styles.welcomeLine}>{t("welcomeBack", lang)} <b>{profile.firstName}</b></p>
-          )}
-          {showPriorityFlow ? (
-            <DateTimeWidget lang={lang} />
-          ) : (
-            // Home only: "My Shift" block physically LEFT of the clock in every
-            // language (the row is forced LTR; each block keeps the page direction).
-            <div style={{ display: "flex", justifyContent: "center", alignItems: "stretch", gap: 8, flexWrap: "nowrap", direction: "ltr" }}>
-              {(() => {
-                const myCrew = parsed && profile?.crewNumber ? parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber)) : null;
-                const today = myCrew ? myCrew.days.find((d) => d.dayIdx === new Date().getDay()) : null;
-                const onClick = () => {
-                  if (!profile?.crewNumber) setActivePanel("profile");
-                  else if (!parsed) setShowPriorityFlow(true);
-                  else if (myCrew) setShowMySchedule(true);
-                  else setActivePanel("profile");
-                };
-                const sub = !profile?.crewNumber ? t("myShiftHomeNoCrew", lang)
-                  : !parsed ? t("myShiftHomeNoFile", lang)
-                  : !myCrew ? t("crewNumberNotInFile", lang)
-                  : null;
-                return (
-                  <button className="sp-myshift sp-shine" onClick={onClick} style={{ "--sp-shine-delay": "1.8s", direction: dir, marginTop: 12, flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 104, padding: "8px 8px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", color: "#fff", background: "var(--my-g)", boxShadow: "0 6px 14px var(--my-glow-soft)", fontFamily: "inherit" }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontWeight: 800, fontSize: 13.5, whiteSpace: "nowrap" }}><Star size={13} color="#fff" /> {t("myShiftHomeTitle", lang)}</span>
-                    {myCrew && <span style={{ fontSize: 11.5, opacity: 0.9 }}>{t("crewWord", lang)} {String(myCrew.crew)}</span>}
-                    {myCrew && (today ? (
-                      <><span style={{ fontSize: 11, opacity: 0.9 }}>{t("todayLabel", lang)}</span><bdi dir="ltr" style={{ fontSize: 12.5, fontWeight: 800, whiteSpace: "nowrap" }}>{formatExcelTime(today.start)}–{formatExcelTime(today.end)}</bdi></>
-                    ) : (
-                      <span style={{ fontSize: 12.5, fontWeight: 700, textAlign: "center" }}>{t("todayLabel", lang)}: {t("off", lang)}</span>
-                    ))}
-                    {sub && <span style={{ fontSize: 10.5, opacity: 0.9, lineHeight: 1.35, textAlign: "center" }}>{sub}</span>}
-                    <span className="sp-shine-layer" aria-hidden="true" />
-                  </button>
-                );
-              })()}
-              <div style={{ direction: dir, display: "flex", flex: "0 1 auto", minWidth: 0 }}><DateTimeWidget lang={lang} /></div>
+        {showPriorityFlow ? (
+          <header className="no-print" style={styles.header}>
+            <img src="./logo.png" alt="" style={styles.headerLogo} />
+            <div style={styles.routeDots}>
+              <span className="sp-dot" style={styles.dot} /><span style={styles.routeLine} /><span className="sp-dot" style={{ ...styles.dot, animationDelay: ".35s" }} /><span style={styles.routeLine} /><span className="sp-dot" style={{ ...styles.dot, background: "var(--accent2)", animationDelay: ".7s" }} />
             </div>
-          )}
-        </header>
+            <h1 style={styles.title}>{t("title", lang)}</h1>
+            <p style={styles.subtitle}>{t("subtitle", lang)}</p>
+            <DateTimeWidget lang={lang} />
+          </header>
+        ) : (
+          <div className="no-print" style={styles.homeGreetingRow}>
+            <button
+              className="sp-shine"
+              onClick={() => { tap(); setActivePanel("profile"); }}
+              aria-label={t("profileTitle", lang)}
+              style={styles.profileBubble}
+            >
+              {(profile?.firstName || "?").trim().charAt(0).toUpperCase()}
+              <span style={styles.profileBubblePencil}><Pencil size={9} color="#fff" /></span>
+            </button>
+            <p style={styles.homeGreetingText}>
+              {t("hiGreeting", lang)} {profile?.firstName ? <b>{profile.firstName}</b> : null} 👋
+            </p>
+          </div>
+        )}
 
         {!showPriorityFlow && (
           <div className="no-print">
-            <button className="sp-hero sp-shine" onClick={() => setShowPriorityFlow(true)} style={{ ...styles.heroTile, "--sp-shine-delay": "1.2s" }}>
-              <span style={styles.heroTileIcon}><Star size={22} color="#fff" /></span>
-              <span style={{ flex: 1 }}>
-                <div style={styles.heroTileTitle}>{t("title", lang)}</div>
-                <div style={styles.heroTileSubtitle}>{t("subtitle", lang)}</div>
-              </span>
-              <ArrowLeft size={16} color="#fff" />
-              <span className="sp-shine-layer" aria-hidden="true" />
-            </button>
+            {(() => {
+              const todayIdxHome = new Date().getDay();
+              const weekdayNamesHome = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
+              const today = myCrew ? myCrew.days.find((d) => d.dayIdx === todayIdxHome) : null;
+              const onCardClick = () => {
+                if (!profile?.crewNumber) setActivePanel("profile");
+                else if (!parsed) setShowPriorityFlow(true);
+                else if (myCrew) setShowMySchedule(true);
+                else setActivePanel("profile");
+              };
+              const sub = !profile?.crewNumber ? t("myShiftHomeNoCrew", lang)
+                : !parsed ? t("myShiftHomeNoFile", lang)
+                : !myCrew ? t("crewNumberNotInFile", lang)
+                : null;
+              return (
+                <button className="sp-myshift sp-shine" onClick={onCardClick} style={{ "--sp-shine-delay": "1.0s", ...styles.myShiftHomeCard }}>
+                  <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 14 }}>
+                      <Star size={14} color="#fff" /> {t("myShiftHomeTitle", lang)}
+                      {myCrew && <span style={{ fontWeight: 600, opacity: 0.85, fontSize: 12 }}>· {t("crewWord", lang)} {String(myCrew.crew)}</span>}
+                    </span>
+                    {myCrew && (
+                      <span style={{ fontSize: 11, fontWeight: 700, background: "rgba(255,255,255,0.22)", borderRadius: 999, padding: "3px 9px", flexShrink: 0 }}>
+                        <bdi dir="ltr">{myCrew.totalHours}</bdi> {t("weekHoursBadge", lang)}
+                      </span>
+                    )}
+                  </span>
 
-            <div style={styles.hubGroupLabel}>{t("hubGroupCrews", lang)}</div>
+                  {myCrew ? (
+                    <span style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      {today ? (
+                        <bdi dir="ltr" style={{ fontSize: 22, fontWeight: 800 }}>{formatExcelTime(today.start)}–{formatExcelTime(today.end)}</bdi>
+                      ) : (
+                        <span style={{ fontSize: 24, fontWeight: 800 }}>{t("off", lang)}</span>
+                      )}
+                      <span style={{ fontSize: 11.5, opacity: 0.85 }}>{t("todayLabel", lang)} · {weekdayNamesHome[todayIdxHome]}</span>
+                    </span>
+                  ) : (
+                    sub && <span style={{ fontSize: 12, opacity: 0.9 }}>{sub}</span>
+                  )}
+
+                  {myCrew && (
+                    <span style={styles.dayChipRow}>
+                      {[0, 1, 2, 3, 4, 5, 6].map((i) => {
+                        const d = myCrew.days.find((x) => x.dayIdx === i);
+                        const isToday = i === todayIdxHome;
+                        return (
+                          <span key={i} style={styles.dayChipCol}>
+                            <span style={{ ...styles.dayChip, background: d ? (REGION_COLORS[d.regionKey] || "#9AA0A6") : "rgba(255,255,255,0.22)", ...(isToday ? styles.dayChipToday : {}) }}>
+                              {d ? (d.code || "•") : "·"}
+                            </span>
+                            <span style={styles.dayChipLabel}>{weekdayNamesHome[i].charAt(0)}</span>
+                          </span>
+                        );
+                      })}
+                    </span>
+                  )}
+
+                  <span style={styles.myShiftActionsRow}>
+                    <span
+                      role="button" tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); tap(); setSwapFormPrefill(null); setActivePanel("swapForm"); }}
+                      style={styles.myShiftActionBtn}
+                    >
+                      <span style={{ ...styles.myShiftActionIconBadge, color: "var(--my)" }}><FileSpreadsheet size={16} /></span>
+                      {t("quickSwapForm", lang)}
+                    </span>
+                    <span
+                      role="button" tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); tap(); setActivePanel("swapFinder"); }}
+                      style={styles.myShiftActionBtn}
+                    >
+                      <span style={{ ...styles.myShiftActionIconBadge, color: "var(--my)" }}><CalendarOff size={16} /></span>
+                      {t("quickCover", lang)}
+                    </span>
+                    {dailyLogVisible && (
+                      <span
+                        role="button" tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); tap(); setActivePanel("dailyLog"); }}
+                        style={styles.myShiftActionBtn}
+                      >
+                        <span style={{ ...styles.myShiftActionIconBadge, color: "var(--my)" }}><ClipboardList size={16} /></span>
+                        {t("quickLog", lang)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="sp-shine-layer" aria-hidden="true" />
+                </button>
+              );
+            })()}
+
+            <div style={{ ...styles.homeTopCards, gridTemplateColumns: weekProgress ? "1fr 1fr" : "1fr" }}>
+              <DateTimeWidget lang={lang} compact />
+              {weekProgress && (
+                <div style={styles.weekRingCard}>
+                  <div style={{ position: "relative", width: 48, height: 48 }}>
+                    <WeekRing percent={weekProgress.percent} size={48} stroke={5} />
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff" }}>
+                      {weekProgress.percent}%
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, opacity: 0.9 }}>{t("weekRingLabel", lang)}</span>
+                    <bdi dir="ltr" style={{ fontSize: 12.5, fontWeight: 800 }}>
+                      {weekProgress.loggedHours.toFixed(1)}/{weekProgress.scheduledHours.toFixed(1)} {t("hoursWord", lang)}
+                    </bdi>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div style={styles.hubGrid}>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("compare2")} style={{ "--sp-shine-delay": "2.4s", animationDelay: "80ms", ...styles.hubTile, background: "var(--t-compare-g)" }}>
+              <button className="sp-hero sp-shine" onClick={() => { tap(); setShowPriorityFlow(true); }} style={{ "--sp-shine-delay": "1.5s", ...styles.hubTile, gridColumn: "span 2", flexDirection: "row", alignItems: "center", gap: 10, background: "var(--hero-g)" }}>
+                <Trophy size={20} color="#fff" />
+                <span style={{ ...styles.hubTileLabel, marginTop: 0, fontSize: 12 }}>{t("title", lang)}</span>
+                <span className="sp-shine-layer" aria-hidden="true" />
+              </button>
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("compare2"); }} style={{ "--sp-shine-delay": "2.0s", animationDelay: "80ms", ...styles.hubTile, background: "var(--t-compare-g)" }}>
                 <GitCompare size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("compare2Title", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("crewLookup")} style={{ "--sp-shine-delay": "2.9s", animationDelay: "135ms", ...styles.hubTile, background: "var(--t-browse-g)" }}>
-                <Search size={18} color="#fff" />
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("crewLookup"); }} style={{ "--sp-shine-delay": "2.5s", animationDelay: "135ms", ...styles.hubTile, background: "var(--t-browse-g)" }}>
+                <Users size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("crewLookupTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("swapFinder")} style={{ "--sp-shine-delay": "3.4s", animationDelay: "190ms", ...styles.hubTile, background: "var(--t-swap-g)" }}>
-                <CalendarOff size={18} color="#fff" />
-                <span style={styles.hubTileLabel}>{t("hubSwapFinder", lang)}</span>
-                <span className="sp-shine-layer" aria-hidden="true" />
-              </button>
-            </div>
-
-            <div style={styles.hubGroupLabel}>{t("hubGroupMe", lang)}</div>
-            <div style={styles.hubGrid}>
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("profile")} style={{ "--sp-shine-delay": "3.9s", animationDelay: "245ms", ...styles.hubTile, background: "var(--t-profile-g)" }}>
-                <User size={18} color="#fff" />
-                <span style={styles.hubTileLabel}>{t("profileTitle", lang)}</span>
-                <span className="sp-shine-layer" aria-hidden="true" />
-              </button>
-              {dailyLogVisible && (
-                <button className="sp-tile sp-shine" onClick={() => setActivePanel("dailyLog")} style={{ "--sp-shine-delay": "4.4s", animationDelay: "300ms", ...styles.hubTile, background: "var(--t-log-g)" }}>
-                  <ClipboardList size={18} color="#fff" />
-                  <span style={styles.hubTileLabel}>{t("dailyLogMenuLabel", lang)}</span>
-                  <span className="sp-shine-layer" aria-hidden="true" />
-                </button>
-              )}
-              <button className="sp-tile sp-shine" onClick={() => setActivePanel("settings")} style={{ "--sp-shine-delay": "4.9s", animationDelay: "355ms", ...styles.hubTile, background: "var(--t-settings-g)" }}>
-                <Sun size={18} color="#fff" />
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("settings"); }} style={{ "--sp-shine-delay": "3.0s", animationDelay: "355ms", ...styles.hubTile, background: "var(--t-settings-g)" }}>
+                <Palette size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("settingsTitle", lang)}</span>
+                <span className="sp-shine-layer" aria-hidden="true" />
+              </button>
+              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("helpMenu"); }} style={{ "--sp-shine-delay": "3.5s", animationDelay: "410ms", ...styles.hubTile, background: "linear-gradient(135deg, #6B7280, #9CA3AF)" }}>
+                <HelpCircle size={18} color="#fff" />
+                <span style={styles.hubTileLabel}>{t("helpMenuLabel", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
             </div>
 
             <div style={styles.hubListCard}>
-              <button style={styles.menuItem} onClick={() => setActivePanel("helpMenu")}>
-                <HelpCircle size={15} /> {t("helpMenuLabel", lang)}
-              </button>
               <button style={styles.menuItem} onClick={() => setActivePanel(isAdmin ? "admin" : "adminLogin")}>
                 <Shield size={15} /> {t("adminMenuLabel", lang)}
               </button>
@@ -4454,7 +5463,23 @@ const styles = {
   hubTileLabel: { fontSize: 10.5, fontWeight: 700, color: "#fff", lineHeight: 1.3, marginTop: 8 },
   hubComingSoonBadge: { position: "absolute", top: 6, insetInlineStart: 6, fontSize: 8, fontWeight: 700, padding: "1px 5px", borderRadius: 20, background: "rgba(255,255,255,0.9)", color: "#4B5563" },
   hubListCard: { border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--card)", padding: 6, display: "flex", flexDirection: "column", gap: 1, marginBottom: 14 },
-  header: { textAlign: "center", marginBottom: 18, paddingTop: 10 },
+  myShiftHomeCard: { display: "flex", flexDirection: "column", gap: 8, width: "100%", textAlign: "start", border: "none", borderRadius: "var(--radius)", padding: "14px 16px", marginBottom: 10, background: "var(--my-g)", color: "#fff", cursor: "pointer", boxShadow: "0 6px 16px var(--my-glow-soft)", fontFamily: "inherit", position: "relative" },
+  myShiftQuickBtn: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 700, padding: "5px 10px", borderRadius: 999, background: "rgba(255,255,255,0.2)", color: "#fff", cursor: "pointer" },
+  myShiftActionsRow: { display: "flex", gap: 6, marginTop: 6 },
+  myShiftActionBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "2px 2px", borderRadius: 10, border: "none", background: "transparent", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 10, fontWeight: 700, lineHeight: 1.15, textAlign: "center" },
+  myShiftActionIconBadge: { width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.94)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.18)", flexShrink: 0 },
+  dayChipRow: { display: "flex", gap: 5, marginTop: 4 },
+  dayChipCol: { display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flex: 1, minWidth: 0 },
+  dayChip: { width: 30, height: 30, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: "#fff", flexShrink: 0, overflow: "hidden", whiteSpace: "nowrap", letterSpacing: "-0.2px", boxSizing: "border-box" },
+  dayChipToday: { boxShadow: "0 0 0 1.5px var(--accent2)" },
+  dayChipLabel: { fontSize: 9, fontWeight: 700, opacity: 0.85 },
+  homeTopCards: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10, alignItems: "stretch" },
+  weekRingCard: { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: "var(--radius)", background: "var(--t-log-g)", color: "#fff", boxShadow: "0 4px 10px rgba(0,0,0,0.14)" },
+  homeGreetingRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingTop: 6 },
+  homeGreetingText: { fontSize: 15.5, fontWeight: 800, color: "var(--text)", margin: 0 },
+  profileBubble: { position: "relative", flexShrink: 0, width: 38, height: 38, borderRadius: "50%", background: "var(--accent)", color: "#fff", fontWeight: 800, fontSize: 16, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 8px rgba(0,0,0,0.2)" },
+  profileBubblePencil: { position: "absolute", bottom: -2, insetInlineEnd: -2, width: 16, height: 16, borderRadius: "50%", background: "var(--accent2)", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--bg)" },
+  header: { textAlign: "center", marginBottom: 18, paddingTop: 10, position: "relative" },
   headerLogo: { width: 56, height: 56, borderRadius: 14, objectFit: "contain", marginBottom: 6 },
   routeDots: { display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 },
   splashOverlay: { position: "fixed", inset: 0, zIndex: 999, background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" },

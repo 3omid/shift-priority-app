@@ -1,7 +1,7 @@
 {
   "name": "shift-priority-app",
   "private": false,
-  "version": "5.46.0",
+  "version": "5.48.0",
   "description": "Shift priority ranking tool for TOK Transit crew schedules.",
   "author": "Omid Farhadnia",
   "license": "MIT",
@@ -11,8 +11,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "electron:dev": "vite build && electron .",
-    "dist": "vite build && electron-builder"
+    "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "dist": "vite build && electron-builder",
+    "test": "vitest run"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -24,7 +25,11 @@
     "@vitejs/plugin-react": "^4.3.1",
     "vite": "^5.4.0",
     "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.2.0",
+    "vitest": "^2.1.1",
+    "fake-indexeddb": "^6.0.0"
   },
   "build": {
     "appId": "com.tokransit.shiftpriority",
