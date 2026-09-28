@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import pkg from "../package.json";
 import { exportBackup, validateBackupFile, restoreBackup, daysSinceLastExport, listSnapshots, restoreSnapshotById } from "./data/backup.js";
-import { playTap, testSound } from "./data/sound.js";
+import { playTap, testSound, unlockAudio, SOUND_TYPES, PITCH_STEPS } from "./data/sound.js";
 import {
   loadProfile, saveProfile, clearProfileStorage,
   loadCrewNames, saveCrewNames,
@@ -4040,6 +4040,12 @@ const BACKUP_STRINGS = {
   soundPop: { fa: "پاپ", en: "Pop", hi: "पॉप" },
   soundBubble: { fa: "حباب", en: "Bubble", hi: "बबल" },
   soundClick: { fa: "کلیک", en: "Click", hi: "क्लिक" },
+  soundKeyboard: { fa: "کیبورد آیفون", en: "iPhone keyboard", hi: "iPhone कीबोर्ड" },
+  soundDrop: { fa: "قطره", en: "Drop", hi: "बूँद" },
+  soundPitch: { fa: "زیر و بمی", en: "Pitch", hi: "पिच" },
+  soundPitchLow: { fa: "بم", en: "Low", hi: "नीचा" },
+  soundPitchHigh: { fa: "زیر", en: "High", hi: "ऊँचा" },
+  soundIosHint: { fa: "روی آیفون اگه کلید کناری روی حالت بی‌صدا (Silent) باشه، مثل صدای کیبورد خود گوشی، این صداها هم شنیده نمی‌شن.", en: "On iPhone, like the keyboard clicks, these sounds can't be heard while the side switch is on Silent.", hi: "iPhone पर, कीबोर्ड क्लिक की तरह, साइड स्विच Silent पर होने पर ये आवाज़ें सुनाई नहीं देतीं।" },
   soundTest: { fa: "تست", en: "Test", hi: "जाँच" },
   backupTitle: { fa: "پشتیبان‌گیری", en: "Backup", hi: "बैकअप" },
   backupHint: {
@@ -4091,6 +4097,7 @@ const BACKUP_STRINGS = {
   },
   snapshotRestored: { fa: "همین نسخه بازگردانی شد.", en: "That snapshot was restored.", hi: "वह स्नैपशॉट पुनर्स्थापित हो गया।" },
 };
+const SOUND_LABEL_KEYS = { pop: "soundPop", bubble: "soundBubble", click: "soundClick", keyboard: "soundKeyboard", drop: "soundDrop" };
 function bt(key, lang) { return BACKUP_STRINGS[key] ? (BACKUP_STRINGS[key][lang] || BACKUP_STRINGS[key].en) : key; }
 
 function SettingsPanel({
@@ -4183,23 +4190,40 @@ function SettingsPanel({
         </div>
       </div>
 
-      {/* ---- Sound (new) ---- */}
-      <div style={styles.prefGroup}>
+      {/* ---- Sound ---- */}
+      <div style={styles.prefGroup} data-no-tap>
         <div style={styles.prefTitle}>{bt("soundTitle", lang)}</div>
         <div style={styles.chipRow}>
           <button onClick={() => setSoundSettings({ ...soundSettings, enabled: false })} style={{ ...styles.chip, ...(!soundSettings.enabled ? styles.chipActive : {}) }}>{bt("soundOff", lang)}</button>
-          <button onClick={() => setSoundSettings({ ...soundSettings, enabled: true })} style={{ ...styles.chip, ...(soundSettings.enabled ? styles.chipActive : {}) }}>{bt("soundOn", lang)}</button>
+          <button onClick={() => { const next = { ...soundSettings, enabled: true }; setSoundSettings(next); testSound(next.type, next.pitch); }} style={{ ...styles.chip, ...(soundSettings.enabled ? styles.chipActive : {}) }}>{bt("soundOn", lang)}</button>
         </div>
-        <div style={{ ...styles.chipRow, marginTop: 8, opacity: soundSettings.enabled ? 1 : 0.5 }}>
-          {["pop", "bubble", "click"].map((type) => (
-            <button key={type} disabled={!soundSettings.enabled}
-              onClick={() => setSoundSettings({ ...soundSettings, type })}
-              style={{ ...styles.chip, ...(soundSettings.type === type ? styles.chipActive : {}) }}>
-              {bt(type === "pop" ? "soundPop" : type === "bubble" ? "soundBubble" : "soundClick", lang)}
+        {/* Picking a sound turns sound on and plays it, so the choices are
+            never greyed out / "dead" to the touch. */}
+        <div style={{ ...styles.chipRow, marginTop: 8 }}>
+          {SOUND_TYPES.map((type) => (
+            <button key={type}
+              onClick={() => { const next = { ...soundSettings, type, enabled: true }; setSoundSettings(next); testSound(type, next.pitch); }}
+              style={{ ...styles.chip, ...(soundSettings.enabled && soundSettings.type === type ? styles.chipActive : {}) }}>
+              {bt(SOUND_LABEL_KEYS[type], lang)}
             </button>
           ))}
-          <button onClick={() => testSound(soundSettings.type)} style={styles.chip}>🔊 {bt("soundTest", lang)}</button>
         </div>
+        <div style={{ ...styles.prefTitle, fontSize: 12.5, marginTop: 12 }}>{bt("soundPitch", lang)}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 12, opacity: 0.8, flexShrink: 0 }}>{bt("soundPitchLow", lang)}</span>
+          <input
+            type="range" min={0} max={PITCH_STEPS.length - 1} step={1}
+            value={Math.max(0, PITCH_STEPS.indexOf(soundSettings.pitch ?? 1))}
+            onChange={(e) => { const pitch = PITCH_STEPS[Number(e.target.value)]; const next = { ...soundSettings, pitch }; setSoundSettings(next); testSound(next.type, pitch); }}
+            aria-label={bt("soundPitch", lang)}
+            style={{ flex: 1, minWidth: 0, width: "100%", margin: 0, accentColor: "var(--accent)" }}
+          />
+          <span style={{ fontSize: 12, opacity: 0.8, flexShrink: 0 }}>{bt("soundPitchHigh", lang)}</span>
+        </div>
+        <div style={{ ...styles.chipRow, marginTop: 8 }}>
+          <button onClick={() => testSound(soundSettings.type, soundSettings.pitch)} style={styles.chip}>🔊 {bt("soundTest", lang)}</button>
+        </div>
+        <p style={{ ...styles.hint, marginTop: 8 }}>{bt("soundIosHint", lang)}</p>
       </div>
 
       {/* ---- Backup (new) ---- */}
@@ -4999,7 +5023,26 @@ export default function ShiftPriorityRanker() {
   ACTIVE_THEME.style = themeStyle;
   const [soundSettings, setSoundSettingsState] = useState(() => loadSoundSettings());
   const setSoundSettings = (next) => { setSoundSettingsState(next); saveSoundSettings(next); };
-  const tap = () => playTap(soundSettings);
+  // One tap sound for every button/link in the app (instead of wiring it
+  // into each onClick). The Settings sound chips play their own preview, so
+  // they carry data-no-tap. The first touches also "unlock" audio on iPhone.
+  const soundRef = useRef(soundSettings);
+  soundRef.current = soundSettings;
+  useEffect(() => {
+    const onClick = (e) => {
+      unlockAudio();
+      const el = e.target && e.target.closest && e.target.closest('button, [role="button"], a[href], summary, select, input[type="checkbox"], input[type="radio"]');
+      if (!el || el.disabled || el.closest("[data-no-tap]")) return;
+      playTap(soundRef.current);
+    };
+    const onTouch = () => unlockAudio();
+    document.addEventListener("click", onClick, true);
+    document.addEventListener("touchend", onTouch, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      document.removeEventListener("touchend", onTouch, { capture: true });
+    };
+  }, []);
   const [showPriorityFlow, setShowPriorityFlow] = useState(false);
   // 'settings' | 'help' | 'about' | 'helpMenu' | 'compare2' | 'profile'
   // | 'crewLookup' | 'adminLogin' | 'admin'
@@ -5520,7 +5563,7 @@ export default function ShiftPriorityRanker() {
           <div className="no-print" style={styles.homeGreetingRow}>
             <button
               className="sp-shine"
-              onClick={() => { tap(); setActivePanel("profile"); }}
+              onClick={() => { setActivePanel("profile"); }}
               aria-label={t("profileTitle", lang)}
               style={styles.profileBubble}
             >
@@ -5596,7 +5639,7 @@ export default function ShiftPriorityRanker() {
                   <span style={styles.myShiftActionsRow}>
                     <span
                       role="button" tabIndex={0}
-                      onClick={(e) => { e.stopPropagation(); tap(); setSwapFormPrefill(null); setActivePanel("swapForm"); }}
+                      onClick={(e) => { e.stopPropagation(); setSwapFormPrefill(null); setActivePanel("swapForm"); }}
                       style={styles.myShiftActionBtn}
                     >
                       <span style={{ ...styles.myShiftActionIconBadge, color: "var(--my)" }}><FileSpreadsheet size={16} /></span>
@@ -5604,7 +5647,7 @@ export default function ShiftPriorityRanker() {
                     </span>
                     <span
                       role="button" tabIndex={0}
-                      onClick={(e) => { e.stopPropagation(); tap(); setActivePanel("swapFinder"); }}
+                      onClick={(e) => { e.stopPropagation(); setActivePanel("swapFinder"); }}
                       style={styles.myShiftActionBtn}
                     >
                       <span style={{ ...styles.myShiftActionIconBadge, color: "var(--my)" }}><CalendarOff size={16} /></span>
@@ -5613,7 +5656,7 @@ export default function ShiftPriorityRanker() {
                     {dailyLogVisible && (
                       <span
                         role="button" tabIndex={0}
-                        onClick={(e) => { e.stopPropagation(); tap(); setActivePanel("dailyLog"); }}
+                        onClick={(e) => { e.stopPropagation(); setActivePanel("dailyLog"); }}
                         style={styles.myShiftActionBtn}
                       >
                         <span style={{ ...styles.myShiftActionIconBadge, color: "var(--my)" }}><ClipboardList size={16} /></span>
@@ -5648,27 +5691,27 @@ export default function ShiftPriorityRanker() {
             </div>
 
             <div style={styles.hubGrid}>
-              <button className="sp-hero sp-shine" onClick={() => { tap(); setShowPriorityFlow(true); }} style={{ "--sp-shine-delay": "1.5s", ...styles.hubTile, gridColumn: "span 2", flexDirection: "row", alignItems: "center", gap: 10, background: "var(--hero-g)" }}>
+              <button className="sp-hero sp-shine" onClick={() => { setShowPriorityFlow(true); }} style={{ "--sp-shine-delay": "1.5s", ...styles.hubTile, gridColumn: "span 2", flexDirection: "row", alignItems: "center", gap: 10, background: "var(--hero-g)" }}>
                 <Trophy size={20} color="#fff" />
                 <span style={{ ...styles.hubTileLabel, marginTop: 0, fontSize: 12 }}>{t("title", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("compare2"); }} style={{ "--sp-shine-delay": "2.0s", animationDelay: "80ms", ...styles.hubTile, background: "var(--t-compare-g)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { setActivePanel("compare2"); }} style={{ "--sp-shine-delay": "2.0s", animationDelay: "80ms", ...styles.hubTile, background: "var(--t-compare-g)" }}>
                 <GitCompare size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("compare2Title", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("crewLookup"); }} style={{ "--sp-shine-delay": "2.5s", animationDelay: "135ms", ...styles.hubTile, background: "var(--t-browse-g)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { setActivePanel("crewLookup"); }} style={{ "--sp-shine-delay": "2.5s", animationDelay: "135ms", ...styles.hubTile, background: "var(--t-browse-g)" }}>
                 <Users size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("crewLookupTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("settings"); }} style={{ "--sp-shine-delay": "3.0s", animationDelay: "355ms", ...styles.hubTile, background: "var(--t-settings-g)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { setActivePanel("settings"); }} style={{ "--sp-shine-delay": "3.0s", animationDelay: "355ms", ...styles.hubTile, background: "var(--t-settings-g)" }}>
                 <Palette size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("settingsTitle", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
               </button>
-              <button className="sp-tile sp-shine" onClick={() => { tap(); setActivePanel("helpMenu"); }} style={{ "--sp-shine-delay": "3.5s", animationDelay: "410ms", ...styles.hubTile, background: "var(--t-help-g)" }}>
+              <button className="sp-tile sp-shine" onClick={() => { setActivePanel("helpMenu"); }} style={{ "--sp-shine-delay": "3.5s", animationDelay: "410ms", ...styles.hubTile, background: "var(--t-help-g)" }}>
                 <HelpCircle size={18} color="#fff" />
                 <span style={styles.hubTileLabel}>{t("helpMenuLabel", lang)}</span>
                 <span className="sp-shine-layer" aria-hidden="true" />
