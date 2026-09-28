@@ -2284,7 +2284,20 @@ function dayChipFontSize(code) {
   if (n <= 3) return 11;
   if (n === 4) return 9.5;
   if (n === 5) return 8.5;
-  return 7.5;
+  if (n === 6) return 7.5;
+  return 6.5;
+}
+// A long code with spaces (e.g. "PRO 9 MRC") is shown on two lines, split
+// at the space nearest the middle, so it fits inside the circle instead of
+// being cut off at both edges.
+function dayChipLines(code) {
+  const str = String(code || "").trim();
+  if (str.length <= 5 || !str.includes(" ")) return [str];
+  let best = -1;
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] === " " && (best < 0 || Math.abs(i - str.length / 2) < Math.abs(best - str.length / 2))) best = i;
+  }
+  return [str.slice(0, best).trim(), str.slice(best + 1).trim()];
 }
 
 // ---------- Admin session ----------
@@ -5659,9 +5672,15 @@ export default function ShiftPriorityRanker() {
                         const isToday = i === todayIdxHome;
                         return (
                           <span key={i} style={styles.dayChipCol}>
-                            <span style={{ ...styles.dayChip, fontSize: dayChipFontSize(d?.code), background: d ? (REGION_COLORS[d.regionKey] || "#9AA0A6") : "rgba(255,255,255,0.22)", ...(isToday ? styles.dayChipToday : {}) }}>
-                              {d ? (d.code || "•") : "·"}
-                            </span>
+                            {(() => {
+                              const lines = d && d.code ? dayChipLines(d.code) : [d ? "•" : "·"];
+                              const longest = lines.reduce((a, l) => (l.length > a.length ? l : a), "");
+                              return (
+                                <span title={d?.code || undefined} style={{ ...styles.dayChip, fontSize: dayChipFontSize(longest), ...(lines.length > 1 ? { flexDirection: "column", lineHeight: 1.05 } : {}), background: d ? (REGION_COLORS[d.regionKey] || "#9AA0A6") : "rgba(255,255,255,0.22)", ...(isToday ? styles.dayChipToday : {}) }}>
+                                  {lines.map((l, k) => <span key={k}>{l}</span>)}
+                                </span>
+                              );
+                            })()}
                             <span style={{ ...styles.dayChipLabel, ...(isToday ? styles.dayChipLabelToday : {}) }}>{weekdayNamesHome[i].charAt(0)}</span>
                           </span>
                         );
