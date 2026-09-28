@@ -24,7 +24,10 @@ function loadIntoHiddenFrame(html) {
     iframe.style.cssText = `position:fixed; left:-12000px; top:0; width:${PAGE_W}px; height:${PAGE_H}px; border:0; opacity:0; pointer-events:none;`;
     // Screen-only bits of the print page (toolbar, preview padding) off, so
     // the layout is exactly what ends up on paper.
-    const printLike = "<style>.toolbar{display:none!important} html,body{margin:0!important;padding:0!important} .page{margin:0!important;padding:0!important}</style>";
+    // text-size-adjust: iPhone Safari otherwise "inflates" long paragraphs
+    // (the form's intro text came out much bigger than the rest), which
+    // pushed the bottom of the form off the page.
+    const printLike = "<style>.toolbar{display:none!important} html{-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important} html,body{margin:0!important;padding:0!important} .page{margin:0!important;padding:0!important}</style>";
     iframe.srcdoc = html.replace("</head>", `${printLike}</head>`);
     const timer = setTimeout(() => { iframe.remove(); reject(new Error("form layout timed out")); }, 15000);
     iframe.onload = async () => {
@@ -47,16 +50,24 @@ function drawLayoutOnCanvas(iframe) {
   const doc = iframe.contentDocument;
   const root = doc.querySelector(".page") || doc.body;
   const origin = root.getBoundingClientRect();
-  const ox = MARGIN_X - origin.left;
-  const oy = MARGIN_Y - origin.top;
+  // Coordinates below are relative to the form's own top-left corner; the
+  // canvas transform places them inside the page margins.
+  const ox = -origin.left;
+  const oy = -origin.top;
 
   const canvas = document.createElement("canvas");
   canvas.width = PAGE_W * SCALE;
   canvas.height = PAGE_H * SCALE;
   const ctx = canvas.getContext("2d");
-  ctx.scale(SCALE, SCALE);
   ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Always one page: if the laid-out form is taller (or wider) than the
+  // printable area — e.g. a phone used bigger fonts — shrink it to fit and
+  // centre it, instead of cutting the bottom off.
+  const availW = PAGE_W - 2 * MARGIN_X, availH = PAGE_H - 2 * MARGIN_Y;
+  const fit = Math.min(1, availW / Math.max(1, root.scrollWidth, origin.width), availH / Math.max(1, root.scrollHeight, origin.height));
+  const tx = MARGIN_X + (availW - origin.width * fit) / 2;
+  ctx.setTransform(SCALE * fit, 0, 0, SCALE * fit, SCALE * tx, SCALE * MARGIN_Y);
 
   const visible = (cs) => cs.display !== "none" && cs.visibility !== "hidden" && cs.opacity !== "0";
 
