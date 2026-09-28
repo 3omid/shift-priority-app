@@ -1778,6 +1778,16 @@ function applyExchangeOverrides(derived, ov, lang) {
   return out;
 }
 
+// Font size for a home-screen day circle: short shift codes read large,
+// longer ones shrink so they still fit inside the circle.
+function dayChipFontSize(code) {
+  const n = String(code || "").length;
+  if (n <= 3) return 11;
+  if (n === 4) return 9.5;
+  if (n === 5) return 8.5;
+  return 7.5;
+}
+
 // ---------- Admin session ----------
 // sessionStorage only — see ADMIN_SESSION_KEY above for why.
 function loadAdminSession() {
@@ -4103,6 +4113,22 @@ function buildSwapFormHtml({ box1, box2, submittedDate }, lang, timestamp) {
     .sup .ln { margin-top: 20px; margin-bottom: 0; }
     .footer { margin-top: 30px; font-size: 11px; }
     @media print { .toolbar { display: none !important; } .page { padding: 0; } .box, .sup { break-inside: avoid; } }
+    /* Phone print dialogs (iPhone/Android) use bigger margins than @page asks
+       for and add their own header/footer, so at full size the form spilled
+       onto a 2nd page unless the person set the print scale to ~84% by hand.
+       Printing, the vertical gaps are trimmed and the whole form is drawn at
+       86%, which lands it on a single page at the default 100% scale. */
+    @media print {
+      .page { zoom: 0.86; }
+      h1 { margin: 6px 0 10px; }
+      .intro p { margin-bottom: 8px; }
+      .box { margin-bottom: 10px; padding: 12px 9px 9px; }
+      .ln { margin-bottom: 11px; }
+      .sup { margin-top: 16px; padding: 12px 12px 13px; }
+      .q { margin-bottom: 8px; }
+      .sup .ln { margin-top: 15px; }
+      .footer { margin-top: 14px; }
+    }
   </style></head>
   <body>
     <div class="toolbar">
@@ -5037,10 +5063,10 @@ export default function ShiftPriorityRanker() {
                         const isToday = i === todayIdxHome;
                         return (
                           <span key={i} style={styles.dayChipCol}>
-                            <span style={{ ...styles.dayChip, background: d ? (REGION_COLORS[d.regionKey] || "#9AA0A6") : "rgba(255,255,255,0.22)", ...(isToday ? styles.dayChipToday : {}) }}>
+                            <span style={{ ...styles.dayChip, fontSize: dayChipFontSize(d?.code), background: d ? (REGION_COLORS[d.regionKey] || "#9AA0A6") : "rgba(255,255,255,0.22)", ...(isToday ? styles.dayChipToday : {}) }}>
                               {d ? (d.code || "•") : "·"}
                             </span>
-                            <span style={styles.dayChipLabel}>{weekdayNamesHome[i].charAt(0)}</span>
+                            <span style={{ ...styles.dayChipLabel, ...(isToday ? styles.dayChipLabelToday : {}) }}>{weekdayNamesHome[i].charAt(0)}</span>
                           </span>
                         );
                       })}
@@ -5468,11 +5494,14 @@ const styles = {
   myShiftActionsRow: { display: "flex", gap: 6, marginTop: 6 },
   myShiftActionBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "2px 2px", borderRadius: 10, border: "none", background: "transparent", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 10, fontWeight: 700, lineHeight: 1.15, textAlign: "center" },
   myShiftActionIconBadge: { width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.94)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.18)", flexShrink: 0 },
-  dayChipRow: { display: "flex", gap: 5, marginTop: 4 },
-  dayChipCol: { display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flex: 1, minWidth: 0 },
-  dayChip: { width: 30, height: 30, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: "#fff", flexShrink: 0, overflow: "hidden", whiteSpace: "nowrap", letterSpacing: "-0.2px", boxSizing: "border-box" },
-  dayChipToday: { boxShadow: "0 0 0 1.5px var(--accent2)" },
-  dayChipLabel: { fontSize: 9, fontWeight: 700, opacity: 0.85 },
+  dayChipRow: { display: "flex", gap: 5, marginTop: 4, padding: "5px 2px 0" },
+  dayChipCol: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flex: 1, minWidth: 0 },
+  dayChip: { width: "min(36px, 100%)", aspectRatio: "1 / 1", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#fff", flexShrink: 0, overflow: "hidden", whiteSpace: "nowrap", letterSpacing: "-0.3px", boxSizing: "border-box" },
+  // Today: a white gap ring then a bright gold ring, so it stands out on any
+  // shift color and on the card's own background.
+  dayChipToday: { boxShadow: "0 0 0 2px rgba(255,255,255,0.95), 0 0 0 4.5px #FFC83D, 0 0 10px 2px rgba(255,200,61,0.55)" },
+  dayChipLabel: { fontSize: 9.5, fontWeight: 700, opacity: 0.85 },
+  dayChipLabelToday: { opacity: 1, fontWeight: 900, color: "#FFC83D" },
   homeTopCards: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10, alignItems: "stretch" },
   weekRingCard: { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: "var(--radius)", background: "var(--t-log-g)", color: "#fff", boxShadow: "0 4px 10px rgba(0,0,0,0.14)" },
   homeGreetingRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingTop: 6 },
