@@ -836,7 +836,7 @@ const THEME_PALETTES = {
       "border": "#2A313B",
       "text": "#ECEFF3",
       "muted": "#9AA4B2",
-      "accent": "#0E9F7E",
+      "accent": "#0E9D7C",
       "accent2": "#FBBF24",
       "radius": "10px"
     },
@@ -1188,7 +1188,7 @@ const THEME_PALETTES = {
       "border": "#33294F",
       "text": "#EEE9FF",
       "muted": "#A79DCA",
-      "accent": "#7C3AED",
+      "accent": "#8846ED",
       "accent2": "#F472B6",
       "radius": "10px"
     },
@@ -1364,7 +1364,7 @@ const THEME_PALETTES = {
       "border": "#2E2E33",
       "text": "#F4F4F5",
       "muted": "#A1A1AA",
-      "accent": "#818CF8",
+      "accent": "#737EF8",
       "accent2": "#60A5FA",
       "radius": "10px"
     },
@@ -1452,7 +1452,7 @@ const THEME_PALETTES = {
       "border": "#3A2F48",
       "text": "#F8EEFB",
       "muted": "#C3AFCB",
-      "accent": "#C084FC",
+      "accent": "#B165FC",
       "accent2": "#FF8FBF",
       "radius": "14px"
     },
@@ -1540,7 +1540,7 @@ const THEME_PALETTES = {
       "border": "#1F3D38",
       "text": "#E6F7F3",
       "muted": "#93BDB3",
-      "accent": "#2EC4B6",
+      "accent": "#269A8C",
       "accent2": "#FF8A8A",
       "radius": "12px"
     },
@@ -1628,7 +1628,7 @@ const THEME_PALETTES = {
       "border": "#272B4D",
       "text": "#ECEEFF",
       "muted": "#A0A6D0",
-      "accent": "#6C8BFF",
+      "accent": "#5D81FF",
       "accent2": "#FF5CA8",
       "radius": "12px"
     },
@@ -1716,7 +1716,7 @@ const THEME_PALETTES = {
       "border": "#2F3D25",
       "text": "#EEF6E8",
       "muted": "#A9BE9C",
-      "accent": "#5CC6A2",
+      "accent": "#349A79",
       "accent2": "#F9A26C",
       "radius": "12px"
     },
