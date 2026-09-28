@@ -2823,7 +2823,7 @@ function DailyLogPanel({ lang, onClose }) {
             <button
               key={label}
               type="button"
-              style={active ? { ...styles.chip, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" } : styles.chip}
+              style={active ? { ...styles.chip, background: "var(--accent)", color: "#fff", border: "1px solid var(--accent)" } : styles.chip}
               onClick={() => applyChip(label)}
             >
               {label}
@@ -3997,14 +3997,17 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, crewEmployeeIds, set
             : eidDefault ? t("adminDefaultBadge", lang) : t("adminBlankBadge", lang);
           return (
             <div key={num} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px" }}>
-                <span style={{ fontWeight: 700, fontSize: 12.5, minWidth: 60 }}>{t("crewWord", lang)} {num}</span>
+              {/* Wraps on a phone: crew #, name and Employee ID stay on the first
+                  line; the badges and the ✕ / 🗑 buttons move to a second line
+                  instead of being pushed off the right edge. */}
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px" }}>
+                <span style={{ fontWeight: 700, fontSize: 12.5, minWidth: 56 }}>{t("crewWord", lang)} {num}</span>
                 <input
                   type="text"
                   value={value}
                   onChange={(e) => setDrafts((prev) => ({ ...prev, [num]: e.target.value }))}
                   onBlur={() => { if (drafts[num] !== undefined) commit(num, drafts[num]); }}
-                  style={{ ...styles.numInputWide, padding: "5px 8px", fontSize: 12.5 }}
+                  style={{ ...styles.numInputWide, padding: "5px 8px", fontSize: 12.5, flex: "1 1 110px", minWidth: 0 }}
                 />
                 <input
                   type="text"
@@ -4012,7 +4015,7 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, crewEmployeeIds, set
                   placeholder={t("employeeIdLabel", lang)}
                   onChange={(e) => setEidDrafts((prev) => ({ ...prev, [num]: e.target.value }))}
                   onBlur={() => { if (eidDrafts[num] !== undefined) commitEid(num, eidDrafts[num]); }}
-                  style={{ ...styles.numInputWide, padding: "5px 8px", fontSize: 12.5, maxWidth: 100, flex: "none" }}
+                  style={{ ...styles.numInputWide, padding: "5px 8px", fontSize: 12.5, flex: "0 1 92px", minWidth: 64 }}
                 />
                 <span style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap" }}>
                   {badge}
@@ -4085,7 +4088,7 @@ const BACKUP_STRINGS = {
   soundPop: { fa: "پاپ", en: "Pop", hi: "पॉप" },
   soundBubble: { fa: "حباب", en: "Bubble", hi: "बबल" },
   soundClick: { fa: "کلیک", en: "Click", hi: "क्लिक" },
-  soundKeyboard: { fa: "کیبورد آیفون", en: "iPhone keyboard", hi: "iPhone कीबोर्ड" },
+  soundKeyboard: { fa: "کلیک صفحه‌کلید", en: "Keyboard clicks", hi: "कीबोर्ड क्लिक" },
   soundDrop: { fa: "قطره", en: "Drop", hi: "बूँद" },
   soundPitch: { fa: "زیر و بمی", en: "Pitch", hi: "पिच" },
   soundPitchLow: { fa: "بم", en: "Low", hi: "नीचा" },
@@ -4121,7 +4124,8 @@ const BACKUP_STRINGS = {
   modeReplaceHint: { fa: "همه‌چیز با فایل بکاپ جایگزین می‌شود.", en: "Everything is replaced with the backup's values.", hi: "सब कुछ बैकअप से बदल दिया जाता है।" },
   modeMergeHint: { fa: "بقیه هم جایگزین می‌شود؛ فقط دفترچه‌ی شیفت با تاریخ‌های موجود ترکیب می‌شود.", en: "Everything else is still replaced; only the daily log is combined with what's already here, by date.", hi: "बाकी सब बदल जाता है; केवल दैनिक लॉग तारीख़ के अनुसार मिलाया जाता है।" },
   restoreBtn: { fa: "بازیابی", en: "Restore", hi: "पुनर्स्थापित करें" },
-  restoreDone: { fa: "بازیابی انجام شد. یک نسخه از قبل هم ذخیره شد.", en: "Restored. A snapshot of your previous data was saved too.", hi: "पुनर्स्थापित हो गया।" },
+  restoreDone: { fa: "بازیابی انجام شد. یک نسخه از قبل هم ذخیره شد. برنامه دوباره باز میشه…", en: "Restored. A snapshot of your previous data was saved too. Reloading…", hi: "पुनर्स्थापित हो गया। फिर से लोड हो रहा है…" },
+  restoreFailed: { fa: "این نسخه قابل بازیابی نیست.", en: "This snapshot can't be restored.", hi: "यह स्नैपशॉट पुनर्स्थापित नहीं हो सकता।" },
   autoBackupsTitle: { fa: "بکاپ‌های خودکار", en: "Automatic backups", hi: "स्वचालित बैकअप" },
   autoBackupsHint: {
     fa: "علاوه بر خروجیِ دستی، برنامه هر روز و هر هفته و بعد از تغییرات مهم، به‌طور خودکار یک نسخه از اطلاعاتت را همین‌جا ذخیره می‌کند.",
@@ -4177,10 +4181,16 @@ function SettingsPanel({
 
   const doRestoreSnapshot = async (id) => {
     if (!window.confirm(bt("restoreSnapshotConfirm", lang))) return;
-    await restoreSnapshotById(id);
+    const res = await restoreSnapshotById(id);
+    if (!res || res.ok === false) { setFileError(bt("restoreFailed", lang)); refreshSnapshots(); return; }
     setSnapshotRestoredId(id);
+    setRestoreDone(true);
     refreshSnapshots();
+    reloadSoon();
   };
+  // The rest of the app read profile/theme/language/names once at start, so
+  // after a restore it reloads to show the restored data everywhere.
+  const reloadSoon = () => setTimeout(() => { try { window.location.reload(); } catch { /* ignore */ } }, 1200);
 
   const onPickFile = async (e) => {
     const file = e.target.files?.[0];
@@ -4197,10 +4207,12 @@ function SettingsPanel({
   };
 
   const doRestore = async () => {
-    await restoreBackup(pendingFile.data, { mode: restoreMode === "merge" ? "mergeDailyLog" : "replace" });
+    const res = await restoreBackup(pendingFile.data, { mode: restoreMode === "merge" ? "mergeDailyLog" : "replace" });
+    if (!res || res.ok === false) { setFileError(bt("restoreFailed", lang)); return; }
     setRestoreDone(true);
     setPendingFile(null);
     refreshSnapshots();
+    reloadSoon();
   };
 
   const exportedAgoText = lastExportDays === null ? "" :
@@ -5010,7 +5022,7 @@ function TopCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
   const [cardRef, inView] = useInView();
   const pct = scorePercent(ds);
   return (
-    <div ref={cardRef} className={`sp-card sp-reveal sp-shine sp-shine-soft${inView ? " sp-in" : ""}`} style={{ animationDelay: `${((rank - 1) % 4) * 90}ms`, "--sp-shine-delay": `${1.5 + (rank - 1) * 0.5}s`, ...styles.topCard, borderColor: isMine ? "var(--accent)" : medal ? medal.border : "var(--border)", ...(isMine ? { borderWidth: 2 } : {}) }}>
+    <div ref={cardRef} className={`sp-card sp-reveal sp-shine sp-shine-soft${inView ? " sp-in" : ""}`} style={{ animationDelay: `${((rank - 1) % 4) * 90}ms`, "--sp-shine-delay": `${1.5 + (rank - 1) * 0.5}s`, ...styles.topCard, border: `${isMine ? 2 : 1.5}px solid ${isMine ? "var(--accent)" : medal ? medal.border : "var(--border)"}` }}>
       <div style={{ ...styles.topBadge, background: medal ? medal.color : "var(--accent)" }}>
         {Icon ? <Icon size={13} /> : rank}
         {Icon && <span>#{rank}</span>}
@@ -5040,7 +5052,7 @@ function ResultCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
   const [cardRef, inView] = useInView();
   const pct = scorePercent(ds);
   return (
-    <div ref={cardRef} className={`sp-card sp-reveal${inView ? " sp-in" : ""}`} style={{ animationDelay: `${(rank % 3) * 80}ms`, ...styles.resultCard, ...(isMine ? { borderColor: "var(--accent)", borderWidth: 2 } : {}) }}>
+    <div ref={cardRef} className={`sp-card sp-reveal${inView ? " sp-in" : ""}`} style={{ animationDelay: `${(rank % 3) * 80}ms`, ...styles.resultCard, ...(isMine ? { border: "2px solid var(--accent)" } : {}) }}>
       <div style={styles.resultCardTop}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={styles.rankBadge}>{rank}</span>
@@ -5197,6 +5209,26 @@ export default function ShiftPriorityRanker() {
   // there's nothing to show it against (no crew, or a 0-hour week).
   // Recomputed whenever activePanel changes so it picks up log edits made
   // in the Daily Shift Log panel as soon as the person returns home.
+  // Re-render at midnight, and whenever the app comes back to the screen
+  // (a home-screen app can sit in the background overnight), so "Today",
+  // the gold ring on today's circle and this week's hours never show
+  // yesterday.
+  const [dayTick, setDayTick] = useState(() => new Date().toDateString());
+  useEffect(() => {
+    let timer = 0;
+    const refresh = () => setDayTick(new Date().toDateString());
+    const arm = () => {
+      const now = new Date();
+      const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+      timer = setTimeout(() => { refresh(); arm(); }, next - now);
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
+    arm();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", refresh);
+    return () => { clearTimeout(timer); document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("focus", refresh); };
+  }, []);
+
   const weekProgress = useMemo(() => {
     if (!myCrew) return null;
     const scheduledMinutes = myCrew.days.reduce((sum, d) => sum + Math.round((Number(d.hours) || 0) * 60), 0);
@@ -5214,10 +5246,13 @@ export default function ShiftPriorityRanker() {
     const percent = Math.max(0, Math.min(100, Math.round((loggedMinutes / scheduledMinutes) * 100)));
     return { percent, loggedHours: loggedMinutes / 60, scheduledHours: scheduledMinutes / 60 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myCrew, activePanel]);
+  }, [myCrew, activePanel, dayTick]);
 
   const handleFile = (e) => {
     const file = e.target.files?.[0];
+    // Clear the picker so choosing the same file again (e.g. an updated
+    // board saved under the same name) still triggers a fresh read.
+    try { e.target.value = ""; } catch { /* ignore */ }
     if (!file) return;
     setError("");
     setFileName(file.name);
@@ -5877,7 +5912,7 @@ export default function ShiftPriorityRanker() {
                       <button
                         key={item.id}
                         onClick={() => (selected ? removeCriterion(item.id) : addCriterion(item.id))}
-                        style={{ ...styles.prefChip, ...(selected ? { ...styles.prefChipActive, borderColor: criterionColor(item.id) } : {}), ...(isLastOdd ? { gridColumn: "1 / span 2" } : {}) }}
+                        style={{ ...styles.prefChip, ...(selected ? { ...styles.prefChipActive, border: `2px solid ${criterionColor(item.id)}` } : {}), ...(isLastOdd ? { gridColumn: "1 / span 2" } : {}) }}
                       >
                         {selected ? <span style={styles.chipRankBadge}>{rankIdx + 1}</span> : <Plus size={12} />}
                         {item.group === "region" && <span style={{ ...styles.regionDot, background: criterionColor(item.id) }} />}
@@ -5903,7 +5938,7 @@ export default function ShiftPriorityRanker() {
               {priorityList.length > 0 && (
                 <div style={styles.priorityChipRow}>
                   {priorityList.map((id, idx) => (
-                    <span key={id} style={{ ...styles.priorityChip, borderColor: criterionColor(id) }}>
+                    <span key={id} style={{ ...styles.priorityChip, border: `1.5px solid ${criterionColor(id)}` }}>
                       <span style={{ ...styles.priorityChipRank, background: criterionColor(id) }}>{idx + 1}</span>
                       <span style={styles.priorityChipLabel}>{resolveCriterionLabel(id, dayOffChoices)[lang]}</span>
                       <button onClick={() => moveCriterion(idx, -1)} style={styles.priorityChipBtn} disabled={idx === 0}><ArrowUp size={12} /></button>
@@ -6091,7 +6126,7 @@ const styles = {
   topBar: { display: "flex", justifyContent: "space-between", alignItems: "center", position: "relative", zIndex: 20 },
   langBtn: { display: "flex", gap: 4 },
   langPill: { fontSize: 11.5, padding: "6px 9px", borderRadius: 20, border: "1px solid var(--border)", background: "var(--card)", cursor: "pointer", color: "var(--text)" },
-  langPillActive: { background: "var(--accent)", borderColor: "var(--accent)", color: "#fff" },
+  langPillActive: { background: "var(--accent)", border: "1px solid var(--accent)", color: "#fff" },
   menuBtn: { display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", cursor: "pointer", color: "var(--text)" },
   menuDropdown: { position: "absolute", top: 36, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 6px 20px rgba(0,0,0,0.12)", padding: 6, display: "flex", flexDirection: "column", gap: 2, width: "max-content", minWidth: 220, maxWidth: "min(280px, calc(100vw - 24px))", zIndex: 200 },
   menuItem: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "8px 10px", borderRadius: 7, border: "none", background: "transparent", color: "var(--text)", cursor: "pointer", textAlign: "start", whiteSpace: "nowrap" },
@@ -6156,10 +6191,10 @@ const styles = {
   radioLabel: { display: "flex", alignItems: "center", gap: 5, fontSize: 13, color: "var(--text)" },
   chipRow: { display: "flex", flexWrap: "wrap", gap: 8 },
   chip: { display: "flex", alignItems: "center", gap: 5, fontSize: 13, padding: "7px 12px", borderRadius: 20, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", cursor: "pointer" },
-  chipActive: { background: "var(--bg)", color: "var(--text)", borderWidth: 2 },
+  chipActive: { background: "var(--bg)", color: "var(--text)", border: "2px solid var(--accent)" },
   prefChipRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 },
   prefChip: { display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 13, padding: "8px 10px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", cursor: "pointer" },
-  prefChipActive: { background: "var(--bg)", color: "var(--text)", borderWidth: 2 },
+  prefChipActive: { background: "var(--bg)", color: "var(--text)", border: "2px solid var(--border)" },
   chipRankBadge: { width: 16, height: 16, borderRadius: "50%", background: "var(--accent)", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" },
   smallLabel: { fontSize: 12.5, color: "var(--muted)" },
   regionDot: { width: 9, height: 9, borderRadius: "50%", display: "inline-block", flexShrink: 0 },
@@ -6172,7 +6207,7 @@ const styles = {
   dayPickRow: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 5, padding: "0 0 10px 28px" },
   dayPickHint: { fontSize: 11, color: "var(--muted)", marginInlineEnd: 4 },
   dayPickBtn: { fontSize: 11, fontWeight: 600, padding: "4px 9px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", cursor: "pointer" },
-  dayPickBtnActive: { background: "#B3432A", color: "#fff", borderColor: "#B3432A" },
+  dayPickBtnActive: { background: "#B3432A", color: "#fff", border: "1px solid #B3432A" },
   dayPickBlock: { marginTop: 8, padding: "8px 10px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--card)" },
   priorityChipRow: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 },
   priorityChip: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5, borderRadius: 20, paddingInlineStart: 10, paddingInlineEnd: 6, paddingTop: 4, paddingBottom: 4, background: "var(--card)", border: "1.5px solid var(--border)" },
@@ -6212,7 +6247,7 @@ const styles = {
   regionChipsRow: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 },
   regionChip: { display: "flex", alignItems: "center", gap: 4, fontSize: 11, background: "var(--bg)", borderRadius: 10, padding: "3px 8px", color: "var(--text)" },
   compareToggle: { display: "flex", alignItems: "center", justifyContent: "center", gap: 5, width: "100%", fontSize: 12, padding: "6px 0", borderRadius: 7, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", cursor: "pointer" },
-  compareToggleActive: { background: "var(--accent)", borderColor: "var(--accent)", color: "#fff" },
+  compareToggleActive: { background: "var(--accent)", border: "1px solid var(--accent)", color: "#fff" },
   compareTable: { borderCollapse: "collapse", width: "100%", minWidth: 420 },
   compareLabelCell: { fontSize: 12.5, fontWeight: 600, color: "var(--muted)", padding: "8px 10px", textAlign: "start", background: "var(--bg)", border: "1px solid var(--border)", whiteSpace: "nowrap" },
   compareHeadCell: { fontSize: 13, fontWeight: 700, padding: "8px 10px", border: "1px solid var(--border)", background: "var(--bg)" },

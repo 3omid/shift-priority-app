@@ -20,6 +20,9 @@ export function buildUserDataPayload() {
   return {
     profile: Store.loadProfile(),
     crewNames: Store.loadCrewNames(),
+    // Admin's Employee-ID directory (used by the Shift Exchange form). Older
+    // backups don't have it; restore simply leaves the current one alone.
+    crewEmployeeIds: Store.loadCrewEmployeeIds(),
     dailyLogAccess: Store.loadDailyLogAccess(),
     theme: Store.loadThemePrefs(),
     sound: Store.loadSoundSettings(),
@@ -116,10 +119,12 @@ export async function validateBackupFile(rawText) {
 // daily log entry-by-entry (by date), keeping whichever side of each date
 // was edited more recently, instead of dropping the other side's entries.
 export async function restoreBackup(data, { mode = "replace" } = {}) {
+  if (!data || typeof data !== "object") return { ok: false, reason: "no-data" };
   await createSnapshot("pre-restore");
 
   if (data.profile !== undefined) await Store.saveProfile(data.profile);
   if (data.crewNames !== undefined) await Store.saveCrewNames(data.crewNames);
+  if (data.crewEmployeeIds !== undefined) await Store.saveCrewEmployeeIds(data.crewEmployeeIds);
   if (data.dailyLogAccess !== undefined) await Store.saveDailyLogAccess(data.dailyLogAccess);
   if (data.theme !== undefined) await Store.saveThemePrefs(data.theme.style, data.theme.mode);
   if (data.sound !== undefined) await Store.saveSoundSettings(data.sound);
@@ -137,7 +142,7 @@ export async function restoreBackup(data, { mode = "replace" } = {}) {
   } else {
     await Store.saveDailyLogEntries(incoming);
   }
-  return { restored: true };
+  return { ok: true, restored: true };
 }
 
 export async function undoLastRestore() {
@@ -225,7 +230,24 @@ export async function restoreSnapshotById(id) {
     r.onsuccess = () => res(r.result); r.onerror = () => res(null);
   });
   if (!row) return { ok: false, reason: "not-found" };
-  return restoreBackup(row.data, { mode: "replace" });
+  // The one-time "pre-migration" snapshot stores the raw old localStorage
+  // strings (legacyRaw), not a payload — convert it instead of crashing on
+  // the missing .data.
+  const data = row.data || (row.legacyRaw ? legacyRawToPayload(row.legacyRaw) : null);
+  if (!data) return { ok: false, reason: "no-data" };
+  return restoreBackup(data, { mode: "replace" });
+}
+
+function legacyRawToPayload(raw) {
+  const parse = (v) => { if (v === null || v === undefined) return undefined; try { return JSON.parse(v); } catch { return undefined; } };
+  const out = {};
+  const profile = parse(raw.profile); if (profile !== undefined) out.profile = profile;
+  const crewNames = parse(raw.crewNames); if (crewNames && typeof crewNames === "object") out.crewNames = crewNames;
+  const access = parse(raw.dailyLogAccess); if (Array.isArray(access)) out.dailyLogAccess = access;
+  const theme = parse(raw.theme); if (theme && theme.style) out.theme = theme;
+  const log = parse(raw.dailyLogEntries);
+  out.dailyLog = Array.isArray(log) ? log.filter((e) => e && e.id && e.date) : [];
+  return out;
 }
 
 async function pruneSnapshots() {
