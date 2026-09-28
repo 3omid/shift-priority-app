@@ -650,7 +650,10 @@ const STRINGS = {
   xchgTrapezeLabel: { fa: "ثبت‌شده در Trapeze توسط", en: "Entered in Trapeze by", hi: "Trapeze में दर्ज किया गया" },
   xchgDispatchLabel: { fa: "ثبت‌شده در برگهٔ دیسپاچ توسط", en: "Entered on Dispatch Sheet by", hi: "डिस्पैच शीट पर दर्ज किया गया" },
   xchgPrintBtn: { fa: "پرینت", en: "Print", hi: "प्रिंट" },
-  xchgPrintIosHint: { fa: "روی آیفون، «پرینت» صفحه‌ی اشتراک‌گذاری رو باز می‌کنه — اونجا گزینه‌ی Print رو بزن.", en: "On iPhone, Print opens the share sheet — choose Print there.", hi: "iPhone पर, प्रिंट शेयर शीट खोलता है — वहाँ Print चुनें।" },
+  xchgPrintIosHint: { fa: "«پرینت» اول کل صفحه رو نشون میده؛ بعد روی آیفون «پرینت» صفحه‌ی اشتراک‌گذاری رو باز می‌کنه — اونجا Print رو بزن.", en: "Print first shows the whole page; on iPhone, Print then opens the share sheet — choose Print there.", hi: "प्रिंट पहले पूरा पेज दिखाता है; iPhone पर फिर शेयर शीट खुलती है — वहाँ Print चुनें।" },
+  xchgPrintPreviewTitle: { fa: "پیش‌نمایش چاپ", en: "Print preview", hi: "प्रिंट पूर्वावलोकन" },
+  xchgPrintNow: { fa: "پرینت", en: "Print", hi: "प्रिंट" },
+  xchgPrintClose: { fa: "بستن", en: "Close", hi: "बंद करें" },
   printIosHint: { fa: "اگه روی آیفون دکمه‌ی پرینت کار نکرد: دکمه‌ی اشتراک‌گذاری (⬆) رو بزن و Print رو انتخاب کن.", en: "If Print does nothing on iPhone: tap the Share button (⬆) and choose Print.", hi: "अगर iPhone पर प्रिंट काम न करे: शेयर बटन (⬆) दबाएँ और Print चुनें।" },
   swapFillThisDay: { fa: "فرم با همین روز", en: "Form with this day", hi: "इसी दिन के साथ फ़ॉर्म" },
   swapFillThisDayShort: { fa: "فرم", en: "Form", hi: "फ़ॉर्म" },
@@ -3643,6 +3646,10 @@ function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefi
   const [submittedDate, setSubmittedDate] = useState(localDateStr());
   const [files, setFiles] = useState(null); // { pdf, png } ready to save/send
   const [exportState, setExportState] = useState("preparing"); // preparing | ready | error
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  // The exact one-page image of the form, for the full-page print preview.
+  const previewUrl = useMemo(() => (files?.png ? URL.createObjectURL(files.png) : null), [files]);
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
   const derived1 = useMemo(() => deriveExchangeBox(box1, crews, crewNames, crewEmployeeIds, profile, lang), [box1, crews, crewNames, crewEmployeeIds, profile, lang]);
   const derived2 = useMemo(() => deriveExchangeBox(box2, crews, crewNames, crewEmployeeIds, profile, lang), [box2, crews, crewNames, crewEmployeeIds, profile, lang]);
@@ -3678,6 +3685,12 @@ function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefi
   }, [formHtml]);
 
   const ios = isIOSDevice();
+  // Print first shows the whole page as it will print (the same one-page
+  // layout as the PDF); printing happens from that preview.
+  const openPrint = () => {
+    if (files) setShowPrintPreview(true);
+    else doPrint();
+  };
   const doPrint = () => {
     if (ios && files) {
       shareOrDownloadFile(files.pdf, exchangeFileName(final1, final2, "pdf"), "Shift Exchange Request Form");
@@ -3728,11 +3741,30 @@ function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefi
         <button onClick={() => doShare("png")} disabled={!ready} style={{ ...actionBtn, opacity: ready ? 1 : 0.55 }}>
           <ImageIcon size={15} /> {t("xchgShareImgBtn", lang)}
         </button>
-        <button onClick={doPrint} style={actionBtn}>
+        <button onClick={openPrint} style={actionBtn}>
           <Printer size={15} /> {t("xchgPrintBtn", lang)}
         </button>
       </div>
       {ios && <p style={{ ...styles.hint, marginTop: 6 }}>{t("xchgPrintIosHint", lang)}</p>}
+
+      {showPrintPreview && previewUrl && (
+        <div role="dialog" aria-modal="true" aria-label={t("xchgPrintPreviewTitle", lang)}
+          style={{ position: "fixed", inset: 0, zIndex: 3000, background: "#15171C", display: "flex", flexDirection: "column", padding: "max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom))", boxSizing: "border-box" }}>
+          <div style={{ color: "#fff", fontWeight: 800, fontSize: 15, textAlign: "center", marginBottom: 10 }}>{t("xchgPrintPreviewTitle", lang)}</div>
+          <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <img src={previewUrl} alt={t("xchgPrintPreviewTitle", lang)}
+              style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", background: "#fff", borderRadius: 4, boxShadow: "0 6px 24px rgba(0,0,0,0.45)" }} />
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+            <button onClick={() => setShowPrintPreview(false)} style={{ ...actionBtn, flex: 1, background: "#fff", color: "#222" }}>
+              <X size={15} /> {t("xchgPrintClose", lang)}
+            </button>
+            <button onClick={doPrint} style={{ ...actionBtn, flex: 2, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}>
+              <Printer size={15} /> {t("xchgPrintNow", lang)}
+            </button>
+          </div>
+        </div>
+      )}
       {exportState === "preparing" && <p style={{ ...styles.hint, marginTop: 6 }}>{t("xchgPreparing", lang)}</p>}
       {exportState === "error" && <div style={styles.errorBox}><AlertCircle size={15} /><span>{t("xchgExportFail", lang)}</span></div>}
 
@@ -4627,6 +4659,7 @@ function buildSwapFormHtml({ box1, box2, submittedDate }, lang, timestamp) {
     @page { size: letter; margin: 0.45in 0.5in; }
     * { box-sizing: border-box; }
     html, body { background:#fff; }
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     body { font-family: Arial, Helvetica, sans-serif; margin: 0; color:#000; font-size: 11px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page { width: 7.5in; margin: 0 auto; padding: 12px 0; }
     .toolbar { position: sticky; top: 0; background: #fff; padding: 8px 12px 12px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; z-index: 10; }
