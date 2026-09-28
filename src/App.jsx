@@ -3871,85 +3871,101 @@ function splitDateParts(dateStr) {
 // by a person, never fabricated here.
 function buildSwapFormHtml({ box1, box2 }, lang, timestamp) {
   const submitted = splitDateParts(localDateStr());
-  // An inline fill-in blank: a bottom-border line with the value centered
-  // on it, or a genuinely empty line (no placeholder text) when unknown.
-  const blank = (value, minWidth) => `<span style="display:inline-block; min-width:${minWidth}px; border-bottom:1.2px solid #333; padding:0 3px; text-align:center; font-weight:600;">${value ? value : "&nbsp;"}</span>`;
+  const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // A fill-in blank exactly like the paper form's: an underline of fixed
+  // width with the value printed on it, and the form's own small grey
+  // caption — "(Driver 1 name)", "(Month)", … — printed underneath.
+  // A value too long for its blank (e.g. a long run code) is printed a bit
+  // smaller rather than cut off or pushing the line onto two rows.
+  const fit = (value, w) => {
+    const need = String(value || "").length * 7.2;
+    return need > w - 4 ? ` style="font-size:${Math.max(8, (11.5 * (w - 4)) / need).toFixed(1)}px"` : "";
+  };
+  const f = (value, w, caption) =>
+    `<span class="f" style="width:${w}px"><span class="v"${fit(value, w)}>${value ? esc(value) : "&nbsp;"}</span>${caption ? `<span class="c">(${caption})</span>` : ""}</span>`;
+  const tx = (s) => `<span class="t">${s}</span>`;
+  const line = (...parts) => `<div class="ln">${parts.join("")}</div>`;
   const box = (num, self, partner) => {
     const p = splitDateParts(partner.date);
+    const me = `Driver ${num}`, other = `Driver ${num === 1 ? 2 : 1}`;
     return `
     <div class="box">
-      <p>
-        I ${blank(self.driverName, 175)} ID #${blank(self.employeeId, 55)} will work on ${blank(p.m, 26)} ${blank(p.d, 22)} ${blank(p.y, 48)} for ${blank(partner.driverName, 175)}
-      </p>
-      <p>
-        ID #${blank(partner.employeeId, 55)}. It is run #${blank(partner.code, 55)}. Piece 1 is from ${blank(self.pieceStart, 55)} to ${blank(self.pieceEnd, 55)} on block ${blank(self.block, 110)}. Piece 2 is from ${blank(partner.pieceStart, 46)} to ${blank(partner.pieceEnd, 46)}
-      </p>
-      <p>
-        on block ${blank(partner.block, 110)}. &nbsp; Crew value ${blank(self.hoursPrint, 60)}. &nbsp; Signature ${num} ${blank("", 180)}
-      </p>
+      ${line(tx("I"), f(self.driverName, 178, `${me} name`), tx("ID #"), f(self.employeeId, 62, `${me} ID`), tx("will work on"), f(p.m, 50, "Month"), f(p.d, 34, "Day"), f(p.y, 42, "Year"), tx("for"), f(partner.driverName, 168, `${other} name`))}
+      ${line(tx("ID #"), f(partner.employeeId, 52, `${other} ID`), tx(". It is run #"), f(partner.code, 64), tx(". Piece 1 is from"), f(self.pieceStart, 37), tx("to"), f(self.pieceEnd, 37), tx("on block"), f(self.block, 88), tx(". Piece 2 is from"), f(partner.pieceStart, 37), tx("to"), f(partner.pieceEnd, 37))}
+      ${line(tx("on block"), f(partner.block, 110), tx("."), tx("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Crew value"), f(self.hoursPrint, 82), tx("."), tx(`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Signature ${num}`), f("", 210))}
     </div>`;
   };
-  const yesNo = () => `<span class="ynopt"><span class="ckbox"></span>Yes</span><span class="ynopt"><span class="ckbox"></span>No</span>`;
+  const q = (text) => `<div class="q"><span>${text}</span><span class="ck"></span><span class="ck"></span></div>`;
   return `<!doctype html><html lang="en" dir="ltr"><head><meta charset="UTF-8" />
   <title>Shift Exchange Request Form</title>
   <style>
-    @page { size: letter; margin: 0.35in; }
+    @page { size: letter; margin: 0.45in 0.5in; }
     * { box-sizing: border-box; }
-    body { font-family: Arial, Helvetica, sans-serif; margin: 18px 22px; color:#111; font-size: 12px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .toolbar { position: sticky; top: 0; background: #fff; padding: 8px 0 14px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; margin-bottom: 14px; z-index: 10; }
+    html, body { background:#fff; }
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; color:#000; font-size: 11px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { width: 7.5in; margin: 0 auto; padding: 12px 0; }
+    .toolbar { position: sticky; top: 0; background: #fff; padding: 8px 12px 12px; display:flex; gap:8px; justify-content:flex-end; border-bottom: 1px solid #eee; z-index: 10; }
     .toolbar button { font-size:14px; padding:9px 15px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
     .toolbar .close-btn { background:#B3432A; color:#fff; border-color:#B3432A; font-weight:700; }
     .toolbar .print-btn { background:#111; color:#fff; font-weight:700; border-color:#111; }
-    .hdr { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 2px; }
-    .logo { font-weight:900; font-size:18px; letter-spacing:0.02em; }
-    .logo small { display:block; font-weight:700; font-size:9px; letter-spacing:0.22em; color:#444; }
-    .submitted { font-size:11px; text-align:right; }
-    h1 { text-align:center; font-size:17px; margin: 0 0 8px; }
-    .intro p { font-size:10.5px; line-height:1.32; margin: 0 0 5px; }
-    .box { border:1.6px solid #111; border-radius: 3px; padding: 7px 12px 8px; margin-bottom: 8px; }
-    .box p { margin: 0 0 6px; line-height: 1.85; }
-    .box p:last-child { margin-bottom: 0; }
-    .sup { border:1.6px solid #111; border-radius: 3px; padding: 8px 12px 9px; }
-    .sup h2 { font-size: 12.5px; margin: 0 0 7px; }
-    .supq { display:flex; justify-content:space-between; align-items:center; gap: 10px; font-size:11.5px; margin-bottom: 5px; max-width: 660px; }
-    .yn { display:flex; gap: 16px; flex-shrink:0; }
-    .ynopt { display:flex; align-items:center; gap: 4px; }
-    .ckbox { width:11px; height:11px; border:1.3px solid #111; display:inline-block; }
-    .sup p { font-size:11.5px; margin: 6px 0; line-height: 1.7; }
-    .footer { margin-top: 8px; font-size: 9.5px; color:#666; }
-    @media print { .toolbar { display: none !important; } .box, .sup { break-inside: avoid; } }
+    .hdr { display:flex; justify-content:space-between; align-items:flex-end; }
+    .logo { line-height: 0.9; }
+    .logo b { display:block; font-family: "Arial Black", Arial, sans-serif; font-weight:900; font-size:34px; letter-spacing:0.02em; }
+    .logo span { display:block; font-weight:700; font-size:12.5px; letter-spacing:0.14em; margin-top:3px; }
+    .submitted { font-size:11px; font-weight:700; display:flex; align-items:flex-end; gap:2px; padding-bottom: 2px; }
+    h1 { text-align:center; font-size:19px; margin: 10px 0 16px; }
+    .intro p { font-size:11.5px; line-height:1.35; margin: 0 0 12px; }
+    .box { border:1.3px solid #000; padding: 14px 9px 10px; margin-bottom: 14px; }
+    .ln { display:flex; align-items:flex-start; flex-wrap:nowrap; white-space:nowrap; gap:3px; margin-bottom: 13px; }
+    .ln:last-child { margin-bottom: 0; }
+    .t { line-height:17px; font-size:11.5px; }
+    .f { display:inline-flex; flex-direction:column; align-items:center; flex:none; }
+    .f .v { display:block; width:100%; height:17px; line-height:17px; border-bottom:1px solid #000; text-align:center; font-weight:700; font-size:11.5px; color:#0b2a6b; overflow:hidden; }
+    .f .c { font-size:8.5px; line-height:1.15; margin-top:1px; }
+    .sup { border:1.3px solid #000; padding: 14px 12px 16px; margin-top: 30px; }
+    .sup h2 { font-size: 12.5px; margin: 0 0 6px; display:flex; }
+    .qhead, .q { display:grid; grid-template-columns: 1fr 44px 44px; column-gap: 14px; align-items:center; }
+    .qhead { font-size:12px; margin-bottom: 4px; }
+    .qhead span { text-align:center; }
+    .q { font-size:11.5px; margin-bottom: 11px; }
+    .ck { width:18px; height:18px; border:1.2px solid #000; justify-self:center; }
+    .sup .ln { margin-top: 20px; margin-bottom: 0; }
+    .footer { margin-top: 30px; font-size: 11px; }
+    @media print { .toolbar { display: none !important; } .page { padding: 0; } .box, .sup { break-inside: avoid; } }
   </style></head>
   <body>
     <div class="toolbar">
       <button class="print-btn" onclick="window.print()">🖨️ Print / PDF</button>
       <button class="close-btn" onclick="window.close()">✕ Close</button>
     </div>
+    <div class="page">
     <div class="hdr">
-      <div class="logo">TOK<small>TRANSIT</small></div>
-      <div class="submitted">Date Request Submitted:&nbsp; M${blank(submitted.m, 24)} D${blank(submitted.d, 20)} Y${blank(submitted.y, 40)}</div>
+      <div class="logo"><b>TOK</b><span>TRANSIT</span></div>
+      <div class="submitted"><span class="t">Date Request Submitted:&nbsp; M</span>${f(submitted.m, 50)}<span class="t">D</span>${f(submitted.d, 44)}<span class="t">Y</span>${f(submitted.y, 56)}</div>
     </div>
     <h1>Shift Exchange Request Form</h1>
     <div class="intro">
-      <p>Driver 1 completes 1<sup>st</sup> box - Driver 2 completes 2<sup>nd</sup> box. If the work only has 1 piece, enter &ldquo;N/A&rdquo; in the blanks on piece 2 - Operations Supervisor will complete the 3<sup>rd</sup> box.</p>
+      <p>Driver 1 completes 1<sup>st</sup> box - Driver 2 completes the 2<sup>nd</sup> box. If the work only has 1 piece, enter &ldquo;N/A&rdquo; in the blanks on piece 2 - Operations Supervisor will complete the 3<sup>rd</sup> box.</p>
       <p>All information must be completed and both drivers must sign form prior to the form being submitted to Operations Supervisor. Shift Exchanges are at the sole discretion of Management and it is each Driver&rsquo;s responsibility to ensure the request has been approved before the requested date(s).</p>
-      <p>*Shift Exchanges must take place within the same pay period. If approved, crew value guarantees will be voided and all hours worked due to shift exchanges are not eligible for overtime.</p>
+      <p>*Shift Exchanges must take place within the same pay period.&nbsp; If approved, crew value guarantees will be voided and all hours worked due to shift exchanges are not eligible for overtime.</p>
       <p>*Request must be made at least five (5) days in advance of the Shift Exchange, and be compliant with Employment Standards, the Collective Agreement and other legislation.</p>
       <p>*This agreement is between the two drivers involved and it is expected that each driver will fulfill their commitment.</p>
     </div>
     ${box(1, box1, box2)}
     ${box(2, box2, box1)}
     <div class="sup">
-      <h2>Operations Supervisor Use Only</h2>
-      <div class="supq"><span>Is the shift information above correct?</span><span class="yn">${yesNo()}</span></div>
-      <div class="supq"><span>Is there a minimum of 8 hours off before and after driver 1 and 2&rsquo;s new shift, and compliant with off day requirements?</span><span class="yn">${yesNo()}</span></div>
-      <div class="supq"><span>Is this switch taking place within the same pay period?</span><span class="yn">${yesNo()}</span></div>
-      <div class="supq"><span>Is the switch approved?</span><span class="yn">${yesNo()}</span></div>
-      <p>If approved, record switch on Dispatch Sheet</p>
-      <p>If <u>not</u> approved, state reason ${blank("", 250)} &nbsp; Date: ${blank("", 110)}</p>
-      <p>Operations Supervisor Name ${blank("", 210)} ID ${blank("", 65)} Signature ${blank("", 190)}</p>
-      <p>Entered in Trapeze by ${blank("", 150)} &nbsp;&nbsp; Entered on Dispatch Sheet by ${blank("", 150)}</p>
+      <div class="qhead"><h2>Operations Supervisor Use Only</h2><span>Yes</span><span>No</span></div>
+      ${q("Is the shift information above correct?")}
+      ${q("Is there a minimum of 8 hours off before and after driver 1 and 2&rsquo;s<br>new shift, and compliant with off day requirements?")}
+      ${q("Is this switch taking place within the same pay period?")}
+      ${q("Is the switch approved?")}
+      <div class="ln" style="margin-top:14px">${tx("If approved, record switch on Dispatch Sheet")}</div>
+      ${line(tx("If <u>not</u> approved, state reason"), f("", 250), tx("&nbsp;&nbsp;&nbsp;Date:"), f("", 150))}
+      ${line(tx("Operations Supervisor Name"), f("", 185), tx("ID"), f("", 70), tx("Signature"), f("", 170))}
+      ${line(tx("Entered in Trapeze by"), f("", 150), tx("&nbsp;&nbsp;&nbsp;Entered on Dispatch Sheet by"), f("", 150))}
     </div>
-    <div class="footer">Revised January 23, 2020 &nbsp;·&nbsp; pre-filled by Shift Priority from your loaded schedule (${timestamp}) — nothing in the Supervisor box above is filled in.</div>
+    <div class="footer">Revised January 23, 2020</div>
+    </div>
   </body></html>`;
 }
 
