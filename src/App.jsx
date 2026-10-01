@@ -6,7 +6,10 @@ import { playTap, testSound, unlockAudio, SOUND_TYPES, PITCH_STEPS } from "./dat
 import {
   loadProfile, saveProfile, clearProfileStorage,
   loadCrewNames, saveCrewNames,
-  loadCrewEmployeeIds, saveCrewEmployeeIds,
+  loadCrewEmployeeIds,
+  loadDrivers, saveDrivers,
+  loadExtraShifts, saveExtraShifts,
+  loadAdminRemember, saveAdminRemember,
   loadThemePrefs, saveThemePrefs,
   loadDailyLogEntries, saveDailyLogEntries,
   loadDailyLogAccess, saveDailyLogAccess,
@@ -18,8 +21,13 @@ import {
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, ArrowLeft, Plus,
   Menu, Sun, Moon, HelpCircle, Trash2, Users, Info, Mail, LogOut,
   Star, CalendarOff, Shield, Lock, Search, ClipboardList, Pencil, Palette, History,
-  Share2, Image as ImageIcon,
+  Share2, Image as ImageIcon, Eye, EyeOff, ChevronDown, ChevronRight, UserPlus, CalendarPlus,
 } from "lucide-react";
+import {
+  parseDispatchMessage, validateShiftRow, normalizeTime, applyExtraShifts, pruneExpiredShifts,
+  BLOCKING_FLAGS, todayStr as todayDateStr,
+} from "./extraShiftParser.js";
+import { seedDriversFromCrews, makeDriver, findDriverForCrew, parseBulkDrivers, matchDriver } from "./drivers.js";
 import { buildExchangeFormFiles, shareOrDownloadFile } from "./exchangeExport.js";
 
 const APP_VERSION = pkg.version;
@@ -102,10 +110,11 @@ const CREW_NAME_DEFAULTS = {
 
 // Built-in default crew-number -> employee/badge-number directory, seeded
 // from the same printed crew list as CREW_NAME_DEFAULTS above (real badge
-// numbers, one per crew, given directly by the user — never guessed). This
-// is the lowest-priority Employee ID source: the admin-maintained
-// crewEmployeeIds directory (Admin panel) wins over it, and the driver's own
-// saved Profile wins over both — see resolveEmployeeId(). Crew numbers left
+// numbers, one per crew, given directly by the user — never guessed). These
+// two lists are copied once into the Drivers directory (Admin panel →
+// Drivers, see seedDriversFromCrews in src/drivers.js), which is from then on
+// the single source of Employee IDs; the driver's own saved Profile still
+// wins over it — see resolveEmployeeId(). Crew numbers left
 // OUT of this list (2, 4, 11, 19, ...) are open/unassigned runs — no badge
 // number should be guessed for them. To update later, either edit this list
 // and redeploy, or fix it per-crew from the Admin panel (which always
@@ -675,7 +684,7 @@ const STRINGS = {
   adminPasswordLabel: { fa: "رمز عبور", en: "Password", hi: "पासवर्ड" },
   adminLoginBtn: { fa: "ورود", en: "Log in", hi: "लॉग इन" },
   adminLoginError: { fa: "نام کاربری یا رمز عبور اشتباهه.", en: "Incorrect username or password.", hi: "गलत उपयोगकर्ता नाम या पासवर्ड।" },
-  adminPanelTitle: { fa: "پنل ادمین — فهرست اسامی گروه‌ها", en: "Admin panel — crew name directory", hi: "एडमिन पैनल — क्रू नाम सूची" },
+  adminPanelTitle: { fa: "پنل ادمین", en: "Admin panel", hi: "एडमिन पैनल" },
   adminPanelHint: {
     fa: "اسم جلوی هر شماره گروه رو می‌تونی ویرایش کنی. اولویت: ویرایش دستی (دکمهٔ حذف داره) > ستون «Driver Name» فایل اکسل > فهرست پیش‌فرض توی خود برنامه. هر گروهی که راننده نداره می‌تونه خالی بمونه — با دکمهٔ پاک‌کردن (✕) کنار هر ردیف می‌تونی هر گروهی رو صریحاً خالی کنی. برنامه جلوی ثبت یه اسم رو برای دو شماره گروه مختلف می‌گیره. ویرایش‌های دستی فقط روی همین دستگاه/مرورگر ذخیره می‌شن.",
     en: "Edit the name next to each crew number. Priority: a manual edit (has a delete button) beats the file's \"Driver Name\" column, which beats the app's built-in default list. A crew with no driver can stay blank — use the ✕ button on any row to explicitly blank it. The app won't let the same name be saved for two different crew numbers. Manual edits are saved only on this device/browser.",
@@ -767,6 +776,91 @@ const STRINGS = {
     hi: "यहां जोड़े गए क्रू नंबर, एडमिन के अलावा, \"दैनिक शिफ्ट लॉग\" का उपयोग कर सकते हैं। यह केवल क्लाइंट-साइड है। नोट: हर व्यक्ति की प्रविष्टियाँ केवल उसके अपने डिवाइस पर सहेजी जाती हैं।",
   },
   adminDailyLogAccessEmpty: { fa: "هنوز کسی اضافه نشده (فقط ادمین می‌بینه)", en: "No one added yet (only Admin sees it)", hi: "अभी तक कोई नहीं जोड़ा गया (केवल एडमिन देखता है)" },
+  // ---- Admin login extras ----
+  adminShowPassword: { fa: "نمایش رمز", en: "Show password", hi: "पासवर्ड दिखाएं" },
+  adminHidePassword: { fa: "پنهان کردن رمز", en: "Hide password", hi: "पासवर्ड छिपाएं" },
+  adminRememberMe: { fa: "مرا روی این دستگاه به خاطر بسپار", en: "Remember me on this device", hi: "इस डिवाइस पर मुझे याद रखें" },
+  adminRememberHint: { fa: "فقط ورود شما ذخیره می‌شه، رمز هیچ‌وقت ذخیره نمی‌شه.", en: "Only the fact that you are logged in is saved — never the password.", hi: "केवल यह सेव होता है कि आप लॉग इन हैं — पासवर्ड कभी नहीं।" },
+  // ---- Admin panel tabs / cleanup ----
+  adminTabCrews: { fa: "گروه‌ها", en: "Crews", hi: "क्रू" },
+  adminTabDrivers: { fa: "راننده‌ها", en: "Drivers", hi: "ड्राइवर" },
+  adminTabExtra: { fa: "شیفت‌های اضافه", en: "Extra shifts", hi: "अतिरिक्त शिफ्ट" },
+  adminMoreInfo: { fa: "توضیحات بیشتر", en: "More info", hi: "अधिक जानकारी" },
+  adminCrewSearchPlaceholder: { fa: "جستجوی شماره گروه یا اسم…", en: "Search crew number or name…", hi: "क्रू नंबर या नाम खोजें…" },
+  adminCrewPickHint: { fa: "یک گروه انتخاب کن تا کارتش برای ویرایش نشون داده بشه.", en: "Pick a crew to edit it.", hi: "संपादित करने के लिए एक क्रू चुनें।" },
+  searchNoMatches: { fa: "چیزی پیدا نشد.", en: "No matches.", hi: "कोई मेल नहीं मिला।" },
+  adminEidFromDirectory: { fa: "از فهرست راننده‌ها", en: "From Drivers", hi: "ड्राइवर सूची से" },
+  // ---- Drivers directory ----
+  driversHint: {
+    fa: "فهرست اصلی راننده‌ها. همه‌ی انتخاب‌گرهای راننده و شماره‌های پرسنلی (مثلاً فرم تعویض شیفت) از همین فهرست خونده می‌شن. راننده‌ها حذف نمی‌شن، فقط غیرفعال می‌شن تا سابقه‌شون بمونه.",
+    en: "The one list of drivers. Every driver picker and every Employee ID in the app (e.g. the Shift Exchange form) comes from here. Drivers are never deleted — deactivate them instead, so their history is kept.",
+    hi: "ड्राइवरों की एकमात्र सूची। ऐप का हर ड्राइवर चयन और हर एम्प्लॉई आईडी (जैसे शिफ्ट एक्सचेंज फॉर्म) यहीं से आता है। ड्राइवर कभी डिलीट नहीं होते — उन्हें निष्क्रिय करें, ताकि उनका इतिहास बना रहे।",
+  },
+  driversSearchPlaceholder: { fa: "جستجوی اسم، شماره پرسنلی یا گروه…", en: "Search name, Employee ID or crew…", hi: "नाम, एम्प्लॉई आईडी या क्रू खोजें…" },
+  driversAddTitle: { fa: "افزودن راننده", en: "Add driver", hi: "ड्राइवर जोड़ें" },
+  driversEditTitle: { fa: "ویرایش راننده", en: "Edit driver", hi: "ड्राइवर संपादित करें" },
+  driverTypeLabel: { fa: "نوع", en: "Type", hi: "प्रकार" },
+  driverTypeFull: { fa: "تمام‌وقت", en: "Full-time", hi: "पूर्णकालिक" },
+  driverTypePart: { fa: "پاره‌وقت", en: "Part-time", hi: "अंशकालिक" },
+  driverCrewOptional: { fa: "شماره گروه (اختیاری)", en: "Crew # (optional)", hi: "क्रू नंबर (वैकल्पिक)" },
+  driverActive: { fa: "فعال", en: "Active", hi: "सक्रिय" },
+  driverInactive: { fa: "غیرفعال", en: "Inactive", hi: "निष्क्रिय" },
+  driversFilterAll: { fa: "همه", en: "All", hi: "सभी" },
+  driverDeactivate: { fa: "غیرفعال کن", en: "Deactivate", hi: "निष्क्रिय करें" },
+  driverReactivate: { fa: "فعال کن", en: "Reactivate", hi: "फिर से सक्रिय करें" },
+  driverEdit: { fa: "ویرایش", en: "Edit", hi: "संपादित करें" },
+  driverSave: { fa: "ذخیره", en: "Save", hi: "सेव करें" },
+  driverCancel: { fa: "انصراف", en: "Cancel", hi: "रद्द करें" },
+  driverNameRequired: { fa: "اسم راننده لازمه.", en: "Driver name is required.", hi: "ड्राइवर का नाम ज़रूरी है।" },
+  driverDupEid: { fa: "این شماره پرسنلی قبلاً برای راننده‌ی دیگه‌ای ثبت شده:", en: "This Employee ID already belongs to:", hi: "यह एम्प्लॉई आईडी पहले से इनकी है:" },
+  driverCrewTaken: { fa: "این گروه الان دست راننده‌ی دیگه‌ایه:", en: "This crew is already assigned to:", hi: "यह क्रू पहले से इन्हें दिया गया है:" },
+  driversNone: { fa: "راننده‌ای پیدا نشد.", en: "No drivers found.", hi: "कोई ड्राइवर नहीं मिला।" },
+  driversCount: { fa: "راننده", en: "drivers", hi: "ड्राइवर" },
+  driversBulkTitle: { fa: "افزودن گروهی (چسباندن لیست)", en: "Bulk add (paste a list)", hi: "एक साथ जोड़ें (सूची पेस्ट करें)" },
+  driversBulkHint: { fa: "هر خط یک راننده: «اسم، شماره پرسنلی». مثلاً: Jane Doe, 1234", en: 'One driver per line: "Name, ID". For example: Jane Doe, 1234', hi: 'हर लाइन में एक ड्राइवर: "नाम, आईडी"। उदाहरण: Jane Doe, 1234' },
+  driversBulkAddBtn: { fa: "افزودن همه", en: "Add all", hi: "सभी जोड़ें" },
+  driversBulkAdded: { fa: "اضافه شد:", en: "Added:", hi: "जोड़े गए:" },
+  driversBulkSkipped: { fa: "رد شد:", en: "Skipped:", hi: "छोड़े गए:" },
+  driversBulkErrFormat: { fa: "قالب «اسم، شماره» نیست", en: 'not "Name, ID"', hi: '"नाम, आईडी" नहीं है' },
+  driversBulkErrDup: { fa: "شماره پرسنلی تکراری", en: "duplicate Employee ID", hi: "डुप्लिकेट एम्प्लॉई आईडी" },
+  driverLine: { fa: "خط", en: "line", hi: "लाइन" },
+  // ---- Extra shifts from dispatch ----
+  extraHint: {
+    fa: "پیام دیسپچ رو اینجا بچسبون و راننده رو انتخاب کن. همه‌ی شیفت‌های داخل پیام خونده می‌شن؛ قبل از تأیید جدول رو چک و اصلاح کن. هر شیفت فقط برای همون تاریخ و همون راننده به برنامه (و یافتن جایگزین) اضافه می‌شه و بعد از گذشتن تاریخش خودش پاک می‌شه.",
+    en: "Paste the dispatch message and pick the driver. Every shift in the message is read; check and fix the table before confirming. Each shift is added for that date only, to that driver's schedule (and Swap Finder), and removes itself once the date has passed.",
+    hi: "डिस्पैच संदेश पेस्ट करें और ड्राइवर चुनें। संदेश की हर शिफ्ट पढ़ी जाती है; पुष्टि से पहले तालिका जांचें और ठीक करें। हर शिफ्ट केवल उसी तारीख के लिए उस ड्राइवर के शेड्यूल (और स्वैप फाइंडर) में जुड़ती है, और तारीख बीतने पर अपने आप हट जाती है।",
+  },
+  extraDriverLabel: { fa: "راننده", en: "Driver", hi: "ड्राइवर" },
+  extraDriverSearch: { fa: "جستجوی راننده…", en: "Search driver…", hi: "ड्राइवर खोजें…" },
+  extraNewDriver: { fa: "راننده‌ی جدید", en: "New driver", hi: "नया ड्राइवर" },
+  extraMessageLabel: { fa: "پیام دیسپچ", en: "Dispatch message", hi: "डिस्पैच संदेश" },
+  extraMessagePlaceholder: { fa: "مثلاً: Tuesday Sept.29 Pro8A BRT 5:22-9:37", en: "e.g. Tuesday Sept.29 Pro8A BRT 5:22-9:37", hi: "जैसे: Tuesday Sept.29 Pro8A BRT 5:22-9:37" },
+  extraParseBtn: { fa: "خواندن پیام", en: "Read message", hi: "संदेश पढ़ें" },
+  extraNoShiftsFound: { fa: "هیچ شیفتی در این پیام پیدا نشد.", en: "No shifts found in this message.", hi: "इस संदेश में कोई शिफ्ट नहीं मिली।" },
+  extraPreviewTitle: { fa: "پیش‌نمایش — قبل از تأیید چک کن", en: "Preview — check before confirming", hi: "पूर्वावलोकन — पुष्टि से पहले जांचें" },
+  extraColDate: { fa: "تاریخ", en: "Date", hi: "तारीख" },
+  extraColRun: { fa: "ران", en: "Run", hi: "रन" },
+  extraColLocation: { fa: "محل", en: "Location", hi: "स्थान" },
+  extraColStart: { fa: "شروع", en: "Start", hi: "शुरू" },
+  extraColEnd: { fa: "پایان", en: "End", hi: "समाप्त" },
+  extraLocationNone: { fa: "—", en: "—", hi: "—" },
+  extraConfirmBtn: { fa: "تأیید و اضافه کردن", en: "Confirm and add", hi: "पुष्टि करें और जोड़ें" },
+  extraNeedDriver: { fa: "اول راننده رو انتخاب کن.", en: "Pick a driver first.", hi: "पहले ड्राइवर चुनें।" },
+  extraFixErrors: { fa: "خطاهای قرمز رو درست کن (یا تیک اون ردیف رو بردار).", en: "Fix the red problems (or untick that row).", hi: "लाल समस्याएं ठीक करें (या उस पंक्ति का टिक हटाएं)।" },
+  extraSaved: { fa: "شیفت اضافه شد:", en: "Shifts added:", hi: "शिफ्ट जोड़ी गईं:" },
+  extraUpcomingTitle: { fa: "شیفت‌های اضافه‌ی پیش‌رو", en: "Upcoming extra shifts", hi: "आगामी अतिरिक्त शिफ्ट" },
+  extraUpcomingNone: { fa: "شیفت اضافه‌ای ثبت نشده.", en: "No extra shifts saved.", hi: "कोई अतिरिक्त शिफ्ट सेव नहीं है।" },
+  extraRemove: { fa: "حذف", en: "Remove", hi: "हटाएं" },
+  extraBadge: { fa: "اضافه", en: "Extra", hi: "अतिरिक्त" },
+  extraReplaces: { fa: "به‌جای", en: "replaces", hi: "इसकी जगह" },
+  extraFlag_invalidStart: { fa: "ساعت شروع نامعتبر", en: "Invalid start time", hi: "शुरू का समय अमान्य" },
+  extraFlag_invalidEnd: { fa: "ساعت پایان نامعتبر", en: "Invalid end time", hi: "समाप्ति का समय अमान्य" },
+  extraFlag_missingStart: { fa: "ساعت شروع نداره", en: "No start time", hi: "शुरू का समय नहीं" },
+  extraFlag_missingEnd: { fa: "ساعت پایان نداره", en: "No end time", hi: "समाप्ति का समय नहीं" },
+  extraFlag_missingDate: { fa: "تاریخ نداره", en: "No date", hi: "तारीख नहीं" },
+  extraFlag_relativeDate: { fa: "تاریخ نسبی (مثل «فردا») — چک کن", en: 'Relative date (e.g. "tomorrow") — check it', hi: 'सापेक्ष तारीख (जैसे "कल") — जांचें' },
+  extraFlag_weekdayMismatch: { fa: "روز هفته با تاریخ نمی‌خونه", en: "Weekday doesn't match the date", hi: "सप्ताह का दिन तारीख से मेल नहीं खाता" },
+  extraFlag_pastDate: { fa: "تاریخ گذشته", en: "Date has passed", hi: "तारीख बीत चुकी है" },
 };
 
 function t(key, lang) { return STRINGS[key] ? (STRINGS[key][lang] || STRINGS[key].en) : key; }
@@ -2189,15 +2283,31 @@ function resolveCrewName(crewNumber, crews, manualNames) {
   return c?.driverName || CREW_NAME_DEFAULTS[key] || "";
 }
 
+// The crew-name map every screen shows: manual Admin names first, then the
+// active driver on that crew in the Drivers directory. A crew deliberately
+// blanked by Admin (an open run) stays blank. resolveCrewName() then falls
+// back to the Excel "Driver Name" column and the built-in default list.
+function mergeDirectoryNames(crewNames, drivers) {
+  const out = { ...(crewNames || {}) };
+  for (const d of drivers || []) {
+    if (!d.active || !d.crewNumber) continue;
+    if (!Object.prototype.hasOwnProperty.call(out, String(d.crewNumber))) out[String(d.crewNumber)] = d.name;
+  }
+  return out;
+}
+
 // Employee ID (badge #) for the Shift Exchange form — a real person
 // identifier, distinct from the crew/run number above. Not present in the
 // weekly Excel schedule, so priority is: the driver's own saved Profile
-// (when this crew # is their own) > the admin-maintained crewEmployeeIds
-// directory (Admin panel manual entry) > the built-in CREW_EMPLOYEE_ID_DEFAULTS
-// list above. Blank when none of the three has it — never invented.
-function resolveEmployeeId(crewNumber, profile, crewEmployeeIds) {
+// (when this crew # is their own) > the Drivers directory (Admin panel),
+// which is the single source of Employee IDs. Only before the directory has
+// ever been set up (drivers === null) does it fall back to the old per-crew
+// map and the built-in CREW_EMPLOYEE_ID_DEFAULTS list. Blank when nothing
+// has it — never invented.
+function resolveEmployeeId(crewNumber, profile, drivers, crewEmployeeIds) {
   const key = String(crewNumber);
   if (profile?.crewNumber && String(profile.crewNumber) === key && profile.employeeId) return profile.employeeId;
+  if (drivers) return findDriverForCrew(drivers, key)?.employeeId || "";
   if (crewEmployeeIds && Object.prototype.hasOwnProperty.call(crewEmployeeIds, key) && crewEmployeeIds[key]) return crewEmployeeIds[key];
   return CREW_EMPLOYEE_ID_DEFAULTS[key] || "";
 }
@@ -2228,8 +2338,10 @@ function addDaysToDateStr(dateStr, daysForward) {
 // nothing is stored twice or invented. Both entry paths (manual search+pick
 // and "Fill Form" from the Replacement Finder) share this one function, so
 // they can never drift apart.
-function deriveExchangeBox({ crewNum, date }, crews, crewNames, crewEmployeeIds, profile, lang) {
+function deriveExchangeBox({ crewNum, date }, baseCrews, crewNames, drivers, profile, lang, extraShifts) {
   const weekdayNames = WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en;
+  // Dispatch extra shifts count for the week of the date being exchanged.
+  const crews = date ? applyExtraShifts(baseCrews, extraShifts, drivers, date) : baseCrews;
   const crewObj = crewNum ? (crews || []).find((c) => String(c.crew) === String(crewNum)) : null;
   const weekday = date ? new Date(date + "T00:00:00").getDay() : null;
   const day = crewObj && weekday !== null ? crewObj.days.find((x) => x.dayIdx === weekday) : null;
@@ -2242,7 +2354,7 @@ function deriveExchangeBox({ crewNum, date }, crews, crewNames, crewEmployeeIds,
     // Real Employee ID only — from the person's own Profile (when this crew
     // # is their own) or the admin-maintained directory. Blank/unknown when
     // neither has it; never fabricated.
-    employeeId: crewNum ? resolveEmployeeId(crewNum, profile, crewEmployeeIds) : "",
+    employeeId: crewNum ? (crewObj?.employeeId || resolveEmployeeId(crewNum, profile, drivers)) : "",
     hasShift: !!day,
     hasCrewAndDate,
     code: day?.code || "",
@@ -2301,8 +2413,11 @@ function dayChipLines(code) {
 }
 
 // ---------- Admin session ----------
-// sessionStorage only — see ADMIN_SESSION_KEY above for why.
+// sessionStorage — see ADMIN_SESSION_KEY above for why — unless Admin ticked
+// "Remember me on this device" at login, which keeps a yes/no flag (never
+// the password) in the store until they log out.
 function loadAdminSession() {
+  if (loadAdminRemember()) return true;
   try { return sessionStorage.getItem(ADMIN_SESSION_KEY) === "1"; } catch { return false; }
 }
 function saveAdminSession(isAdmin) {
@@ -2485,8 +2600,13 @@ function MyScheduleModal({ crew, name, lang, themeMode, onClose, onBack }) {
                 <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px" }}>
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: REGION_COLORS[d.regionKey] || "#9AA0A6", flexShrink: 0 }} />
                   <span style={{ fontSize: 12 }}>{regionLabel(d.regionKey, lang)} · {d.code || "-"}</span>
-                  <span style={{ marginInlineStart: "auto", fontWeight: 700, fontSize: 12.5 }}>{formatExcelTime(d.start)}–{formatExcelTime(d.end)}</span>
-                  <span style={{ fontSize: 11, color: "var(--muted)" }}>{formatDuration(d.hours, lang)}</span>
+                  {d.extra && (
+                    <span title={d.replaced ? `${t("extraReplaces", lang)} ${d.replaced.code || ""} ${formatExcelTime(d.replaced.start)}–${formatExcelTime(d.replaced.end)}` : undefined} style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: "#0EA37E", borderRadius: 999, padding: "1.5px 7px" }}>
+                      + {t("extraBadge", lang)} · <bdi dir="ltr">{d.extraDate}</bdi>
+                    </span>
+                  )}
+                  <span style={{ marginInlineStart: "auto", fontWeight: 700, fontSize: 12.5 }}><bdi dir="ltr">{formatExcelTime(d.start)}{d.end !== "" ? `–${formatExcelTime(d.end)}` : ""}</bdi></span>
+                  {Number(d.hours) > 0 && <span style={{ fontSize: 11, color: "var(--muted)" }}>{formatDuration(d.hours, lang)}</span>}
                 </div>
               ) : (
                 <div style={{ flex: 1, border: "1.5px dashed #e0a0a0", background: "#fbeceb", color: "#b3432a", borderRadius: 8, padding: "7px 10px", fontWeight: 700, fontSize: 12 }}>
@@ -3317,9 +3437,12 @@ function localDateStr(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function SwapFinderPanel({ lang, crews, crewNames, profile, onViewCrew, onFillForm, onClose }) {
+function SwapFinderPanel({ lang, crews: baseCrews, extraShifts, drivers, crewNames, profile, onViewCrew, onFillForm, onClose }) {
   const [myCrewNum, setMyCrewNum] = useState(profile?.crewNumber ? String(profile.crewNumber) : "");
   const [date, setDate] = useState(localDateStr());
+  // The board for the week of the searched date, with any dispatch extra
+  // shifts in that week added to their drivers.
+  const crews = useMemo(() => applyExtraShifts(baseCrews, extraShifts, drivers, date), [baseCrews, extraShifts, drivers, date]);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [results, setResults] = useState(null);
@@ -3648,7 +3771,7 @@ function exchangeFileName(f1, f2, ext) {
 // already-loaded schedule/name/Employee-ID data — nothing here is a second
 // copy of that data. Manual edits sit on top as overrides, and the final
 // form can be printed or saved/sent as a PDF or an image.
-function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefill, onClose }) {
+function SwapFormPanel({ lang, crews, crewNames, drivers, extraShifts, profile, prefill, onClose }) {
   const [box1, setBox1] = useState(prefill?.box1 || { crewNum: profile?.crewNumber ? String(profile.crewNumber) : "", date: localDateStr() });
   const [box2, setBox2] = useState(prefill?.box2 || { crewNum: "", date: localDateStr() });
   // Which box's crew/employee picker (if any) is open — 1 or 2.
@@ -3664,8 +3787,8 @@ function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefi
   const previewUrl = useMemo(() => (files?.png ? URL.createObjectURL(files.png) : null), [files]);
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
-  const derived1 = useMemo(() => deriveExchangeBox(box1, crews, crewNames, crewEmployeeIds, profile, lang), [box1, crews, crewNames, crewEmployeeIds, profile, lang]);
-  const derived2 = useMemo(() => deriveExchangeBox(box2, crews, crewNames, crewEmployeeIds, profile, lang), [box2, crews, crewNames, crewEmployeeIds, profile, lang]);
+  const derived1 = useMemo(() => deriveExchangeBox(box1, crews, crewNames, drivers, profile, lang, extraShifts), [box1, crews, crewNames, drivers, profile, lang, extraShifts]);
+  const derived2 = useMemo(() => deriveExchangeBox(box2, crews, crewNames, drivers, profile, lang, extraShifts), [box2, crews, crewNames, drivers, profile, lang, extraShifts]);
   const final1 = useMemo(() => applyExchangeOverrides(derived1, overrides[1], lang), [derived1, overrides, lang]);
   const final2 = useMemo(() => applyExchangeOverrides(derived2, overrides[2], lang), [derived2, overrides, lang]);
 
@@ -3784,7 +3907,7 @@ function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefi
       {picker && (
         <CrewLookupPanel
           lang={lang}
-          crews={crews}
+          crews={applyExtraShifts(crews, extraShifts, drivers, (picker === 1 ? box1 : box2).date)}
           crewNames={crewNames}
           onPick={(crewNumber) => {
             changeBox(picker, { crewNum: String(crewNumber) });
@@ -3805,11 +3928,15 @@ function SwapFormPanel({ lang, crews, crewNames, crewEmployeeIds, profile, prefi
 function AdminLoginModal({ lang, onSuccess, onClose }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState(false);
 
   const submit = () => {
     if (username.trim() === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
       saveAdminSession(true);
+      // Only a yes/no flag goes to the store — the password is never saved.
+      saveAdminRemember(remember);
       onSuccess();
     } else {
       setError(true);
@@ -3827,14 +3954,30 @@ function AdminLoginModal({ lang, onSuccess, onClose }) {
         autoComplete="off"
       />
       <div style={{ ...styles.smallLabel, marginTop: 10 }}>{t("adminPasswordLabel", lang)}</div>
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => { setPassword(e.target.value); setError(false); }}
-        onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-        style={styles.numInputWide}
-        autoComplete="off"
-      />
+      <div style={{ position: "relative", display: "flex" }}>
+        <input
+          type={showPassword ? "text" : "password"}
+          value={password}
+          onChange={(e) => { setPassword(e.target.value); setError(false); }}
+          onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+          style={{ ...styles.numInputWide, paddingInlineEnd: 40 }}
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          onClick={() => setShowPassword((v) => !v)}
+          aria-label={t(showPassword ? "adminHidePassword" : "adminShowPassword", lang)}
+          title={t(showPassword ? "adminHidePassword" : "adminShowPassword", lang)}
+          style={{ position: "absolute", insetInlineEnd: 4, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: 6, display: "flex" }}
+        >
+          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
+      </div>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12.5, cursor: "pointer" }}>
+        <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+        {t("adminRememberMe", lang)}
+      </label>
+      <p style={{ ...styles.hint, margin: "2px 0 0", fontSize: 11 }}>{t("adminRememberHint", lang)}</p>
       {error && (
         <div style={styles.errorBox}><AlertCircle size={15} /><span>{t("adminLoginError", lang)}</span></div>
       )}
@@ -3845,17 +3988,170 @@ function AdminLoginModal({ lang, onSuccess, onClose }) {
   );
 }
 
-function AdminPanel({ lang, crews, crewNames, setCrewNames, crewEmployeeIds, setCrewEmployeeIds, dailyLogAccess, setDailyLogAccess, onLogout, onClose }) {
+// A heading (optional) with an ⓘ button that shows/hides a long help text,
+// so the Admin panel isn't a wall of text.
+function InfoToggle({ lang, title, text }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom: open ? 0 : 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {title && <span style={{ fontWeight: 700, fontSize: 12.5 }}>{title}</span>}
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-label={t("adminMoreInfo", lang)}
+          title={t("adminMoreInfo", lang)}
+          style={{ background: open ? "var(--accent)" : "transparent", color: open ? "#fff" : "var(--muted)", border: "1px solid var(--border)", borderRadius: "50%", width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, fontSize: 12, fontWeight: 700 }}
+        >
+          ⓘ
+        </button>
+      </div>
+      {open && <p style={{ ...styles.hint, marginTop: 6 }}>{text}</p>}
+    </div>
+  );
+}
+
+function CollapsibleSection({ title, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 10, marginTop: 12 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", background: "transparent", border: "none", color: "var(--text)", padding: "10px 12px", cursor: "pointer", fontWeight: 700, fontSize: 12.5, textAlign: "start" }}
+      >
+        {open ? <ChevronDown size={15} /> : <ChevronRight size={15} className="sp-flip-rtl" />}
+        {title}
+      </button>
+      {open && <div style={{ padding: "0 12px 12px" }}>{children}</div>}
+    </div>
+  );
+}
+
+// Type-to-search dropdown. options: [{ value, label, sub?, search }].
+// The list opens inline (not floating) so it never gets clipped inside the
+// modal on a phone.
+function SearchSelect({ lang, value, options, onChange, placeholder }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selected = options.find((o) => o.value === value) || null;
+  const q = query.trim().toLowerCase();
+  const matches = useMemo(
+    () => options.filter((o) => !q || o.search.toLowerCase().includes(q)).slice(0, 60),
+    [options, q]
+  );
+  const choose = (v) => { onChange(v); setOpen(false); setQuery(""); };
+  return (
+    <div>
+      <div style={{ position: "relative" }}>
+        <Search size={14} style={{ position: "absolute", insetInlineStart: 10, top: 10, color: "var(--muted)" }} />
+        <input
+          type="text"
+          value={open ? query : (selected ? selected.label : "")}
+          placeholder={placeholder}
+          onFocus={() => { setOpen(true); setQuery(""); }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && matches[0]) { e.preventDefault(); choose(matches[0].value); e.currentTarget.blur(); }
+            if (e.key === "Escape") e.currentTarget.blur();
+          }}
+          style={{ ...styles.numInputWide, width: "100%", boxSizing: "border-box", paddingInlineStart: 30, paddingInlineEnd: 30 }}
+        />
+        <ChevronDown size={15} style={{ position: "absolute", insetInlineEnd: 10, top: 10, color: "var(--muted)", pointerEvents: "none" }} />
+      </div>
+      {open && (
+        <div role="listbox" style={{ border: "1px solid var(--border)", borderRadius: 8, marginTop: 4, maxHeight: 220, overflowY: "auto", background: "var(--card)" }}>
+          {matches.length === 0 && <div style={{ ...styles.hint, margin: 0, padding: "8px 10px" }}>{t("searchNoMatches", lang)}</div>}
+          {matches.map((o) => (
+            <div
+              key={o.value}
+              role="option"
+              aria-selected={o.value === value}
+              onMouseDown={(e) => { e.preventDefault(); choose(o.value); }}
+              style={{ padding: "7px 10px", cursor: "pointer", fontSize: 12.5, borderBottom: "1px solid var(--border)", background: o.value === value ? "var(--bg)" : "transparent", display: "flex", gap: 6, alignItems: "baseline" }}
+            >
+              <span style={{ fontWeight: 700 }}>{o.label}</span>
+              {o.sub && <span style={{ fontSize: 11, color: "var(--muted)" }}>{o.sub}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// `styles` is defined at the bottom of this file, so build these lazily.
+function adminInput(extra) {
+  return { ...styles.numInputWide, padding: "6px 8px", fontSize: 12.5, minWidth: 0, width: "100%", boxSizing: "border-box", ...extra };
+}
+function accentBtn(extra) {
+  return { ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)", ...extra };
+}
+function weekdayDateLabel(dateStr, lang) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return `${(WEEKDAY_LABELS[lang] || WEEKDAY_LABELS.en)[d.getDay()]} ${dateStr}`;
+}
+const EXTRA_REGION_KEYS = ["RH", "NMK", "CLDR", "STF", "MRG"];
+
+function AdminPanel({ lang, crews, crewNames, setCrewNames, drivers, setDrivers, extraShifts, setExtraShifts, dailyLogAccess, setDailyLogAccess, onLogout, onClose }) {
+  const [tab, setTab] = useState("crews");
+  const tabs = [
+    { id: "crews", label: t("adminTabCrews", lang), icon: <Users size={14} /> },
+    { id: "drivers", label: t("adminTabDrivers", lang), icon: <UserPlus size={14} /> },
+    { id: "extra", label: t("adminTabExtra", lang), icon: <CalendarPlus size={14} /> },
+  ];
+  return (
+    <Modal title={t("adminPanelTitle", lang)} onClose={onClose}>
+      <div role="tablist" style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid var(--border)", paddingBottom: 8, flexWrap: "wrap" }}>
+        {tabs.map((tb) => (
+          <button
+            key={tb.id}
+            role="tab"
+            aria-selected={tab === tb.id}
+            onClick={() => setTab(tb.id)}
+            style={tab === tb.id ? accentBtn({ padding: "6px 10px" }) : { ...styles.smallActionBtn, padding: "6px 10px" }}
+          >
+            {tb.icon} {tb.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "crews" && (
+        <AdminCrewsTab
+          lang={lang} crews={crews} crewNames={crewNames} setCrewNames={setCrewNames}
+          drivers={drivers} setDrivers={setDrivers}
+          dailyLogAccess={dailyLogAccess} setDailyLogAccess={setDailyLogAccess}
+        />
+      )}
+      {tab === "drivers" && <AdminDriversTab lang={lang} drivers={drivers} setDrivers={setDrivers} />}
+      {tab === "extra" && (
+        <AdminExtraShiftsTab lang={lang} drivers={drivers} setDrivers={setDrivers} extraShifts={extraShifts} setExtraShifts={setExtraShifts} />
+      )}
+
+      <button onClick={onLogout} style={{ ...styles.smallActionBtn, color: "#B3432A", marginTop: 14 }}>
+        <LogOut size={14} /> {t("adminLogoutBtn", lang)}
+      </button>
+    </Modal>
+  );
+}
+
+function AdminCrewsTab({ lang, crews, crewNames, setCrewNames, drivers, setDrivers, dailyLogAccess, setDailyLogAccess }) {
+  const [selected, setSelected] = useState("");
   const [drafts, setDrafts] = useState({});
   const [newCrew, setNewCrew] = useState("");
   const [newName, setNewName] = useState("");
   const [dupWarning, setDupWarning] = useState({}); // { [crewNum]: theOtherCrewNumItClashesWith }
   const [newDup, setNewDup] = useState(null);
   const [newDailyLogCrew, setNewDailyLogCrew] = useState("");
-  // Employee-ID directory drafts — a separate, simpler parallel to the name
-  // editor above: no duplicate check (two people can't share a name, but
-  // there's no such rule for Employee IDs), and a blank value just means
-  // "unknown" (the Shift Exchange form shows N/A rather than a guess).
+  // Employee-ID drafts. The Employee ID itself lives in the Drivers
+  // directory (the single source); editing it here edits the active driver
+  // on this crew. No duplicate-name check applies to IDs, and a blank value
+  // just means "unknown" (the Shift Exchange form shows N/A, never a guess).
   const [eidDrafts, setEidDrafts] = useState({});
 
   const addDailyLogAccess = () => {
@@ -3875,25 +4171,27 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, crewEmployeeIds, set
   };
 
   // Union of every crew number in the currently loaded file, every crew
-  // number in the built-in default list, plus every crew number that
-  // already has a manually-saved name (so manual entries survive even once
-  // the file that had them is gone, or a different file is loaded).
+  // number in the built-in default list, every crew number that already has
+  // a manually-saved name (so manual entries survive even once the file
+  // that had them is gone), plus every crew a driver is assigned to.
   const allNumbers = useMemo(() => {
     const set = new Set();
     (crews || []).forEach((c) => set.add(String(c.crew)));
     Object.keys(CREW_NAME_DEFAULTS).forEach((k) => set.add(k));
     Object.keys(crewNames || {}).forEach((k) => set.add(k));
+    (drivers || []).forEach((d) => { if (d.active && d.crewNumber) set.add(String(d.crewNumber)); });
     return Array.from(set).sort((a, b) => (Number(a) - Number(b)) || a.localeCompare(b));
-  }, [crews, crewNames]);
+  }, [crews, crewNames, drivers]);
 
   const autoNameFor = (num) => (crews || []).find((c) => String(c.crew) === num)?.driverName || "";
   const defaultNameFor = (num) => CREW_NAME_DEFAULTS[num] || "";
-  // What a crew currently resolves to, same priority as resolveCrewName()
-  // (manual override > auto-read > built-in default) — used to check a new
-  // name against every OTHER crew before it's allowed to save.
+  const directoryNameFor = (num) => findDriverForCrew(drivers, num)?.name || "";
+  // What a crew currently resolves to, same priority as the rest of the app
+  // (manual override > Drivers directory > auto-read > built-in default) —
+  // used to check a new name against every OTHER crew before it's saved.
   const resolvedNameFor = (num) => {
     if (crewNames && Object.prototype.hasOwnProperty.call(crewNames, num)) return crewNames[num];
-    return autoNameFor(num) || defaultNameFor(num);
+    return directoryNameFor(num) || autoNameFor(num) || defaultNameFor(num);
   };
   // A blank name never counts as a clash (every open crew is blank on
   // purpose); a real name can't be saved under two different crew numbers.
@@ -3940,20 +4238,102 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, crewEmployeeIds, set
     commit(num, newName.trim());
     setNewCrew("");
     setNewName("");
+    setSelected(num);
   };
 
   const commitEid = (num, value) => {
     const clean = value.trim();
-    const next = { ...crewEmployeeIds, [String(num)]: clean };
-    setCrewEmployeeIds(next);
-    saveCrewEmployeeIds(next);
+    const linked = findDriverForCrew(drivers, num);
+    if (linked) {
+      if (linked.employeeId !== clean) setDrivers(drivers.map((d) => (d.id === linked.id ? { ...d, employeeId: clean } : d)));
+    } else if (clean) {
+      const name = resolvedNameFor(num).trim() || `${t("crewWord", "en")} ${num}`;
+      setDrivers([...drivers, makeDriver({ name, employeeId: clean, crewNumber: num })]);
+    }
+    setEidDrafts((prev) => { const n = { ...prev }; delete n[num]; return n; });
+  };
+
+  const crewOptions = useMemo(() => allNumbers.map((num) => {
+    const name = resolvedNameFor(num);
+    return { value: num, label: `${t("crewWord", lang)} ${num}`, sub: name, search: `${num} ${name}` };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [allNumbers, crewNames, drivers, crews, lang]);
+
+  const renderCard = (num) => {
+    const hasOverride = Object.prototype.hasOwnProperty.call(crewNames || {}, num);
+    const dir = directoryNameFor(num);
+    const auto = autoNameFor(num);
+    const def = defaultNameFor(num);
+    const value = drafts[num] !== undefined ? drafts[num] : (hasOverride ? crewNames[num] : (dir || auto || def));
+    const badge = hasOverride
+      ? (crewNames[num] === "" ? t("adminBlankBadge", lang) : t("adminManualBadge", lang))
+      : dir ? t("adminEidFromDirectory", lang) : auto ? t("adminAutoBadge", lang) : def ? t("adminDefaultBadge", lang) : t("adminBlankBadge", lang);
+    const dup = dupWarning[num];
+    const linked = findDriverForCrew(drivers, num);
+    const eidValue = eidDrafts[num] !== undefined ? eidDrafts[num] : (linked?.employeeId || "");
+    const eidBadge = linked?.employeeId ? t("adminEidFromDirectory", lang) : t("adminBlankBadge", lang);
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, border: "1px solid var(--border)", borderRadius: 10, padding: 10, background: "var(--bg)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontWeight: 800, fontSize: 13.5 }}>{t("crewWord", lang)} {num}</span>
+          <span style={{ marginInlineStart: "auto", display: "flex", gap: 6 }}>
+            <button onClick={() => clearRow(num)} title={t("adminClearTooltip", lang)} aria-label={t("adminClearTooltip", lang)} style={{ ...styles.smallActionBtn, padding: "5px 7px" }}>
+              <X size={13} />
+            </button>
+            {hasOverride && (
+              <button onClick={() => removeOverride(num)} style={{ ...styles.smallActionBtn, padding: "5px 7px", color: "#B3432A" }}>
+                <Trash2 size={13} />
+              </button>
+            )}
+          </span>
+        </div>
+        <label style={{ fontSize: 11.5, color: "var(--muted)" }}>
+          {t("driverNameLabel", lang)} · <span>{badge}</span>
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => setDrafts((prev) => ({ ...prev, [num]: e.target.value }))}
+            onBlur={() => { if (drafts[num] !== undefined) commit(num, drafts[num]); }}
+            style={adminInput({ marginTop: 3 })}
+          />
+        </label>
+        {dup && (
+          <p style={{ fontSize: 11, color: "#B3432A", margin: 0 }}>
+            {t("adminDupWarning", lang)} {t("crewWord", lang)} {dup}
+          </p>
+        )}
+        <label style={{ fontSize: 11.5, color: "var(--muted)" }}>
+          {t("employeeIdLabel", lang)} · <span>{eidBadge}</span>
+          <input
+            type="text"
+            value={eidValue}
+            placeholder={t("employeeIdLabel", lang)}
+            onChange={(e) => setEidDrafts((prev) => ({ ...prev, [num]: e.target.value }))}
+            onBlur={() => { if (eidDrafts[num] !== undefined) commitEid(num, eidDrafts[num]); }}
+            style={adminInput({ marginTop: 3 })}
+          />
+        </label>
+      </div>
+    );
   };
 
   return (
-    <Modal title={t("adminPanelTitle", lang)} onClose={onClose}>
-      <p style={styles.hint}>{t("adminPanelHint", lang)}</p>
+    <div>
+      <InfoToggle lang={lang} title={t("adminTabCrews", lang)} text={t("adminPanelHint", lang)} />
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+      <SearchSelect
+        lang={lang}
+        value={selected}
+        options={crewOptions}
+        onChange={setSelected}
+        placeholder={t("adminCrewSearchPlaceholder", lang)}
+      />
+      <div style={{ marginTop: 8 }}>
+        {allNumbers.length === 0 && <p style={styles.hint}>{t("adminNoCrews", lang)}</p>}
+        {selected ? renderCard(selected) : allNumbers.length > 0 && <p style={styles.hint}>{t("adminCrewPickHint", lang)}</p>}
+      </div>
+
+      <div style={{ display: "flex", gap: 6, marginTop: 12, marginBottom: 4 }}>
         <input
           type="number"
           placeholder={t("crewNumberLabel", lang)}
@@ -3966,9 +4346,9 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, crewEmployeeIds, set
           placeholder={t("driverNameLabel", lang)}
           value={newName}
           onChange={(e) => { setNewName(e.target.value); setNewDup(null); }}
-          style={styles.numInputWide}
+          style={{ ...styles.numInputWide, minWidth: 0 }}
         />
-        <button onClick={addNew} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}>
+        <button onClick={addNew} aria-label={t("driversAddTitle", lang)} style={accentBtn()}>
           <Plus size={14} />
         </button>
       </div>
@@ -3978,73 +4358,8 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, crewEmployeeIds, set
         </p>
       )}
 
-      <div style={{ maxHeight: 340, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
-        {allNumbers.length === 0 && <p style={styles.hint}>{t("adminNoCrews", lang)}</p>}
-        {allNumbers.map((num) => {
-          const hasOverride = Object.prototype.hasOwnProperty.call(crewNames || {}, num);
-          const auto = autoNameFor(num);
-          const def = defaultNameFor(num);
-          const value = drafts[num] !== undefined ? drafts[num] : (hasOverride ? crewNames[num] : (auto || def));
-          const badge = hasOverride
-            ? (crewNames[num] === "" ? t("adminBlankBadge", lang) : t("adminManualBadge", lang))
-            : auto ? t("adminAutoBadge", lang) : def ? t("adminDefaultBadge", lang) : t("adminBlankBadge", lang);
-          const dup = dupWarning[num];
-          const hasEidOverride = Object.prototype.hasOwnProperty.call(crewEmployeeIds || {}, num);
-          const eidDefault = CREW_EMPLOYEE_ID_DEFAULTS[num] || "";
-          const eidValue = eidDrafts[num] !== undefined ? eidDrafts[num] : (hasEidOverride ? crewEmployeeIds[num] : eidDefault);
-          const eidBadge = hasEidOverride
-            ? (crewEmployeeIds[num] === "" ? t("adminBlankBadge", lang) : t("adminManualBadge", lang))
-            : eidDefault ? t("adminDefaultBadge", lang) : t("adminBlankBadge", lang);
-          return (
-            <div key={num} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {/* Wraps on a phone: crew #, name and Employee ID stay on the first
-                  line; the badges and the ✕ / 🗑 buttons move to a second line
-                  instead of being pushed off the right edge. */}
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px" }}>
-                <span style={{ fontWeight: 700, fontSize: 12.5, minWidth: 56 }}>{t("crewWord", lang)} {num}</span>
-                <input
-                  type="text"
-                  value={value}
-                  onChange={(e) => setDrafts((prev) => ({ ...prev, [num]: e.target.value }))}
-                  onBlur={() => { if (drafts[num] !== undefined) commit(num, drafts[num]); }}
-                  style={{ ...styles.numInputWide, padding: "5px 8px", fontSize: 12.5, flex: "1 1 110px", minWidth: 0 }}
-                />
-                <input
-                  type="text"
-                  value={eidValue}
-                  placeholder={t("employeeIdLabel", lang)}
-                  onChange={(e) => setEidDrafts((prev) => ({ ...prev, [num]: e.target.value }))}
-                  onBlur={() => { if (eidDrafts[num] !== undefined) commitEid(num, eidDrafts[num]); }}
-                  style={{ ...styles.numInputWide, padding: "5px 8px", fontSize: 12.5, flex: "0 1 92px", minWidth: 64 }}
-                />
-                <span style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap" }}>
-                  {badge}
-                </span>
-                <span style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "nowrap" }}>
-                  {eidBadge}
-                </span>
-                <button onClick={() => clearRow(num)} title={t("adminClearTooltip", lang)} style={{ ...styles.smallActionBtn, padding: "5px 7px" }}>
-                  <X size={13} />
-                </button>
-                {hasOverride && (
-                  <button onClick={() => removeOverride(num)} style={{ ...styles.smallActionBtn, padding: "5px 7px", color: "#B3432A" }}>
-                    <Trash2 size={13} />
-                  </button>
-                )}
-              </div>
-              {dup && (
-                <p style={{ fontSize: 11, color: "#B3432A", margin: "0 4px" }}>
-                  {t("adminDupWarning", lang)} {t("crewWord", lang)} {dup}
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 12 }}>
-        <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 4 }}>{t("adminDailyLogAccessTitle", lang)}</div>
-        <p style={styles.hint}>{t("adminDailyLogAccessHint", lang)}</p>
+      <CollapsibleSection title={t("adminDailyLogAccessTitle", lang)}>
+        <InfoToggle lang={lang} text={t("adminDailyLogAccessHint", lang)} />
         <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
           <input
             type="number"
@@ -4054,7 +4369,7 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, crewEmployeeIds, set
             onKeyDown={(e) => { if (e.key === "Enter") addDailyLogAccess(); }}
             style={{ ...styles.numInputWide, minWidth: 90, width: 90, flex: "none" }}
           />
-          <button onClick={addDailyLogAccess} style={{ ...styles.smallActionBtn, background: "var(--accent)", color: "#fff", borderColor: "var(--accent)" }}>
+          <button onClick={addDailyLogAccess} style={accentBtn()}>
             <Plus size={14} />
           </button>
         </div>
@@ -4069,12 +4384,387 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, crewEmployeeIds, set
             </span>
           ))}
         </div>
+      </CollapsibleSection>
+    </div>
+  );
+}
+
+// Add/edit form for one driver. Returns an error string from onSubmit to
+// keep the form open with that message.
+function DriverForm({ lang, initial, onSubmit, onCancel, submitLabel, compact }) {
+  const [name, setName] = useState(initial?.name || "");
+  const [employeeId, setEmployeeId] = useState(initial?.employeeId || "");
+  const [type, setType] = useState(initial?.type || "full");
+  const [crewNumber, setCrewNumber] = useState(initial?.crewNumber || "");
+  const [error, setError] = useState("");
+  const submit = () => {
+    const err = onSubmit({ name: name.trim(), employeeId: employeeId.trim(), type, crewNumber: crewNumber.trim() });
+    if (err) { setError(err); return; }
+    if (!initial) { setName(""); setEmployeeId(""); setCrewNumber(""); setType("full"); }
+    setError("");
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        <input type="text" placeholder={t("driverNameLabel", lang)} value={name} onChange={(e) => { setName(e.target.value); setError(""); }} style={adminInput({ gridColumn: "1 / -1" })} />
+        <input type="text" placeholder={t("employeeIdLabel", lang)} value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); setError(""); }} style={adminInput()} />
+        <select value={type} onChange={(e) => setType(e.target.value)} aria-label={t("driverTypeLabel", lang)} style={adminInput()}>
+          <option value="full">{t("driverTypeFull", lang)}</option>
+          <option value="part">{t("driverTypePart", lang)}</option>
+        </select>
+        {!compact && (
+          <input type="number" placeholder={t("driverCrewOptional", lang)} value={crewNumber} onChange={(e) => { setCrewNumber(e.target.value); setError(""); }} style={adminInput({ gridColumn: "1 / -1" })} />
+        )}
+      </div>
+      {error && <p style={{ fontSize: 11.5, color: "#B3432A", margin: 0 }}>{error}</p>}
+      <div style={{ display: "flex", gap: 6 }}>
+        <button onClick={submit} style={accentBtn()}>
+          <Check size={14} /> {submitLabel}
+        </button>
+        {onCancel && <button onClick={onCancel} style={styles.smallActionBtn}>{t("driverCancel", lang)}</button>}
+      </div>
+    </div>
+  );
+}
+
+// Checks a driver add/edit against the rest of the directory. Returns an
+// error message, or "" when it's fine to save.
+function driverProblem(lang, drivers, values, selfId) {
+  if (!values.name) return t("driverNameRequired", lang);
+  const others = drivers.filter((d) => d.id !== selfId);
+  if (values.employeeId) {
+    const hit = others.find((d) => String(d.employeeId).trim() === values.employeeId);
+    if (hit) return `${t("driverDupEid", lang)} ${hit.name}`;
+  }
+  if (values.crewNumber) {
+    const hit = others.find((d) => d.active && String(d.crewNumber) === values.crewNumber);
+    if (hit) return `${t("driverCrewTaken", lang)} ${hit.name}`;
+  }
+  return "";
+}
+
+function AdminDriversTab({ lang, drivers, setDrivers }) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("active"); // active | inactive | all
+  const [editingId, setEditingId] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [bulkType, setBulkType] = useState("full");
+  const [bulkResult, setBulkResult] = useState(null);
+
+  const list = useMemo(() => drivers
+    .filter((d) => (filter === "all" ? true : filter === "active" ? d.active : !d.active))
+    .filter((d) => matchDriver(d, query))
+    .sort((a, b) => a.name.localeCompare(b.name)), [drivers, filter, query]);
+
+  const add = (values) => {
+    const err = driverProblem(lang, drivers, values, null);
+    if (err) return err;
+    setDrivers([...drivers, makeDriver(values)]);
+    return "";
+  };
+  const update = (id, values) => {
+    const err = driverProblem(lang, drivers, values, id);
+    if (err) return err;
+    setDrivers(drivers.map((d) => (d.id === id ? { ...d, ...values } : d)));
+    setEditingId(null);
+    return "";
+  };
+  // Deactivate instead of delete: the driver stays in the list (and in any
+  // saved extra shifts) but drops out of pickers and frees their crew.
+  const setActive = (id, active) => {
+    setDrivers(drivers.map((d) => {
+      if (d.id !== id) return d;
+      if (active && d.crewNumber && drivers.some((o) => o.id !== id && o.active && String(o.crewNumber) === String(d.crewNumber))) {
+        return { ...d, active: true, crewNumber: "" };
+      }
+      return { ...d, active };
+    }));
+  };
+  const bulkAdd = () => {
+    const { rows, errors } = parseBulkDrivers(bulkText, drivers);
+    if (rows.length) setDrivers([...drivers, ...rows.map((r) => makeDriver({ ...r, type: bulkType }))]);
+    setBulkResult({ added: rows.length, errors });
+    if (!errors.length) setBulkText("");
+  };
+
+  const filterBtn = (id, label) => (
+    <button onClick={() => setFilter(id)} aria-pressed={filter === id} style={filter === id ? accentBtn({ padding: "4px 9px", fontSize: 11.5 }) : { ...styles.smallActionBtn, padding: "4px 9px", fontSize: 11.5 }}>{label}</button>
+  );
+
+  return (
+    <div>
+      <InfoToggle lang={lang} title={t("adminTabDrivers", lang)} text={t("driversHint", lang)} />
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+        <button onClick={() => setShowAdd((v) => !v)} style={accentBtn()}>
+          <UserPlus size={14} /> {t("driversAddTitle", lang)}
+        </button>
+      </div>
+      {showAdd && (
+        <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 10, marginBottom: 10, background: "var(--bg)" }}>
+          <DriverForm lang={lang} onSubmit={add} onCancel={() => setShowAdd(false)} submitLabel={t("driversAddTitle", lang)} />
+        </div>
+      )}
+
+      <div style={{ position: "relative", marginBottom: 6 }}>
+        <Search size={14} style={{ position: "absolute", insetInlineStart: 10, top: 10, color: "var(--muted)" }} />
+        <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("driversSearchPlaceholder", lang)} style={{ ...styles.numInputWide, width: "100%", boxSizing: "border-box", paddingInlineStart: 30 }} />
+      </div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+        {filterBtn("active", t("driverActive", lang))}
+        {filterBtn("inactive", t("driverInactive", lang))}
+        {filterBtn("all", t("driversFilterAll", lang))}
+        <span style={{ marginInlineStart: "auto", fontSize: 11, color: "var(--muted)" }}>{list.length} {t("driversCount", lang)}</span>
       </div>
 
-      <button onClick={onLogout} style={{ ...styles.smallActionBtn, color: "#B3432A", marginTop: 12 }}>
-        <LogOut size={14} /> {t("adminLogoutBtn", lang)}
+      <div style={{ maxHeight: 320, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+        {list.length === 0 && <p style={styles.hint}>{t("driversNone", lang)}</p>}
+        {list.map((d) => (
+          <div key={d.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "7px 9px", opacity: d.active ? 1 : 0.65 }}>
+            {editingId === d.id ? (
+              <DriverForm lang={lang} initial={d} onSubmit={(v) => update(d.id, v)} onCancel={() => setEditingId(null)} submitLabel={t("driverSave", lang)} />
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>{d.name}</span>
+                <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                  {d.employeeId ? <bdi dir="ltr">#{d.employeeId}</bdi> : "—"} · {t(d.type === "part" ? "driverTypePart" : "driverTypeFull", lang)}
+                  {d.crewNumber ? ` · ${t("crewWord", lang)} ${d.crewNumber}` : ""}
+                  {!d.active ? ` · ${t("driverInactive", lang)}` : ""}
+                </span>
+                <span style={{ marginInlineStart: "auto", display: "flex", gap: 4 }}>
+                  <button onClick={() => setEditingId(d.id)} aria-label={t("driverEdit", lang)} title={t("driverEdit", lang)} style={{ ...styles.smallActionBtn, padding: "4px 7px" }}>
+                    <Pencil size={12} />
+                  </button>
+                  <button onClick={() => setActive(d.id, !d.active)} style={{ ...styles.smallActionBtn, padding: "4px 8px", fontSize: 11, color: d.active ? "#B3432A" : "#0EA37E" }}>
+                    {t(d.active ? "driverDeactivate" : "driverReactivate", lang)}
+                  </button>
+                </span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <CollapsibleSection title={t("driversBulkTitle", lang)}>
+        <p style={styles.hint}>{t("driversBulkHint", lang)}</p>
+        <textarea
+          value={bulkText}
+          onChange={(e) => { setBulkText(e.target.value); setBulkResult(null); }}
+          rows={5}
+          dir="ltr"
+          placeholder={"Jane Doe, 1234\nJohn Roe, 5678"}
+          style={adminInput({ fontFamily: "inherit", resize: "vertical" })}
+        />
+        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          <select value={bulkType} onChange={(e) => setBulkType(e.target.value)} aria-label={t("driverTypeLabel", lang)} style={adminInput({ width: "auto" })}>
+            <option value="full">{t("driverTypeFull", lang)}</option>
+            <option value="part">{t("driverTypePart", lang)}</option>
+          </select>
+          <button onClick={bulkAdd} disabled={!bulkText.trim()} style={accentBtn({ opacity: bulkText.trim() ? 1 : 0.5 })}>
+            <Plus size={14} /> {t("driversBulkAddBtn", lang)}
+          </button>
+        </div>
+        {bulkResult && (
+          <div style={{ fontSize: 12, marginTop: 8 }}>
+            <div style={{ color: "#0EA37E", fontWeight: 700 }}>{t("driversBulkAdded", lang)} {bulkResult.added}</div>
+            {bulkResult.errors.length > 0 && (
+              <div style={{ color: "#B3432A", marginTop: 4 }}>
+                {t("driversBulkSkipped", lang)} {bulkResult.errors.length}
+                <ul style={{ margin: "4px 0 0", paddingInlineStart: 18 }}>
+                  {bulkResult.errors.map((e) => (
+                    <li key={e.line}>{t("driverLine", lang)} {e.line}: <bdi dir="ltr">{e.text}</bdi> — {t(e.reason === "duplicate" ? "driversBulkErrDup" : "driversBulkErrFormat", lang)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </CollapsibleSection>
+    </div>
+  );
+}
+
+function AdminExtraShiftsTab({ lang, drivers, setDrivers, extraShifts, setExtraShifts }) {
+  const [driverId, setDriverId] = useState("");
+  const [showNewDriver, setShowNewDriver] = useState(false);
+  const [message, setMessage] = useState("");
+  const [rows, setRows] = useState(null); // preview rows, or null before parsing
+  const [notice, setNotice] = useState(null); // { kind: "ok"|"err", text }
+  const today = todayDateStr();
+
+  const driverOptions = useMemo(() => drivers
+    .filter((d) => d.active)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((d) => ({
+      value: d.id,
+      label: d.name,
+      sub: [d.employeeId && `#${d.employeeId}`, d.crewNumber && `${t("crewWord", lang)} ${d.crewNumber}`, t(d.type === "part" ? "driverTypePart" : "driverTypeFull", lang)].filter(Boolean).join(" · "),
+      search: `${d.name} ${d.employeeId} ${d.crewNumber}`,
+    })), [drivers, lang]);
+  const driverById = useMemo(() => new Map(drivers.map((d) => [d.id, d])), [drivers]);
+
+  const addDriver = (values) => {
+    const err = driverProblem(lang, drivers, values, null);
+    if (err) return err;
+    const d = makeDriver(values);
+    setDrivers([...drivers, d]);
+    setDriverId(d.id);
+    setShowNewDriver(false);
+    return "";
+  };
+
+  const parse = () => {
+    const parsed = parseDispatchMessage(message, today);
+    setNotice(parsed.length ? null : { kind: "err", text: t("extraNoShiftsFound", lang) });
+    setRows(parsed.map((r, i) => ({ ...r, key: i, include: true })));
+  };
+  const patchRow = (key, patch) => setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+
+  const checked = (rows || []).map((r) => ({ ...r, flags: validateShiftRow(r, today) }));
+  const included = checked.filter((r) => r.include);
+  const blocked = included.some((r) => r.flags.some((f) => BLOCKING_FLAGS.includes(f)));
+  const canConfirm = !!driverId && included.length > 0 && !blocked;
+
+  const confirm = () => {
+    if (!driverId) { setNotice({ kind: "err", text: t("extraNeedDriver", lang) }); return; }
+    if (blocked) { setNotice({ kind: "err", text: t("extraFixErrors", lang) }); return; }
+    const now = Date.now();
+    const items = included.map((r, i) => {
+      const end = normalizeTime(r.end);
+      return {
+        id: `xs-${now.toString(36)}-${i}`,
+        driverId,
+        date: r.date,
+        run: r.run.trim().toUpperCase(),
+        regionKey: r.regionKey || "",
+        location: r.regionKey ? regionLabel(r.regionKey, "en") : "",
+        start: normalizeTime(r.start).text,
+        end: end.valid ? end.text : "",
+        source: message.trim().slice(0, 500),
+        createdAt: now,
+      };
+    });
+    // One extra shift per driver per date: a newer message for the same day replaces the old one.
+    const next = extraShifts
+      .filter((s) => !items.some((it) => it.driverId === s.driverId && it.date === s.date))
+      .concat(items)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+    setExtraShifts(pruneExpiredShifts(next, today));
+    setNotice({ kind: "ok", text: `${t("extraSaved", lang)} ${items.length}` });
+    setRows(null);
+    setMessage("");
+  };
+
+  const remove = (id) => setExtraShifts(extraShifts.filter((s) => s.id !== id));
+  const upcoming = extraShifts.slice().sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+
+  const flagChip = (f) => {
+    const blocking = BLOCKING_FLAGS.includes(f);
+    return (
+      <span key={f} style={{ fontSize: 10.5, fontWeight: 700, borderRadius: 999, padding: "2px 7px", background: blocking ? "#F7E9E4" : "#FFF4D6", color: blocking ? "#B3432A" : "#8A6A00", border: `1px solid ${blocking ? "#E8B4A6" : "#E9D27A"}` }}>
+        {blocking ? "⚠" : "ⓘ"} {t(`extraFlag_${f}`, lang)}
+      </span>
+    );
+  };
+  const timeBad = (r, which) => r.flags.includes(which === "start" ? "invalidStart" : "invalidEnd") || (which === "start" && r.flags.includes("missingStart"));
+
+  return (
+    <div>
+      <InfoToggle lang={lang} title={t("adminTabExtra", lang)} text={t("extraHint", lang)} />
+
+      <div style={{ ...styles.smallLabel, marginBottom: 4 }}>{t("extraDriverLabel", lang)}</div>
+      <SearchSelect lang={lang} value={driverId} options={driverOptions} onChange={setDriverId} placeholder={t("extraDriverSearch", lang)} />
+      <button onClick={() => setShowNewDriver((v) => !v)} style={{ ...styles.smallActionBtn, marginTop: 6, padding: "5px 9px", fontSize: 11.5 }}>
+        <UserPlus size={13} /> + {t("extraNewDriver", lang)}
       </button>
-    </Modal>
+      {showNewDriver && (
+        <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 10, marginTop: 6, background: "var(--bg)" }}>
+          <DriverForm lang={lang} onSubmit={addDriver} onCancel={() => setShowNewDriver(false)} submitLabel={t("driversAddTitle", lang)} />
+        </div>
+      )}
+
+      <div style={{ ...styles.smallLabel, margin: "12px 0 4px" }}>{t("extraMessageLabel", lang)}</div>
+      <textarea
+        value={message}
+        onChange={(e) => { setMessage(e.target.value); setNotice(null); }}
+        rows={4}
+        dir="ltr"
+        placeholder={t("extraMessagePlaceholder", lang)}
+        style={adminInput({ fontFamily: "inherit", resize: "vertical" })}
+      />
+      <button onClick={parse} disabled={!message.trim()} style={accentBtn({ marginTop: 6, opacity: message.trim() ? 1 : 0.5 })}>
+        <Search size={14} /> {t("extraParseBtn", lang)}
+      </button>
+
+      {checked.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontWeight: 800, fontSize: 12.5, marginBottom: 6 }}>{t("extraPreviewTitle", lang)}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {checked.map((r) => (
+              <div key={r.key} style={{ border: `1px solid ${r.flags.some((f) => BLOCKING_FLAGS.includes(f)) && r.include ? "#E8B4A6" : "var(--border)"}`, borderRadius: 10, padding: 8, opacity: r.include ? 1 : 0.55 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <input type="checkbox" checked={r.include} onChange={(e) => patchRow(r.key, { include: e.target.checked })} aria-label={t("extraConfirmBtn", lang)} />
+                  <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{r.dateText ? <bdi dir="ltr">“{r.dateText}”</bdi> : null} {r.date ? `→ ${weekdayDateLabel(r.date, lang)}` : ""}</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                  <label style={{ fontSize: 11, color: "var(--muted)" }}>{t("extraColDate", lang)}
+                    <input type="date" value={r.date} onChange={(e) => patchRow(r.key, { date: e.target.value })} style={adminInput({ marginTop: 2, borderColor: r.flags.includes("missingDate") || r.flags.includes("pastDate") ? "#B3432A" : undefined })} />
+                  </label>
+                  <label style={{ fontSize: 11, color: "var(--muted)" }}>{t("extraColRun", lang)}
+                    <input type="text" value={r.run} onChange={(e) => patchRow(r.key, { run: e.target.value })} style={adminInput({ marginTop: 2 })} />
+                  </label>
+                  <label style={{ fontSize: 11, color: "var(--muted)" }}>{t("extraColStart", lang)}
+                    <input type="text" inputMode="numeric" placeholder="HH:MM" value={r.start} onChange={(e) => patchRow(r.key, { start: e.target.value })} style={adminInput({ marginTop: 2, borderColor: timeBad(r, "start") ? "#B3432A" : undefined })} />
+                  </label>
+                  <label style={{ fontSize: 11, color: "var(--muted)" }}>{t("extraColEnd", lang)}
+                    <input type="text" inputMode="numeric" placeholder="HH:MM" value={r.end} onChange={(e) => patchRow(r.key, { end: e.target.value })} style={adminInput({ marginTop: 2, borderColor: timeBad(r, "end") ? "#B3432A" : r.flags.includes("missingEnd") ? "#E9D27A" : undefined })} />
+                  </label>
+                  <label style={{ fontSize: 11, color: "var(--muted)", gridColumn: "1 / -1" }}>{t("extraColLocation", lang)}
+                    <select value={r.regionKey} onChange={(e) => patchRow(r.key, { regionKey: e.target.value })} style={adminInput({ marginTop: 2 })}>
+                      <option value="">{t("extraLocationNone", lang)}</option>
+                      {EXTRA_REGION_KEYS.map((k) => <option key={k} value={k}>{regionLabel(k, lang)}</option>)}
+                    </select>
+                  </label>
+                </div>
+                {r.flags.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>{r.flags.map(flagChip)}</div>}
+              </div>
+            ))}
+          </div>
+          {!driverId && <p style={{ fontSize: 11.5, color: "#B3432A", margin: "8px 0 0" }}>{t("extraNeedDriver", lang)}</p>}
+          {driverId && blocked && <p style={{ fontSize: 11.5, color: "#B3432A", margin: "8px 0 0" }}>{t("extraFixErrors", lang)}</p>}
+          <button onClick={confirm} disabled={!canConfirm} style={accentBtn({ marginTop: 8, opacity: canConfirm ? 1 : 0.5 })}>
+            <Check size={14} /> {t("extraConfirmBtn", lang)}
+          </button>
+        </div>
+      )}
+      {notice && (
+        notice.kind === "ok"
+          ? <p style={{ fontSize: 12, color: "#0EA37E", fontWeight: 700, margin: "8px 0 0" }}>✓ {notice.text}</p>
+          : <div style={styles.errorBox}><AlertCircle size={15} /><span>{notice.text}</span></div>
+      )}
+
+      <CollapsibleSection title={`${t("extraUpcomingTitle", lang)} (${upcoming.length})`} defaultOpen>
+        {upcoming.length === 0 && <p style={styles.hint}>{t("extraUpcomingNone", lang)}</p>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {upcoming.map((s) => {
+            const d = driverById.get(s.driverId);
+            return (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px", fontSize: 12 }}>
+                <b>{weekdayDateLabel(s.date, lang)}</b>
+                <span>{d ? d.name : "?"}</span>
+                <span style={{ color: "var(--muted)" }}>
+                  {s.run || "—"}{s.regionKey ? ` · ${regionLabel(s.regionKey, lang)}` : ""} · <bdi dir="ltr">{s.start}{s.end ? `–${s.end}` : ""}</bdi>
+                </span>
+                <button onClick={() => remove(s.id)} aria-label={t("extraRemove", lang)} title={t("extraRemove", lang)} style={{ ...styles.smallActionBtn, padding: "4px 6px", marginInlineStart: "auto", color: "#B3432A" }}>
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </CollapsibleSection>
+    </div>
   );
 }
 
@@ -5117,8 +5807,32 @@ export default function ShiftPriorityRanker() {
   // overlaid with manual Admin edits) and whether this tab is unlocked as
   // Admin — see the loadCrewNames/loadAdminSession helpers above.
   const [crewNames, setCrewNames] = useState(() => loadCrewNames());
-  const [crewEmployeeIds, setCrewEmployeeIds] = useState(() => loadCrewEmployeeIds());
   const [isAdmin, setIsAdmin] = useState(() => loadAdminSession());
+  // Drivers directory — the single source for driver pickers and Employee
+  // IDs. The first time this version runs it is seeded once from the old
+  // per-crew names/Employee IDs (manual Admin entries, the last loaded
+  // file's Driver Name column, then the built-in lists), then saved.
+  const [drivers, setDriversState] = useState(() => {
+    const saved = loadDrivers();
+    if (saved) return saved;
+    const fileNames = {};
+    for (const c of loadLastFile()?.parsed?.crews || []) if (c.driverName) fileNames[String(c.crew)] = c.driverName;
+    return seedDriversFromCrews({
+      crewNames: loadCrewNames(),
+      crewEmployeeIds: loadCrewEmployeeIds(),
+      nameDefaults: { ...CREW_NAME_DEFAULTS, ...fileNames },
+      employeeIdDefaults: CREW_EMPLOYEE_ID_DEFAULTS,
+    });
+  });
+  useEffect(() => { if (loadDrivers() === null) saveDrivers(drivers); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const setDrivers = (next) => { setDriversState(next); saveDrivers(next); };
+  // Extra shifts from dispatch messages (Admin panel). Each is for one date
+  // and one driver; past ones are pruned below.
+  const [extraShifts, setExtraShiftsState] = useState(() => loadExtraShifts());
+  const setExtraShifts = (next) => { setExtraShiftsState(next); saveExtraShifts(next); };
+  // What every screen shows as a crew's driver name (manual Admin names,
+  // then the Drivers directory; see mergeDirectoryNames).
+  const displayNames = useMemo(() => mergeDirectoryNames(crewNames, drivers), [crewNames, drivers]);
   // The crew picked from the "Browse crews" lookup panel, or null.
   const [lookupCrew, setLookupCrew] = useState(null);
   const [swapViewCrew, setSwapViewCrew] = useState(null);
@@ -5198,12 +5912,6 @@ export default function ShiftPriorityRanker() {
     if (meta) meta.setAttribute("content", themeMode === "dark" ? palette.card : palette.accent);
   }, [palette, themeMode]);
 
-  // My own crew's row in the loaded schedule, used by the home screen's
-  // "My Shift" card and the weekly-hours ring below it.
-  const myCrew = useMemo(() => (
-    parsed && profile?.crewNumber ? parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber)) : null
-  ), [parsed, profile]);
-
   // This week's logged hours (from the Daily Shift Log) vs. this week's
   // scheduled hours (from the loaded board), as a 0-100 percent. null when
   // there's nothing to show it against (no crew, or a 0-hour week).
@@ -5228,6 +5936,28 @@ export default function ShiftPriorityRanker() {
     window.addEventListener("focus", refresh);
     return () => { clearTimeout(timer); document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("focus", refresh); };
   }, []);
+
+  // Drop extra shifts once their date has passed (on open, at midnight, and
+  // when the app comes back to the screen).
+  useEffect(() => {
+    const pruned = pruneExpiredShifts(extraShifts, todayDateStr());
+    if (pruned.length !== extraShifts.length) setExtraShifts(pruned);
+  }, [dayTick]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // This week's board (Sun–Sat around today) with dispatch extra shifts
+  // added to their drivers — what the home screen, My Schedule and Browse
+  // crews show. Ranking and Compare keep using the plain weekly board.
+  const weekCrews = useMemo(() => (
+    parsed ? applyExtraShifts(parsed.crews, extraShifts, drivers, todayDateStr()) : null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [parsed, extraShifts, drivers, dayTick]);
+
+  // My own crew's row in the loaded schedule, used by the home screen's
+  // "My Shift" card and the weekly-hours ring below it.
+  const myCrew = useMemo(() => (
+    weekCrews && profile?.crewNumber ? weekCrews.find((c) => String(c.crew) === String(profile.crewNumber)) : null
+  ), [weekCrews, profile]);
+
 
   const weekProgress = useMemo(() => {
     if (!myCrew) return null;
@@ -5541,7 +6271,9 @@ export default function ShiftPriorityRanker() {
         <SwapFinderPanel
           lang={lang}
           crews={parsed.crews}
-          crewNames={crewNames}
+          extraShifts={extraShifts}
+          drivers={drivers}
+          crewNames={displayNames}
           profile={profile}
           onViewCrew={(c) => setSwapViewCrew(c)}
           onFillForm={(data) => { setSwapFormPrefill(data); setActivePanel("swapForm"); }}
@@ -5553,8 +6285,9 @@ export default function ShiftPriorityRanker() {
           key={swapFormPrefill ? JSON.stringify(swapFormPrefill) : "manual"}
           lang={lang}
           crews={parsed?.crews}
-          crewNames={crewNames}
-          crewEmployeeIds={crewEmployeeIds}
+          crewNames={displayNames}
+          drivers={drivers}
+          extraShifts={extraShifts}
           profile={profile}
           prefill={swapFormPrefill}
           onClose={() => { setActivePanel(swapFormPrefill ? "swapFinder" : null); setSwapFormPrefill(null); }}
@@ -5563,7 +6296,7 @@ export default function ShiftPriorityRanker() {
       {swapViewCrew && (
         <MyScheduleModal
           crew={swapViewCrew}
-          name={resolveCrewName(swapViewCrew.crew, parsed?.crews, crewNames)}
+          name={resolveCrewName(swapViewCrew.crew, weekCrews, displayNames)}
           lang={lang}
           themeMode={themeMode}
           onClose={() => setSwapViewCrew(null)}
@@ -5573,10 +6306,10 @@ export default function ShiftPriorityRanker() {
       {activePanel === "crewLookup" && parsed && (
         <CrewLookupPanel
           lang={lang}
-          crews={parsed.crews}
-          crewNames={crewNames}
+          crews={weekCrews}
+          crewNames={displayNames}
           onPick={(crewNumber) => {
-            const c = parsed.crews.find((cc) => String(cc.crew) === String(crewNumber));
+            const c = weekCrews.find((cc) => String(cc.crew) === String(crewNumber));
             if (c) { setLookupCrew(c); setActivePanel(null); }
           }}
           onClose={() => setActivePanel(null)}
@@ -5588,7 +6321,7 @@ export default function ShiftPriorityRanker() {
       {lookupCrew && (
         <MyScheduleModal
           crew={lookupCrew}
-          name={resolveCrewName(lookupCrew.crew, parsed?.crews, crewNames)}
+          name={resolveCrewName(lookupCrew.crew, weekCrews, displayNames)}
           lang={lang}
           themeMode={themeMode}
           onClose={() => setLookupCrew(null)}
@@ -5608,20 +6341,22 @@ export default function ShiftPriorityRanker() {
           crews={parsed?.crews}
           crewNames={crewNames}
           setCrewNames={setCrewNames}
-          crewEmployeeIds={crewEmployeeIds}
-          setCrewEmployeeIds={setCrewEmployeeIds}
+          drivers={drivers}
+          setDrivers={setDrivers}
+          extraShifts={extraShifts}
+          setExtraShifts={setExtraShifts}
           dailyLogAccess={dailyLogAccess}
           setDailyLogAccess={setDailyLogAccess}
-          onLogout={() => { setIsAdmin(false); saveAdminSession(false); setActivePanel(null); }}
+          onLogout={() => { setIsAdmin(false); saveAdminSession(false); saveAdminRemember(false); setActivePanel(null); }}
           onClose={() => setActivePanel(null)}
         />
       )}
       {showMySchedule && parsed && profile?.crewNumber && (() => {
-        const myCrew = parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber));
+        const myCrew = weekCrews.find((c) => String(c.crew) === String(profile.crewNumber));
         return myCrew ? (
           <MyScheduleModal
             crew={myCrew}
-            name={resolveCrewName(myCrew.crew, parsed.crews, crewNames)}
+            name={resolveCrewName(myCrew.crew, weekCrews, displayNames)}
             lang={lang}
             themeMode={themeMode}
             onClose={() => setShowMySchedule(false)}
@@ -5690,7 +6425,7 @@ export default function ShiftPriorityRanker() {
                   {myCrew ? (
                     <span style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                       {today ? (
-                        <bdi dir="ltr" style={{ fontSize: 22, fontWeight: 800 }}>{formatExcelTime(today.start)}–{formatExcelTime(today.end)}</bdi>
+                        <bdi dir="ltr" style={{ fontSize: 22, fontWeight: 800 }}>{formatExcelTime(today.start)}{today.end !== "" ? `–${formatExcelTime(today.end)}` : ""}{today.extra ? " +" : ""}</bdi>
                       ) : (
                         <span style={{ fontSize: 24, fontWeight: 800 }}>{t("off", lang)}</span>
                       )}
@@ -5711,7 +6446,7 @@ export default function ShiftPriorityRanker() {
                               const lines = d && d.code ? dayChipLines(d.code) : [d ? "•" : "·"];
                               const longest = lines.reduce((a, l) => (l.length > a.length ? l : a), "");
                               return (
-                                <span title={d?.code || undefined} style={{ ...styles.dayChip, fontSize: dayChipFontSize(longest), ...(lines.length > 1 ? { flexDirection: "column", lineHeight: 1.05 } : {}), background: d ? (REGION_COLORS[d.regionKey] || "#9AA0A6") : "rgba(255,255,255,0.22)", ...(isToday ? styles.dayChipToday : {}) }}>
+                                <span title={d?.code || undefined} style={{ ...styles.dayChip, fontSize: dayChipFontSize(longest), ...(lines.length > 1 ? { flexDirection: "column", lineHeight: 1.05 } : {}), background: d ? (REGION_COLORS[d.regionKey] || "#9AA0A6") : "rgba(255,255,255,0.22)", ...(d?.extra ? { outline: "2px dashed #fff", outlineOffset: 1 } : {}), ...(isToday ? styles.dayChipToday : {}) }}>
                                   {lines.map((l, k) => <span key={k}>{l}</span>)}
                                 </span>
                               );
@@ -5819,7 +6554,7 @@ export default function ShiftPriorityRanker() {
         {showPriorityFlow && (
         <div style={{ "--accent": "var(--flow)" }}>
         {profile?.crewNumber && parsed && (() => {
-          const myCrew = parsed.crews.find((c) => String(c.crew) === String(profile.crewNumber));
+          const myCrew = weekCrews.find((c) => String(c.crew) === String(profile.crewNumber));
           return (
             <div className="no-print" style={styles.myShiftCard}>
               <div>
@@ -5827,7 +6562,7 @@ export default function ShiftPriorityRanker() {
                 <div style={{ fontSize: 16, fontWeight: 800 }}>
                   {t("crewWord", lang)} {profile.crewNumber}
                   {(() => {
-                    const myName = resolveCrewName(profile.crewNumber, parsed.crews, crewNames);
+                    const myName = resolveCrewName(profile.crewNumber, weekCrews, displayNames);
                     return myName ? <span style={{ fontWeight: 700 }}> · {myName}</span> : null;
                   })()}
                   {myCrew && <span style={{ fontWeight: 600, fontSize: 12.5, color: "var(--muted)" }}> · {myCrew.type} · {myCrew.shiftRaw}</span>}

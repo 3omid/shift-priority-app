@@ -149,3 +149,23 @@ describe("data layer: migration + storage (run in order, one shared IndexedDB)",
     expect(Store.loadDailyLogEntries().map((e) => e.date).sort()).toEqual(["2026-09-01", "2026-09-02"]);
   });
 });
+
+describe("data layer: drivers directory, extra shifts, admin remember flag", () => {
+  it("persist across a re-hydrate and ride along in backups (except the remember flag)", async () => {
+    await Store.init();
+    expect(Store.loadDrivers()).toBeNull(); // never set up -> app seeds it once
+    await Store.saveDrivers([{ id: "d1", name: "Omid", employeeId: "1599", type: "full", crewNumber: "40", active: true }]);
+    await Store.saveExtraShifts([{ id: "s1", driverId: "d1", date: "2099-01-01", run: "V7", start: "13:22", end: "" }]);
+    await Store.saveAdminRemember(true);
+    await Store.init();
+    expect(Store.loadDrivers()[0].name).toBe("Omid");
+    expect(Store.loadExtraShifts()[0].run).toBe("V7");
+    expect(Store.loadAdminRemember()).toBe(true);
+    const payload = Backup.buildUserDataPayload();
+    expect(payload.drivers).toHaveLength(1);
+    expect(payload.extraShifts).toHaveLength(1);
+    expect(payload).not.toHaveProperty("adminRemember");
+    await Store.saveAdminRemember(false);
+    expect(Store.loadAdminRemember()).toBe(false);
+  });
+});

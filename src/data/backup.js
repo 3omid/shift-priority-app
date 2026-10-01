@@ -24,6 +24,10 @@ export function buildUserDataPayload() {
     // backups don't have it; restore simply leaves the current one alone.
     crewEmployeeIds: Store.loadCrewEmployeeIds(),
     dailyLogAccess: Store.loadDailyLogAccess(),
+    // Drivers directory and dispatch extra shifts. Older backups have
+    // neither; restore then leaves the current ones alone.
+    drivers: Store.loadDrivers(),
+    extraShifts: Store.loadExtraShifts(),
     theme: Store.loadThemePrefs(),
     sound: Store.loadSoundSettings(),
     lang: Store.loadLang(),
@@ -126,6 +130,8 @@ export async function restoreBackup(data, { mode = "replace" } = {}) {
   if (data.crewNames !== undefined) await Store.saveCrewNames(data.crewNames);
   if (data.crewEmployeeIds !== undefined) await Store.saveCrewEmployeeIds(data.crewEmployeeIds);
   if (data.dailyLogAccess !== undefined) await Store.saveDailyLogAccess(data.dailyLogAccess);
+  if (data.drivers !== undefined) await Store.saveDrivers(data.drivers);
+  if (data.extraShifts !== undefined) await Store.saveExtraShifts(data.extraShifts);
   if (data.theme !== undefined) await Store.saveThemePrefs(data.theme.style, data.theme.mode);
   if (data.sound !== undefined) await Store.saveSoundSettings(data.sound);
   if (data.lang !== undefined) await Store.saveLang(data.lang);
