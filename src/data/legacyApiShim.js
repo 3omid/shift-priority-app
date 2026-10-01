@@ -8,6 +8,7 @@ export {
   loadProfile, saveProfile, clearProfileStorage,
   loadCrewNames, saveCrewNames,
   loadCrewEmployeeIds, saveCrewEmployeeIds,
+  loadCrewServiceTypes, saveCrewServiceTypes,
   loadDrivers, saveDrivers,
   loadExtraShifts, saveExtraShifts,
   loadAdminRemember, saveAdminRemember,

@@ -35,6 +35,7 @@ export const DEFAULTS = {
   dailyLogAccess: [], // [crewNumber, ...]
   // Drivers directory (see src/drivers.js). null = never set up yet, so the
   // app knows to seed it once from crewNames/crewEmployeeIds.
+  crewServiceTypes: {}, // { [crewNumber]: "OR" | "MOR" } -- On Request / Mobility On Request, admin-maintained
   drivers: null, // [{ id, name, employeeId, type, crewNumber, active, createdAt }]
   extraShifts: [], // [{ id, driverId, date, run, location, regionKey, start, end, source, createdAt }]
   // "Remember me on this device" for the Admin login: only a flag, never

@@ -26,6 +26,7 @@ export function buildUserDataPayload() {
     dailyLogAccess: Store.loadDailyLogAccess(),
     // Drivers directory and dispatch extra shifts. Older backups have
     // neither; restore then leaves the current ones alone.
+    crewServiceTypes: Store.loadCrewServiceTypes(),
     drivers: Store.loadDrivers(),
     extraShifts: Store.loadExtraShifts(),
     theme: Store.loadThemePrefs(),
@@ -130,6 +131,7 @@ export async function restoreBackup(data, { mode = "replace" } = {}) {
   if (data.crewNames !== undefined) await Store.saveCrewNames(data.crewNames);
   if (data.crewEmployeeIds !== undefined) await Store.saveCrewEmployeeIds(data.crewEmployeeIds);
   if (data.dailyLogAccess !== undefined) await Store.saveDailyLogAccess(data.dailyLogAccess);
+  if (data.crewServiceTypes !== undefined) await Store.saveCrewServiceTypes(data.crewServiceTypes);
   if (data.drivers !== undefined) await Store.saveDrivers(data.drivers);
   if (data.extraShifts !== undefined) await Store.saveExtraShifts(data.extraShifts);
   if (data.theme !== undefined) await Store.saveThemePrefs(data.theme.style, data.theme.mode);

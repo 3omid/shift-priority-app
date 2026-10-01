@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, createContext, useContext } from "react";
 import * as XLSX from "xlsx";
 import pkg from "../package.json";
 import { exportBackup, validateBackupFile, restoreBackup, daysSinceLastExport, listSnapshots, restoreSnapshotById } from "./data/backup.js";
@@ -7,6 +7,7 @@ import {
   loadProfile, saveProfile, clearProfileStorage,
   loadCrewNames, saveCrewNames,
   loadCrewEmployeeIds,
+  loadCrewServiceTypes, saveCrewServiceTypes,
   loadDrivers, saveDrivers,
   loadExtraShifts, saveExtraShifts,
   loadAdminRemember, saveAdminRemember,
@@ -27,6 +28,7 @@ import {
   parseDispatchMessage, validateShiftRow, normalizeTime, applyExtraShifts, pruneExpiredShifts,
   BLOCKING_FLAGS, todayStr as todayDateStr,
 } from "./extraShiftParser.js";
+import { parseServiceTypeText, serviceTypeOf, SERVICE_TYPES } from "./crewServiceTypes.js";
 import { seedDriversFromCrews, makeDriver, findDriverForCrew, parseBulkDrivers, matchDriver } from "./drivers.js";
 import { buildExchangeFormFiles, shareOrDownloadFile } from "./exchangeExport.js";
 
@@ -861,6 +863,24 @@ const STRINGS = {
   extraFlag_relativeDate: { fa: "تاریخ نسبی (مثل «فردا») — چک کن", en: 'Relative date (e.g. "tomorrow") — check it', hi: 'सापेक्ष तारीख (जैसे "कल") — जांचें' },
   extraFlag_weekdayMismatch: { fa: "روز هفته با تاریخ نمی‌خونه", en: "Weekday doesn't match the date", hi: "सप्ताह का दिन तारीख से मेल नहीं खाता" },
   extraFlag_pastDate: { fa: "تاریخ گذشته", en: "Date has passed", hi: "तारीख बीत चुकी है" },
+  // ---- Crew service type (On Request / Mobility On Request) ----
+  serviceTypeLabel: { fa: "نوع سرویس", en: "Service type", hi: "सेवा का प्रकार" },
+  serviceTypeOR: { fa: "آن‌ریکوئست (OR)", en: "On Request (OR)", hi: "ऑन रिक्वेस्ट (OR)" },
+  serviceTypeMOR: { fa: "موبیلیتی (MOR)", en: "Mobility On Request (MOR)", hi: "मोबिलिटी ऑन रिक्वेस्ट (MOR)" },
+  serviceTypeNone: { fa: "مشخص نشده", en: "Not set", hi: "तय नहीं" },
+  serviceTypeImportTitle: { fa: "وارد کردن نوع سرویس گروه‌ها (OR / MOR)", en: "Import crew service types (OR / MOR)", hi: "क्रू सेवा प्रकार आयात करें (OR / MOR)" },
+  serviceTypeImportHint: {
+    fa: "هر خط: شماره گروه و نوعش، به هر ترتیبی. مثلاً «21 Newmarket MOR»، «5 On Request»، «30-35 MOR» یا «7, 8 MOR». می‌تونی ستون‌ها رو مستقیم از اکسل هم کپی کنی. MOR یعنی موبیلیتی (مسافرهای دارای معلولیت، مشکل جسمی یا ذهنی، یا سالمند)؛ OR یعنی آن‌ریکوئست (مسافرهای معمولی).",
+    en: 'One line per crew (or range): the crew number and its type, in any order. E.g. "21 Newmarket MOR", "5 On Request", "30-35 MOR" or "7, 8 MOR". You can also paste columns straight from Excel. MOR = Mobility On Request (riders with a disability, a physical or mental condition, or seniors); OR = On Request (regular riders).',
+    hi: 'हर लाइन: क्रू नंबर और उसका प्रकार, किसी भी क्रम में। जैसे "21 Newmarket MOR", "5 On Request", "30-35 MOR" या "7, 8 MOR"। आप एक्सेल से सीधे कॉलम भी पेस्ट कर सकते हैं। MOR = मोबिलिटी ऑन रिक्वेस्ट (विकलांगता, शारीरिक या मानसिक समस्या वाले, या बुज़ुर्ग यात्री); OR = ऑन रिक्वेस्ट (सामान्य यात्री)।',
+  },
+  serviceTypePreviewBtn: { fa: "پیش‌نمایش", en: "Preview", hi: "पूर्वावलोकन" },
+  serviceTypeApplyBtn: { fa: "اعمال", en: "Apply", hi: "लागू करें" },
+  serviceTypeWillSet: { fa: "این گروه‌ها تنظیم می‌شن:", en: "These crews will be set:", hi: "ये क्रू सेट होंगे:" },
+  serviceTypeApplied: { fa: "تنظیم شد:", en: "Updated:", hi: "अपडेट हुए:" },
+  serviceTypeErrNoType: { fa: "نوع (OR/MOR) پیدا نشد", en: "no type (OR/MOR) found", hi: "प्रकार (OR/MOR) नहीं मिला" },
+  serviceTypeErrNoCrew: { fa: "شماره گروه پیدا نشد", en: "no crew number found", hi: "क्रू नंबर नहीं मिला" },
+  serviceTypeCount: { fa: "گروه با نوع مشخص", en: "crews have a type", hi: "क्रू का प्रकार तय है" },
 };
 
 function t(key, lang) { return STRINGS[key] ? (STRINGS[key][lang] || STRINGS[key].en) : key; }
@@ -2060,6 +2080,27 @@ function FingerprintStrip({ fingerprint }) {
 // cards usually mount below the fold (or behind the loading splash), so a
 // plain on-mount CSS animation has already finished before the user sees it.
 // useInView flips once when the element scrolls into view; CSS keys off .sp-in.
+// Crew service type (On Request / Mobility On Request), provided once at the
+// app root so every place that shows a crew number can add the small badge
+// without threading the map through each component.
+const ServiceTypesContext = createContext({});
+const SERVICE_TYPE_COLORS = { OR: { bg: "#E3EEFC", fg: "#1D4F91", border: "#A9C6EE" }, MOR: { bg: "#F1E6FB", fg: "#6A2C9C", border: "#CDAAE8" } };
+function ServiceTypeBadge({ crew, lang, onDark }) {
+  const type = serviceTypeOf(useContext(ServiceTypesContext), crew);
+  if (!type) return null;
+  const c = SERVICE_TYPE_COLORS[type];
+  const label = t(type === "MOR" ? "serviceTypeMOR" : "serviceTypeOR", lang);
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      style={{ display: "inline-flex", alignItems: "center", fontSize: 9.5, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1, borderRadius: 999, padding: "2.5px 6px", marginInlineStart: 5, verticalAlign: "middle", whiteSpace: "nowrap", ...(onDark ? { background: "rgba(255,255,255,0.25)", color: "#fff", border: "1px solid rgba(255,255,255,0.45)" } : { background: c.bg, color: c.fg, border: `1px solid ${c.border}` }) }}
+    >
+      {type === "MOR" ? "♿ MOR" : "OR"}
+    </span>
+  );
+}
+
 const PREFERS_REDUCED_MOTION = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function useInView() {
@@ -2617,7 +2658,7 @@ function MyScheduleModal({ crew, name, lang, themeMode, onClose, onBack }) {
           );
         })}
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 13, fontWeight: 700, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-          <span>{crew.type} · {crew.shiftRaw}</span>
+          <span>{crew.type} · {crew.shiftRaw}<ServiceTypeBadge crew={crew.crew} lang={lang} /></span>
           <span>{crew.totalHours} {t("hours", lang)}</span>
         </div>
       </div>
@@ -3267,7 +3308,7 @@ function CrewLookupPanel({ lang, crews, crewNames, onPick, onClose }) {
             onClick={() => onPick(c.crew)}
             style={{ ...styles.chip, flexDirection: "column", alignItems: "flex-start", gap: 2, minWidth: 88 }}
           >
-            <span style={{ fontWeight: 700 }}>{t("crewWord", lang)} {String(c.crew)}</span>
+            <span style={{ fontWeight: 700 }}>{t("crewWord", lang)} {String(c.crew)}<ServiceTypeBadge crew={c.crew} lang={lang} /></span>
             {c.name && <span style={{ fontSize: 11, color: "var(--muted)" }}>{c.name}</span>}
           </button>
         ))}
@@ -3526,7 +3567,7 @@ function SwapFinderPanel({ lang, crews: baseCrews, extraShifts, drivers, crewNam
               <Reveal key={r.crew.crew} className="sp-card" style={{ animationDelay: `${i * 90}ms`, border: "1px solid var(--border)", borderInlineStart: `4px solid ${r.canSwap ? "#0EA37E" : "#C9A227"}`, borderRadius: 10, padding: "9px 11px", background: "var(--card)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontWeight: 900, fontSize: 15, color: "var(--accent)" }}>{i + 1}</span>
-                  <span style={{ fontWeight: 800, fontSize: 13.5 }}>{t("crewWord", lang)} {String(r.crew.crew)}{name ? ` · ${name}` : ""}</span>
+                  <span style={{ fontWeight: 800, fontSize: 13.5 }}>{t("crewWord", lang)} {String(r.crew.crew)}<ServiceTypeBadge crew={r.crew.crew} lang={lang} />{name ? ` · ${name}` : ""}</span>
                   <span style={{ marginInlineStart: "auto", fontSize: 11, color: "var(--muted)" }}>{t("swapFit", lang)} {r.fit}%</span>
                 </div>
                 <div style={{ fontSize: 12, marginTop: 5, display: "flex", flexDirection: "column", gap: 3 }}>
@@ -4098,7 +4139,7 @@ function weekdayDateLabel(dateStr, lang) {
 }
 const EXTRA_REGION_KEYS = ["RH", "NMK", "CLDR", "STF", "MRG"];
 
-function AdminPanel({ lang, crews, crewNames, setCrewNames, drivers, setDrivers, extraShifts, setExtraShifts, dailyLogAccess, setDailyLogAccess, onLogout, onClose }) {
+function AdminPanel({ lang, crews, crewNames, setCrewNames, crewServiceTypes, setCrewServiceTypes, drivers, setDrivers, extraShifts, setExtraShifts, dailyLogAccess, setDailyLogAccess, onLogout, onClose }) {
   const [tab, setTab] = useState("crews");
   const tabs = [
     { id: "crews", label: t("adminTabCrews", lang), icon: <Users size={14} /> },
@@ -4124,6 +4165,7 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, drivers, setDrivers,
       {tab === "crews" && (
         <AdminCrewsTab
           lang={lang} crews={crews} crewNames={crewNames} setCrewNames={setCrewNames}
+          crewServiceTypes={crewServiceTypes} setCrewServiceTypes={setCrewServiceTypes}
           drivers={drivers} setDrivers={setDrivers}
           dailyLogAccess={dailyLogAccess} setDailyLogAccess={setDailyLogAccess}
         />
@@ -4140,7 +4182,7 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, drivers, setDrivers,
   );
 }
 
-function AdminCrewsTab({ lang, crews, crewNames, setCrewNames, drivers, setDrivers, dailyLogAccess, setDailyLogAccess }) {
+function AdminCrewsTab({ lang, crews, crewNames, setCrewNames, crewServiceTypes, setCrewServiceTypes, drivers, setDrivers, dailyLogAccess, setDailyLogAccess }) {
   const [selected, setSelected] = useState("");
   const [drafts, setDrafts] = useState({});
   const [newCrew, setNewCrew] = useState("");
@@ -4255,9 +4297,16 @@ function AdminCrewsTab({ lang, crews, crewNames, setCrewNames, drivers, setDrive
 
   const crewOptions = useMemo(() => allNumbers.map((num) => {
     const name = resolvedNameFor(num);
-    return { value: num, label: `${t("crewWord", lang)} ${num}`, sub: name, search: `${num} ${name}` };
+    const type = serviceTypeOf(crewServiceTypes, num);
+    return { value: num, label: `${t("crewWord", lang)} ${num}`, sub: [name, type].filter(Boolean).join(" · "), search: `${num} ${name} ${type || ""}` };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [allNumbers, crewNames, drivers, crews, lang]);
+  }), [allNumbers, crewNames, drivers, crews, crewServiceTypes, lang]);
+
+  const setServiceType = (num, type) => {
+    const next = { ...crewServiceTypes };
+    if (type) next[String(num)] = type; else delete next[String(num)];
+    setCrewServiceTypes(next);
+  };
 
   const renderCard = (num) => {
     const hasOverride = Object.prototype.hasOwnProperty.call(crewNames || {}, num);
@@ -4313,6 +4362,25 @@ function AdminCrewsTab({ lang, crews, crewNames, setCrewNames, drivers, setDrive
             style={adminInput({ marginTop: 3 })}
           />
         </label>
+        <div style={{ fontSize: 11.5, color: "var(--muted)" }}>
+          {t("serviceTypeLabel", lang)}
+          <div role="radiogroup" aria-label={t("serviceTypeLabel", lang)} style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+            {[...SERVICE_TYPES, ""].map((type) => {
+              const on = (serviceTypeOf(crewServiceTypes, num) || "") === type;
+              return (
+                <button
+                  key={type || "none"}
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => setServiceType(num, type)}
+                  style={on ? accentBtn({ padding: "5px 9px", fontSize: 11.5 }) : { ...styles.smallActionBtn, padding: "5px 9px", fontSize: 11.5 }}
+                >
+                  {t(type === "MOR" ? "serviceTypeMOR" : type === "OR" ? "serviceTypeOR" : "serviceTypeNone", lang)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     );
   };
@@ -4358,6 +4426,8 @@ function AdminCrewsTab({ lang, crews, crewNames, setCrewNames, drivers, setDrive
         </p>
       )}
 
+      <ServiceTypeImport lang={lang} crewServiceTypes={crewServiceTypes} setCrewServiceTypes={setCrewServiceTypes} />
+
       <CollapsibleSection title={t("adminDailyLogAccessTitle", lang)}>
         <InfoToggle lang={lang} text={t("adminDailyLogAccessHint", lang)} />
         <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
@@ -4386,6 +4456,71 @@ function AdminCrewsTab({ lang, crews, crewNames, setCrewNames, drivers, setDrive
         </div>
       </CollapsibleSection>
     </div>
+  );
+}
+
+// Bulk import of crew service types from pasted text (or Excel columns):
+// preview first, then apply on top of what's already set.
+function ServiceTypeImport({ lang, crewServiceTypes, setCrewServiceTypes }) {
+  const [text, setText] = useState("");
+  const [preview, setPreview] = useState(null); // { updates, errors }
+  const [applied, setApplied] = useState(null);
+  const count = Object.keys(crewServiceTypes || {}).length;
+  const entries = preview ? Object.entries(preview.updates).sort((a, b) => Number(a[0]) - Number(b[0])) : [];
+  const apply = () => {
+    setCrewServiceTypes({ ...crewServiceTypes, ...preview.updates });
+    setApplied(entries.length);
+    setPreview(null);
+    setText("");
+  };
+  return (
+    <CollapsibleSection title={`${t("serviceTypeImportTitle", lang)} · ${count} ${t("serviceTypeCount", lang)}`}>
+      <InfoToggle lang={lang} text={t("serviceTypeImportHint", lang)} />
+      <textarea
+        value={text}
+        onChange={(e) => { setText(e.target.value); setPreview(null); setApplied(null); }}
+        rows={5}
+        dir="ltr"
+        placeholder={"21 Newmarket MOR\n5 On Request\n30-35 MOR"}
+        style={adminInput({ fontFamily: "inherit", resize: "vertical" })}
+      />
+      <button onClick={() => setPreview(parseServiceTypeText(text))} disabled={!text.trim()} style={accentBtn({ marginTop: 6, opacity: text.trim() ? 1 : 0.5 })}>
+        <Search size={14} /> {t("serviceTypePreviewBtn", lang)}
+      </button>
+      {preview && (
+        <div style={{ marginTop: 8, fontSize: 12 }}>
+          {entries.length > 0 && (
+            <>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>{t("serviceTypeWillSet", lang)} {entries.length}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxHeight: 140, overflowY: "auto" }}>
+                {entries.map(([num, type]) => {
+                  const before = serviceTypeOf(crewServiceTypes, num);
+                  const changed = before && before !== type;
+                  return (
+                    <span key={num} style={{ border: "1px solid var(--border)", borderRadius: 999, padding: "2px 8px", background: changed ? "#FFF4D6" : "var(--bg)", color: changed ? "#5A4600" : undefined }}>
+                      {t("crewWord", lang)} {num}: {changed ? <s style={{ opacity: 0.7 }}>{before}</s> : null} <b>{type}</b>
+                    </span>
+                  );
+                })}
+              </div>
+            </>
+          )}
+          {preview.errors.length > 0 && (
+            <ul style={{ color: "#B3432A", margin: "6px 0 0", paddingInlineStart: 18 }}>
+              {preview.errors.map((e) => (
+                <li key={e.line}>{t("driverLine", lang)} {e.line}: <bdi dir="ltr">{e.text}</bdi> — {t(e.reason === "noType" ? "serviceTypeErrNoType" : "serviceTypeErrNoCrew", lang)}</li>
+              ))}
+            </ul>
+          )}
+          {entries.length > 0 && (
+            <button onClick={apply} style={accentBtn({ marginTop: 8 })}>
+              <Check size={14} /> {t("serviceTypeApplyBtn", lang)}
+            </button>
+          )}
+        </div>
+      )}
+      {applied !== null && <p style={{ fontSize: 12, color: "#0EA37E", fontWeight: 700, margin: "8px 0 0" }}>✓ {t("serviceTypeApplied", lang)} {applied}</p>}
+    </CollapsibleSection>
   );
 }
 
@@ -5719,7 +5854,7 @@ function TopCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
       </div>
       <div style={styles.heroTop}>
         <div style={styles.heroCrew}>
-          {t("crewWord", lang)} {String(r.crew)}
+          {t("crewWord", lang)} {String(r.crew)}<ServiceTypeBadge crew={r.crew} lang={lang} />
           {isMine && <span style={styles.mineBadge}><Star size={10} /> {t("myShiftBadge", lang)}</span>}
         </div>
         <div style={{ ...styles.scoreBadge, color: scoreColor(pct) }}><CountUp value={pct} run={inView} delay={200} />%</div>
@@ -5746,7 +5881,7 @@ function ResultCard({ r, rank, lang, compareSet, toggleCompare, profile }) {
       <div style={styles.resultCardTop}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={styles.rankBadge}>{rank}</span>
-          <span style={styles.resultCrew}>{t("crewWord", lang)} {String(r.crew)}</span>
+          <span style={styles.resultCrew}>{t("crewWord", lang)} {String(r.crew)}<ServiceTypeBadge crew={r.crew} lang={lang} /></span>
           {isMine && <span style={styles.mineBadge}><Star size={10} /> {t("myShiftBadge", lang)}</span>}
         </div>
         <span style={{ ...styles.scoreBadgeSm, color: scoreColor(pct) }}><CountUp value={pct} run={inView} delay={150} />%</span>
@@ -5808,6 +5943,10 @@ export default function ShiftPriorityRanker() {
   // Admin — see the loadCrewNames/loadAdminSession helpers above.
   const [crewNames, setCrewNames] = useState(() => loadCrewNames());
   const [isAdmin, setIsAdmin] = useState(() => loadAdminSession());
+  // Each crew's service type, OR (On Request) or MOR (Mobility On Request) —
+  // set by Admin, shown as a small badge next to the crew number everywhere.
+  const [crewServiceTypes, setCrewServiceTypesState] = useState(() => loadCrewServiceTypes());
+  const setCrewServiceTypes = (next) => { setCrewServiceTypesState(next); saveCrewServiceTypes(next); };
   // Drivers directory — the single source for driver pickers and Employee
   // IDs. The first time this version runs it is seeded once from the old
   // per-crew names/Employee IDs (manual Admin entries, the last loaded
@@ -6139,6 +6278,7 @@ export default function ShiftPriorityRanker() {
   };
 
   return (
+    <ServiceTypesContext.Provider value={crewServiceTypes}>
     <div dir={dir} className={booting ? "sp-booting" : "sp-ready"} style={{ ...styles.page, ...rootVars }}>
       <style>{`
         .print-report { display: none; }
@@ -6341,6 +6481,8 @@ export default function ShiftPriorityRanker() {
           crews={parsed?.crews}
           crewNames={crewNames}
           setCrewNames={setCrewNames}
+          crewServiceTypes={crewServiceTypes}
+          setCrewServiceTypes={setCrewServiceTypes}
           drivers={drivers}
           setDrivers={setDrivers}
           extraShifts={extraShifts}
@@ -6413,7 +6555,7 @@ export default function ShiftPriorityRanker() {
                   <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 14 }}>
                       <Star size={14} color="#fff" /> {t("myShiftHomeTitle", lang)}
-                      {myCrew && <span style={{ fontWeight: 600, opacity: 0.85, fontSize: 12 }}>· {t("crewWord", lang)} {String(myCrew.crew)}</span>}
+                      {myCrew && <span style={{ fontWeight: 600, opacity: 0.85, fontSize: 12 }}>· {t("crewWord", lang)} {String(myCrew.crew)}<ServiceTypeBadge crew={myCrew.crew} lang={lang} onDark /></span>}
                     </span>
                     {myCrew && (
                       <span style={{ fontSize: 11, fontWeight: 700, background: "rgba(255,255,255,0.22)", borderRadius: 999, padding: "3px 9px", flexShrink: 0 }}>
@@ -6560,7 +6702,7 @@ export default function ShiftPriorityRanker() {
               <div>
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>{t("myShiftCard", lang)}</div>
                 <div style={{ fontSize: 16, fontWeight: 800 }}>
-                  {t("crewWord", lang)} {profile.crewNumber}
+                  {t("crewWord", lang)} {profile.crewNumber}<ServiceTypeBadge crew={profile.crewNumber} lang={lang} />
                   {(() => {
                     const myName = resolveCrewName(profile.crewNumber, weekCrews, displayNames);
                     return myName ? <span style={{ fontWeight: 700 }}> · {myName}</span> : null;
@@ -6773,7 +6915,7 @@ export default function ShiftPriorityRanker() {
                     {compareResults.map((r) => (
                       <th key={r.crew} style={styles.compareHeadCell}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                          {t("crewWord", lang)} {String(r.crew)}
+                          {t("crewWord", lang)} {String(r.crew)}<ServiceTypeBadge crew={r.crew} lang={lang} />
                           <button onClick={() => toggleCompare(r.crew)} style={styles.compareRemoveBtn}><X size={12} /></button>
                         </div>
                       </th>
@@ -6853,6 +6995,7 @@ export default function ShiftPriorityRanker() {
         </footer>
       </div>
     </div>
+    </ServiceTypesContext.Provider>
   );
 }
 
