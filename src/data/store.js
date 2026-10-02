@@ -141,6 +141,20 @@ export function saveCrewNames(map) { return setKv("crewNames", map); }
 export function loadCrewEmployeeIds() { return getKv("crewEmployeeIds") || {}; }
 export function saveCrewEmployeeIds(map) { return setKv("crewEmployeeIds", map); }
 
+// ---- shift service types (On Request / Mobility On Request), per run+yard ----
+export function loadShiftServiceTypes() { return getKv("shiftServiceTypes") || {}; }
+export function saveShiftServiceTypes(map) { return setKv("shiftServiceTypes", map); }
+
+// ---- drivers directory + extra shifts from dispatch ----
+export function loadDrivers() { return getKv("drivers") ?? null; }
+export function saveDrivers(list) { return setKv("drivers", list); }
+export function loadExtraShifts() { return getKv("extraShifts") || []; }
+export function saveExtraShifts(list) { return setKv("extraShifts", list); }
+
+// ---- admin "remember me on this device" (a flag only, never a password) ----
+export function loadAdminRemember() { return getKv("adminRemember") === true; }
+export function saveAdminRemember(on) { return setKv("adminRemember", !!on); }
+
 // ---- theme ----
 export function loadThemePrefs() { return getKv("theme") || DEFAULTS.theme; }
 export function saveThemePrefs(style, mode) { return setKv("theme", { style, mode }); }

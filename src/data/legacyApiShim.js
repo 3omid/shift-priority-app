@@ -8,6 +8,10 @@ export {
   loadProfile, saveProfile, clearProfileStorage,
   loadCrewNames, saveCrewNames,
   loadCrewEmployeeIds, saveCrewEmployeeIds,
+  loadShiftServiceTypes, saveShiftServiceTypes,
+  loadDrivers, saveDrivers,
+  loadExtraShifts, saveExtraShifts,
+  loadAdminRemember, saveAdminRemember,
   loadThemePrefs, saveThemePrefs,
   loadDailyLogEntries, saveDailyLogEntries,
   loadDailyLogAccess, saveDailyLogAccess,
@@ -22,3 +26,5 @@ export {
 // ADMIN_SESSION_KEY in App.jsx) so it clears itself when the tab closes.
 // It isn't user data and was never part of the migration; leave App.jsx's
 // existing loadAdminSession/saveAdminSession functions exactly as they are.
+// The optional "Remember me on this device" flag (loadAdminRemember) is the
+// one exception: it lives in the store, and is only a yes/no flag.

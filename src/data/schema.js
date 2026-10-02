@@ -33,6 +33,14 @@ export const DEFAULTS = {
   crewNames: {}, // { [crewNumber]: name }
   crewEmployeeIds: {}, // { [crewNumber]: employeeId } -- admin-maintained, for the Shift Exchange form
   dailyLogAccess: [], // [crewNumber, ...]
+  // Drivers directory (see src/drivers.js). null = never set up yet, so the
+  // app knows to seed it once from crewNames/crewEmployeeIds.
+  shiftServiceTypes: {}, // { "<RUNCODE>@<yard>": "OR" | "MOR" } -- per shift (run), not per crew; see src/shiftServiceTypes.js
+  drivers: null, // [{ id, name, employeeId, type, crewNumber, active, createdAt }]
+  extraShifts: [], // [{ id, driverId, date, run, location, regionKey, start, end, source, createdAt }]
+  // "Remember me on this device" for the Admin login: only a flag, never
+  // the password. Device-specific, so it is left out of backups.
+  adminRemember: false,
   theme: { style: "universal", mode: "light" },
   sound: { enabled: false, type: "keyboard", pitch: 1 },
   lang: "en",
