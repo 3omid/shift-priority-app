@@ -1,18 +1,19 @@
 // Service type of each SHIFT (a run on a day, e.g. run "21" out of the
-// Newmarket yard): "OR" (On Request — regular riders) or "MOR" (Mobility On
+// Newmarket yard): "OR" (On Request — regular riders), "MOR" (Mobility On
 // Request — riders with a disability, a physical or mental condition, or
-// seniors). It belongs to the shift, not to the crew: the same crew can work
+// seniors), or "OR+MOR" for the few mixed shifts that carry both. It belongs to the shift, not to the crew: the same crew can work
 // MOR runs on some days and OR runs on others, so a crew's week shows the
 // type day by day.
 //
-// Stored as { [shiftKey]: "OR" | "MOR" } through src/data/store.js, where
+// Stored as { [shiftKey]: "OR" | "MOR" | "OR+MOR" } through src/data/store.js, where
 // shiftKey = "<RUNCODE>@<regionKey>" (e.g. "21@NMK"), or "<RUNCODE>@*" when
 // the yard wasn't given (matches that run code at any yard).
 // Pure helpers only, so the text import can be unit-tested.
 
 import { LOCATIONS } from "./extraShiftParser.js";
 
-export const SERVICE_TYPES = ["OR", "MOR"];
+export const MIXED = "OR+MOR";
+export const SERVICE_TYPES = ["OR", "MOR", MIXED];
 export const ANY_YARD = "*";
 
 // "PRO 9 MRC" -> "PRO9MRC", "run 14" -> "14", "ru15" -> "15", " v7 " -> "V7".
@@ -39,14 +40,20 @@ export function serviceTypeForShift(map, code, regionKey) {
   return SERVICE_TYPES.includes(v) ? v : null;
 }
 
-// "MOR", "Mobility", "Mobility On Request" -> MOR; "OR", "On Request" -> OR.
-// MOR is checked first because "Mobility On Request" also contains "On Request".
+// "MOR", "Mobility", "Mobility On Request" -> MOR; "OR", "On Request" -> OR;
+// both together ("OR+MOR", "MOR + On Request", "OR/MOR") or a word like
+// "mixed"/"both"/"ترکیبی" -> OR+MOR. MOR words are taken out before looking
+// for OR, because "Mobility On Request" itself contains "On Request".
 const MOR_RE = /\bmobility(?:\s+on[\s-]*request)?\b|\bM\.?O\.?R\b|موبیلیتی|مبیلیتی/gi;
 const OR_RE = /\bon[\s-]*request\b|\bO\.?R\b|آن\s*ریکوئست|آن‌ریکوئست/gi;
+const MIXED_RE = /\bmixed\b|\bmix\b|\bboth\b|\bcombo\b|\bcombined\b|ترکیبی|هر\s*دو/gi;
 export function detectServiceType(text) {
   const s = String(text || "");
-  if (new RegExp(MOR_RE.source, "i").test(s)) return "MOR";
-  if (new RegExp(OR_RE.source, "i").test(s)) return "OR";
+  const hasMor = new RegExp(MOR_RE.source, "i").test(s);
+  const hasOr = new RegExp(OR_RE.source, "i").test(s.replace(new RegExp(MOR_RE.source, "gi"), " "));
+  if ((hasMor && hasOr) || new RegExp(MIXED_RE.source, "i").test(s)) return MIXED;
+  if (hasMor) return "MOR";
+  if (hasOr) return "OR";
   return null;
 }
 
@@ -67,7 +74,8 @@ export function parseServiceTypeText(text) {
     if (!line) return;
     const type = detectServiceType(line);
     if (!type) { errors.push({ line: i + 1, text: line, reason: "noType" }); return; }
-    let rest = line.replace(new RegExp(MOR_RE.source, "gi"), " ").replace(new RegExp(OR_RE.source, "gi"), " ");
+    let rest = line.replace(new RegExp(MOR_RE.source, "gi"), " ").replace(new RegExp(OR_RE.source, "gi"), " ")
+      .replace(new RegExp(MIXED_RE.source, "gi"), " ").replace(/[+&]/g, " ").replace(/\band\b|\bplus\b|\bwith\b/gi, " ");
     let regionKey = null;
     for (const loc of LOCATIONS) {
       const re = new RegExp(loc.re.source, "gi");

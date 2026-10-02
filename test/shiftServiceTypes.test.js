@@ -14,6 +14,17 @@ describe("shift service types (OR / MOR), per shift not per crew", () => {
     expect(detectServiceType("for Morning")).toBeNull();
   });
 
+  it("mixed shifts: OR + MOR together, either order, or a word like mixed/both", () => {
+    for (const txt of ["OR+MOR", "MOR + OR", "OR/MOR", "MOR plus On Request", "On Request and Mobility", "mixed", "both", "ترکیبی"]) {
+      expect(detectServiceType(txt), txt).toBe("OR+MOR");
+    }
+    expect(detectServiceType("Mobility On Request")).toBe("MOR"); // one type, not mixed
+    const { updates, errors } = parseServiceTypeText("44 Newmarket OR+MOR\nMOR + OR, BRT, 9\n17 mixed");
+    expect(updates).toEqual({ "44@NMK": "OR+MOR", "9@RH": "OR+MOR", "17@*": "OR+MOR" });
+    expect(errors).toEqual([]);
+    expect(serviceTypeForShift(updates, "44", "NMK")).toBe("OR+MOR");
+  });
+
   it("normalizes run codes and builds run@yard keys", () => {
     expect(normalizeRunCode("PRO 9 MRC")).toBe("PRO9MRC");
     expect(normalizeRunCode("run 14")).toBe("14");

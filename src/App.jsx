@@ -867,6 +867,7 @@ const STRINGS = {
   serviceTypeLabel: { fa: "نوع سرویس", en: "Service type", hi: "सेवा का प्रकार" },
   serviceTypeOR: { fa: "آن‌ریکوئست (OR)", en: "On Request (OR)", hi: "ऑन रिक्वेस्ट (OR)" },
   serviceTypeMOR: { fa: "موبیلیتی (MOR)", en: "Mobility On Request (MOR)", hi: "मोबिलिटी ऑन रिक्वेस्ट (MOR)" },
+  serviceTypeMIX: { fa: "ترکیبی: آن‌ریکوئست + موبیلیتی (OR+MOR)", en: "Mixed: On Request + Mobility (OR+MOR)", hi: "मिश्रित: ऑन रिक्वेस्ट + मोबिलिटी (OR+MOR)" },
   serviceTypeNone: { fa: "مشخص نشده", en: "Not set", hi: "तय नहीं" },
   serviceTypeDaysTitle: { fa: "نوع سرویس شیفت‌های این گروه (روز به روز)", en: "Service type of this crew's shifts (day by day)", hi: "इस क्रू की शिफ्टों का सेवा प्रकार (दिन-ब-दिन)" },
   serviceTypeDaysNote: {
@@ -879,9 +880,9 @@ const STRINGS = {
   serviceTypeAnyYard: { fa: "هر یاردی", en: "any yard", hi: "कोई भी यार्ड" },
   serviceTypeImportTitle: { fa: "نوع سرویس شیفت‌ها (OR / MOR) — وارد کردن و فهرست", en: "Shift service types (OR / MOR) — import & list", hi: "शिफ्ट सेवा प्रकार (OR / MOR) — आयात और सूची" },
   serviceTypeImportHint: {
-    fa: "هر خط: شماره یا کد ران، یارد و نوع، به هر ترتیبی. مثلاً «21 Newmarket MOR»، «12 Newmarket On Request»، «PRO 9 MRC, BRT, MOR» یا «30-35 Newmarket MOR». ستون‌ها رو مستقیم از اکسل هم می‌تونی کپی کنی. اگه یارد ننویسی، برای اون ران توی هر یاردی حساب می‌شه. MOR یعنی موبیلیتی (مسافرهای دارای معلولیت، مشکل جسمی یا ذهنی، یا سالمند)؛ OR یعنی آن‌ریکوئست (مسافرهای معمولی).",
-    en: 'One line per run (or list/range of runs): the run number or code, the yard, and the type, in any order. E.g. "21 Newmarket MOR", "12 Newmarket On Request", "PRO 9 MRC, BRT, MOR" or "30-35 Newmarket MOR". You can paste columns straight from Excel. Without a yard, the line applies to that run at any yard. MOR = Mobility On Request (riders with a disability, a physical or mental condition, or seniors); OR = On Request (regular riders).',
-    hi: 'हर लाइन में एक रन (या रनों की सूची/रेंज): रन नंबर या कोड, यार्ड और प्रकार, किसी भी क्रम में। जैसे "21 Newmarket MOR", "12 Newmarket On Request", "PRO 9 MRC, BRT, MOR" या "30-35 Newmarket MOR"। आप एक्सेल से सीधे कॉलम पेस्ट कर सकते हैं। यार्ड न लिखें तो वह लाइन उस रन पर हर यार्ड में लागू होती है। MOR = मोबिलिटी ऑन रिक्वेस्ट (विकलांगता, शारीरिक या मानसिक समस्या वाले, या बुज़ुर्ग यात्री); OR = ऑन रिक्वेस्ट (सामान्य यात्री)।',
+    fa: "هر خط: شماره یا کد ران، یارد و نوع، به هر ترتیبی. مثلاً «21 Newmarket MOR»، «12 Newmarket On Request»، «PRO 9 MRC, BRT, MOR»، «30-35 Newmarket MOR» یا برای شیفت ترکیبی «44 Newmarket OR+MOR». ستون‌ها رو مستقیم از اکسل هم می‌تونی کپی کنی. اگه یارد ننویسی، برای اون ران توی هر یاردی حساب می‌شه. MOR یعنی موبیلیتی (مسافرهای دارای معلولیت، مشکل جسمی یا ذهنی، یا سالمند)؛ OR یعنی آن‌ریکوئست (مسافرهای معمولی).",
+    en: 'One line per run (or list/range of runs): the run number or code, the yard, and the type, in any order. E.g. "21 Newmarket MOR", "12 Newmarket On Request", "PRO 9 MRC, BRT, MOR", "30-35 Newmarket MOR", or for a mixed shift "44 Newmarket OR+MOR". You can paste columns straight from Excel. Without a yard, the line applies to that run at any yard. MOR = Mobility On Request (riders with a disability, a physical or mental condition, or seniors); OR = On Request (regular riders).',
+    hi: 'हर लाइन में एक रन (या रनों की सूची/रेंज): रन नंबर या कोड, यार्ड और प्रकार, किसी भी क्रम में। जैसे "21 Newmarket MOR", "12 Newmarket On Request", "PRO 9 MRC, BRT, MOR", "30-35 Newmarket MOR", या मिश्रित शिफ्ट के लिए "44 Newmarket OR+MOR"। आप एक्सेल से सीधे कॉलम पेस्ट कर सकते हैं। यार्ड न लिखें तो वह लाइन उस रन पर हर यार्ड में लागू होती है। MOR = मोबिलिटी ऑन रिक्वेस्ट (विकलांगता, शारीरिक या मानसिक समस्या वाले, या बुज़ुर्ग यात्री); OR = ऑन रिक्वेस्ट (सामान्य यात्री)।',
   },
   serviceTypePreviewBtn: { fa: "پیش‌نمایش", en: "Preview", hi: "पूर्वावलोकन" },
   serviceTypeApplyBtn: { fa: "اعمال", en: "Apply", hi: "लागू करें" },
@@ -2095,7 +2096,14 @@ function FingerprintStrip({ fingerprint }) {
 // not per crew. The map is provided once at the app root so every place that
 // shows a day's shift can add the small badge without threading it through.
 const ServiceTypesContext = createContext({});
-const SERVICE_TYPE_COLORS = { OR: { bg: "#E3EEFC", fg: "#1D4F91", border: "#A9C6EE", solid: "#2F6FC4" }, MOR: { bg: "#F1E6FB", fg: "#6A2C9C", border: "#CDAAE8", solid: "#7B3FB0" } };
+const SERVICE_TYPE_COLORS = {
+  OR: { bg: "#E3EEFC", fg: "#1D4F91", border: "#A9C6EE", solid: "#2F6FC4" },
+  MOR: { bg: "#F1E6FB", fg: "#6A2C9C", border: "#CDAAE8", solid: "#7B3FB0" },
+  "OR+MOR": { bg: "#E2F5F1", fg: "#0F6B5A", border: "#9ED8CB", solid: "#138A73" },
+};
+const SERVICE_TYPE_LABEL_KEYS = { OR: "serviceTypeOR", MOR: "serviceTypeMOR", "OR+MOR": "serviceTypeMIX" };
+const SERVICE_TYPE_BADGE_TEXT = { OR: "OR", MOR: "♿ MOR", "OR+MOR": "OR+♿MOR" };
+const SERVICE_TYPE_DOT_TEXT = { OR: "O", MOR: "M", "OR+MOR": "O+M" };
 function useShiftServiceType(code, regionKey) {
   return serviceTypeForShift(useContext(ServiceTypesContext), code, regionKey);
 }
@@ -2103,14 +2111,14 @@ function ServiceTypeBadge({ code, regionKey, lang, onDark }) {
   const type = useShiftServiceType(code, regionKey);
   if (!type) return null;
   const c = SERVICE_TYPE_COLORS[type];
-  const label = t(type === "MOR" ? "serviceTypeMOR" : "serviceTypeOR", lang);
+  const label = t(SERVICE_TYPE_LABEL_KEYS[type], lang);
   return (
     <span
       title={label}
       aria-label={label}
       style={{ display: "inline-flex", alignItems: "center", fontSize: 9.5, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1, borderRadius: 999, padding: "2.5px 6px", marginInlineStart: 5, verticalAlign: "middle", whiteSpace: "nowrap", ...(onDark ? { background: "rgba(255,255,255,0.25)", color: "#fff", border: "1px solid rgba(255,255,255,0.45)" } : { background: c.bg, color: c.fg, border: `1px solid ${c.border}` }) }}
     >
-      {type === "MOR" ? "♿ MOR" : "OR"}
+      {SERVICE_TYPE_BADGE_TEXT[type]}
     </span>
   );
 }
@@ -2118,10 +2126,10 @@ function ServiceTypeBadge({ code, regionKey, lang, onDark }) {
 function ServiceTypeDot({ code, regionKey, lang }) {
   const type = useShiftServiceType(code, regionKey);
   if (!type) return null;
-  const label = t(type === "MOR" ? "serviceTypeMOR" : "serviceTypeOR", lang);
+  const label = t(SERVICE_TYPE_LABEL_KEYS[type], lang);
   return (
     <span title={label} aria-label={label} style={{ position: "absolute", top: -3, insetInlineEnd: -3, minWidth: 14, height: 14, borderRadius: 7, background: SERVICE_TYPE_COLORS[type].solid, color: "#fff", border: "1.5px solid #fff", fontSize: 7.5, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 2px", boxSizing: "border-box", lineHeight: 1 }}>
-      {type === "MOR" ? "M" : "O"}
+      {SERVICE_TYPE_DOT_TEXT[type]}
     </span>
   );
 }
@@ -4497,7 +4505,7 @@ function ShiftTypeDays({ lang, crew, shiftServiceTypes, onSet }) {
                 {d.code ? (
                   <span role="radiogroup" aria-label={`${t("serviceTypeLabel", lang)} — ${weekdayNames[d.dayIdx]}`} style={{ display: "flex", gap: 4, marginInlineStart: "auto" }}>
                     {[...SERVICE_TYPES, ""].map((type) => (
-                      <button key={type || "none"} role="radio" aria-checked={current === type} title={t(type === "MOR" ? "serviceTypeMOR" : type === "OR" ? "serviceTypeOR" : "serviceTypeNone", lang)} onClick={() => onSet(d.code, d.regionKey, type)} style={btn(current === type)}>
+                      <button key={type || "none"} role="radio" aria-checked={current === type} title={t(SERVICE_TYPE_LABEL_KEYS[type] || "serviceTypeNone", lang)} onClick={() => onSet(d.code, d.regionKey, type)} style={btn(current === type)}>
                         {type || "—"}
                       </button>
                     ))}
