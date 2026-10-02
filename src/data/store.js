@@ -141,9 +141,9 @@ export function saveCrewNames(map) { return setKv("crewNames", map); }
 export function loadCrewEmployeeIds() { return getKv("crewEmployeeIds") || {}; }
 export function saveCrewEmployeeIds(map) { return setKv("crewEmployeeIds", map); }
 
-// ---- crew service types (On Request / Mobility On Request) ----
-export function loadCrewServiceTypes() { return getKv("crewServiceTypes") || {}; }
-export function saveCrewServiceTypes(map) { return setKv("crewServiceTypes", map); }
+// ---- shift service types (On Request / Mobility On Request), per run+yard ----
+export function loadShiftServiceTypes() { return getKv("shiftServiceTypes") || {}; }
+export function saveShiftServiceTypes(map) { return setKv("shiftServiceTypes", map); }
 
 // ---- drivers directory + extra shifts from dispatch ----
 export function loadDrivers() { return getKv("drivers") ?? null; }

@@ -18,7 +18,7 @@ const WEEKDAYS = {
 
 // Yard names as dispatch writes them -> the app's region keys (see
 // REGION_LABELS in App.jsx). "BRT" is the Richmond Hill yard.
-const LOCATIONS = [
+export const LOCATIONS = [
   { re: /\bBRT\b/i, location: "Richmond Hill", regionKey: "RH" },
   { re: /\brichmond\s*hill\b|\bRH\b/i, location: "Richmond Hill", regionKey: "RH" },
   { re: /\bnew\s?market\b|\bNMK\b/i, location: "Newmarket", regionKey: "NMK" },
