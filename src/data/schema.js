@@ -36,6 +36,10 @@ export const DEFAULTS = {
   // Drivers directory (see src/drivers.js). null = never set up yet, so the
   // app knows to seed it once from crewNames/crewEmployeeIds.
   shiftServiceTypes: {}, // { "<RUNCODE>@<yard>": "OR" | "MOR" } -- per shift (run), not per crew; see src/shiftServiceTypes.js
+  // Sharing the shift types with everyone (src/sharedData.js). Device-only,
+  // so both are left out of backups: the GitHub key never leaves this device.
+  sharedSync: { syncedAt: 0, dirty: false },
+  githubToken: "",
   drivers: null, // [{ id, name, employeeId, type, crewNumber, active, createdAt }]
   extraShifts: [], // [{ id, driverId, date, run, location, regionKey, start, end, source, createdAt }]
   // "Remember me on this device" for the Admin login: only a flag, never

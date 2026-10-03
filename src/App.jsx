@@ -8,6 +8,8 @@ import {
   loadCrewNames, saveCrewNames,
   loadCrewEmployeeIds,
   loadShiftServiceTypes, saveShiftServiceTypes,
+  loadSharedSync, saveSharedSync,
+  loadGithubToken, saveGithubToken,
   loadDrivers, saveDrivers,
   loadExtraShifts, saveExtraShifts,
   loadAdminRemember, saveAdminRemember,
@@ -22,13 +24,14 @@ import {
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, ArrowLeft, Plus,
   Menu, Sun, Moon, HelpCircle, Trash2, Users, Info, Mail, LogOut,
   Star, CalendarOff, Shield, Lock, Search, ClipboardList, Pencil, Palette, History,
-  Share2, Image as ImageIcon, Accessibility, Eye, EyeOff, ChevronDown, ChevronRight, UserPlus, CalendarPlus,
+  Share2, Image as ImageIcon, Accessibility, UploadCloud, Eye, EyeOff, ChevronDown, ChevronRight, UserPlus, CalendarPlus,
 } from "lucide-react";
 import {
   parseDispatchMessage, validateShiftRow, normalizeTime, applyExtraShifts, pruneExpiredShifts,
   BLOCKING_FLAGS, todayStr as todayDateStr,
 } from "./extraShiftParser.js";
 import { parseServiceTypeText, serviceTypeForShift, shiftKey, splitShiftKey, SERVICE_TYPES, ANY_YARD } from "./shiftServiceTypes.js";
+import { fetchSharedFile, decideSync, buildSharedFile, publishSharedFile } from "./sharedData.js";
 import { seedDriversFromCrews, makeDriver, findDriverForCrew, parseBulkDrivers, matchDriver } from "./drivers.js";
 import { buildExchangeFormFiles, shareOrDownloadFile } from "./exchangeExport.js";
 
@@ -893,6 +896,29 @@ const STRINGS = {
   serviceTypeCount: { fa: "شیفت با نوع مشخص", en: "shifts have a type", hi: "शिफ्टों का प्रकार तय है" },
   serviceTypeSavedTitle: { fa: "شیفت‌های ثبت‌شده", en: "Saved shifts", hi: "सेव की गई शिफ्टें" },
   serviceTypeRunWord: { fa: "ران", en: "Run", hi: "रन" },
+  // ---- Sharing Admin settings with everyone ----
+  shareTitle: { fa: "اشتراک با همه", en: "Shared with everyone", hi: "सभी के साथ साझा" },
+  shareStatusOk: { fa: "نوع شیفت‌ها برای همه ذخیره شد. گوشی بقیه با باز کردن برنامه (حداکثر چند دقیقه بعد) همین رو می‌بینن.", en: "Shift types are saved for everyone. Other phones see them when the app is opened (within a few minutes).", hi: "शिफ्ट प्रकार सभी के लिए सेव हैं। बाकी फ़ोन ऐप खोलने पर (कुछ मिनटों में) इन्हें देखेंगे।" },
+  shareStatusSynced: { fa: "همه همین نوع شیفت‌ها رو می‌بینن.", en: "Everyone sees these shift types.", hi: "सभी यही शिफ्ट प्रकार देखते हैं।" },
+  shareStatusPending: { fa: "تغییرات هنوز برای همه ذخیره نشده — چند ثانیه‌ی دیگه خودکار ذخیره می‌شه.", en: "Changes not shared yet — saving for everyone in a few seconds.", hi: "बदलाव अभी साझा नहीं हुए — कुछ सेकंड में सभी के लिए सेव होंगे।" },
+  shareStatusPublishing: { fa: "در حال ذخیره برای همه…", en: "Saving for everyone…", hi: "सभी के लिए सेव हो रहा है…" },
+  shareStatusNoToken: { fa: "تغییرات فقط روی همین گوشی ذخیره شده. برای اینکه به همه برسه، یه بار «کلید گیت‌هاب» رو پایین وارد کن.", en: "Changes are saved on this phone only. Add the GitHub key below once so they reach everyone.", hi: "बदलाव केवल इस फ़ोन पर सेव हैं। सभी तक पहुँचाने के लिए नीचे एक बार GitHub कुंजी डालें।" },
+  shareStatusError: { fa: "برای همه ذخیره نشد:", en: "Couldn't save for everyone:", hi: "सभी के लिए सेव नहीं हुआ:" },
+  shareErrBadToken: { fa: "کلید گیت‌هاب اشتباهه یا منقضی شده.", en: "the GitHub key is wrong or expired.", hi: "GitHub कुंजी गलत है या समाप्त हो गई है।" },
+  shareErrNoAccess: { fa: "این کلید اجازه‌ی نوشتن توی مخزن برنامه رو نداره.", en: "this key can't write to the app's repository.", hi: "यह कुंजी ऐप की रिपॉज़िटरी में लिख नहीं सकती।" },
+  shareErrNetwork: { fa: "اینترنت وصل نیست یا گیت‌هاب جواب نداد.", en: "no internet, or GitHub didn't respond.", hi: "इंटरनेट नहीं है, या GitHub ने जवाब नहीं दिया।" },
+  shareErrOther: { fa: "خطای ناشناخته از گیت‌هاب.", en: "GitHub returned an unexpected error.", hi: "GitHub से अनपेक्षित त्रुटि।" },
+  sharePublishNow: { fa: "الان برای همه ذخیره کن", en: "Save for everyone now", hi: "अभी सभी के लिए सेव करें" },
+  shareSetupTitle: { fa: "تنظیم اشتراک (کلید گیت‌هاب)", en: "Sharing setup (GitHub key)", hi: "साझा करने की सेटिंग (GitHub कुंजी)" },
+  shareTokenLabel: { fa: "کلید گیت‌هاب (token)", en: "GitHub key (token)", hi: "GitHub कुंजी (token)" },
+  shareTokenSave: { fa: "ذخیره‌ی کلید", en: "Save key", hi: "कुंजी सेव करें" },
+  shareTokenSaved: { fa: "کلید روی همین گوشی ذخیره شده (هیچ‌وقت توی بکاپ یا برای کسی نمی‌ره).", en: "Key saved on this phone only (never in backups, never sent to anyone else).", hi: "कुंजी केवल इस फ़ोन पर सेव है (कभी बैकअप में या किसी और को नहीं जाती)।" },
+  shareTokenRemove: { fa: "حذف کلید", en: "Remove key", hi: "कुंजी हटाएं" },
+  shareSetupSteps: {
+    fa: "یه بار لازمه: ۱) توی گیت‌هاب برو Settings ← Developer settings ← Personal access tokens ← Fine-grained tokens ← Generate new token. ۲) Repository access: «Only select repositories» و shift-priority-app رو انتخاب کن. ۳) Permissions ← Repository permissions ← Contents: «Read and write». ۴) توکن رو بساز، کپی کن و اینجا بچسبون. این کلید فقط روی همین گوشی می‌مونه. نوع شیفت‌ها روی یه شاخه‌ی جدا به اسم shared-data ذخیره می‌شه و خود برنامه یا سایت رو تغییر نمی‌ده.",
+    en: "One time only: 1) On GitHub go to Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token. 2) Repository access: “Only select repositories” → shift-priority-app. 3) Permissions → Repository permissions → Contents: “Read and write”. 4) Generate, copy, and paste it here. The key stays on this phone only. Shift types are saved on a separate branch called shared-data; the app and the site themselves are not changed.",
+    hi: "केवल एक बार: 1) GitHub पर Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token पर जाएं। 2) Repository access: “Only select repositories” → shift-priority-app। 3) Permissions → Repository permissions → Contents: “Read and write”। 4) टोकन बनाएं, कॉपी करें और यहाँ पेस्ट करें। कुंजी केवल इस फ़ोन पर रहती है। शिफ्ट प्रकार shared-data नाम की अलग ब्रांच पर सेव होते हैं; ऐप और साइट नहीं बदलते।",
+  },
 };
 
 function t(key, lang) { return STRINGS[key] ? (STRINGS[key][lang] || STRINGS[key].en) : key; }
@@ -4180,7 +4206,72 @@ function weekdayDateLabel(dateStr, lang) {
 }
 const EXTRA_REGION_KEYS = ["RH", "NMK", "CLDR", "STF", "MRG"];
 
-function AdminPanel({ lang, crews, crewNames, setCrewNames, shiftServiceTypes, setShiftServiceTypes, drivers, setDrivers, extraShifts, setExtraShifts, dailyLogAccess, setDailyLogAccess, onLogout, onClose }) {
+// Top of the Admin panel: whether the shift types reach everyone, plus the
+// one-time GitHub key setup that makes it work (see src/sharedData.js).
+function SharePanel({ lang, sharing }) {
+  const { status, token, setToken, publishNow } = sharing;
+  const [draft, setDraft] = useState("");
+  const [showSetup, setShowSetup] = useState(!token);
+  const errKey = { badToken: "shareErrBadToken", noAccess: "shareErrNoAccess", network: "shareErrNetwork" }[status.kind] || "shareErrOther";
+  const tone = status.state === "error" ? "bad" : status.state === "pending" && !token ? "warn" : status.state === "ok" || status.state === "synced" ? "good" : "info";
+  const colors = { good: ["#E3F6EE", "#0B6B4B", "#9ED8C0"], warn: ["#FFF4D6", "#6B5200", "#E9D27A"], bad: ["#F7E9E4", "#B3432A", "#E8B4A6"], info: ["#E3EEFC", "#1D4F91", "#A9C6EE"] }[tone];
+  let text;
+  if (status.state === "error") text = `${t("shareStatusError", lang)} ${t(errKey, lang)}`;
+  else if (status.state === "publishing") text = t("shareStatusPublishing", lang);
+  else if (status.state === "pending") text = token ? t("shareStatusPending", lang) : t("shareStatusNoToken", lang);
+  else if (status.state === "ok") text = t("shareStatusOk", lang);
+  else text = t("shareStatusSynced", lang);
+  return (
+    <div role="status" style={{ border: `1px solid ${colors[2]}`, background: colors[0], color: colors[1], borderRadius: 10, padding: "8px 10px", marginBottom: 12, fontSize: 12 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+        <UploadCloud size={16} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <b>{t("shareTitle", lang)}</b> · {text}
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+        {token && (status.state === "pending" || status.state === "error") && (
+          <button onClick={publishNow} style={accentBtn({ padding: "5px 9px", fontSize: 11.5 })}>
+            <UploadCloud size={13} /> {t("sharePublishNow", lang)}
+          </button>
+        )}
+        <button onClick={() => setShowSetup((v) => !v)} aria-expanded={showSetup} style={{ ...styles.smallActionBtn, padding: "5px 9px", fontSize: 11.5 }}>
+          {showSetup ? <ChevronDown size={13} /> : <ChevronRight size={13} className="sp-flip-rtl" />} {t("shareSetupTitle", lang)}
+        </button>
+      </div>
+      {showSetup && (
+        <div style={{ marginTop: 8, color: "var(--text)", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
+          <p style={{ ...styles.hint, marginBottom: 8 }}>{t("shareSetupSteps", lang)}</p>
+          {token ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11.5, color: "#0B6B4B", flex: "1 1 160px" }}>✓ {t("shareTokenSaved", lang)}</span>
+              <button onClick={() => setToken("")} style={{ ...styles.smallActionBtn, padding: "5px 9px", fontSize: 11.5, color: "#B3432A" }}>{t("shareTokenRemove", lang)}</button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                id="share-token"
+                type="password"
+                autoComplete="off"
+                dir="ltr"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder={t("shareTokenLabel", lang)}
+                aria-label={t("shareTokenLabel", lang)}
+                style={adminInput()}
+              />
+              <button onClick={() => { if (draft.trim()) { setToken(draft.trim()); setDraft(""); } }} disabled={!draft.trim()} style={accentBtn({ opacity: draft.trim() ? 1 : 0.5, whiteSpace: "nowrap" })}>
+                {t("shareTokenSave", lang)}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminPanel({ lang, crews, crewNames, setCrewNames, shiftServiceTypes, setShiftServiceTypes, sharing, drivers, setDrivers, extraShifts, setExtraShifts, dailyLogAccess, setDailyLogAccess, onLogout, onClose }) {
   const [tab, setTab] = useState("crews");
   const tabs = [
     { id: "crews", label: t("adminTabCrews", lang), icon: <Users size={14} /> },
@@ -4189,6 +4280,7 @@ function AdminPanel({ lang, crews, crewNames, setCrewNames, shiftServiceTypes, s
   ];
   return (
     <Modal title={t("adminPanelTitle", lang)} onClose={onClose}>
+      <SharePanel lang={lang} sharing={sharing} />
       <div role="tablist" style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid var(--border)", paddingBottom: 8, flexWrap: "wrap" }}>
         {tabs.map((tb) => (
           <button
@@ -6044,7 +6136,74 @@ export default function ShiftPriorityRanker() {
   // Per shift, not per crew: one crew can work MOR runs on some days and OR
   // runs on others.
   const [shiftServiceTypes, setShiftServiceTypesState] = useState(() => loadShiftServiceTypes());
-  const setShiftServiceTypes = (next) => { setShiftServiceTypesState(next); saveShiftServiceTypes(next); };
+  // Shared with everyone (src/sharedData.js): every phone downloads the
+  // Admin's shift types on open and whenever the app comes back to the
+  // screen; the Admin's own edits (one by one or bulk import) are saved for
+  // everyone a few seconds after the last change. Saving needs the GitHub
+  // key, which is kept on the Admin's phone only.
+  const [githubToken, setGithubTokenState] = useState(() => loadGithubToken());
+  const [shareStatus, setShareStatus] = useState(() => ({ state: loadSharedSync().dirty ? "pending" : "synced" }));
+  const publishTimer = useRef(0);
+  const latestTypes = useRef(shiftServiceTypes);
+  latestTypes.current = shiftServiceTypes;
+  const publishNow = async (tokenArg) => {
+    const token = tokenArg || loadGithubToken();
+    if (!token) { setShareStatus({ state: "pending" }); return; }
+    clearTimeout(publishTimer.current);
+    setShareStatus({ state: "publishing" });
+    const file = buildSharedFile(latestTypes.current);
+    try {
+      await publishSharedFile({ token, file });
+      saveSharedSync({ syncedAt: file.updatedAt, dirty: false });
+      setShareStatus({ state: "ok" });
+    } catch (e) {
+      setShareStatus({ state: "error", kind: e?.kind || "other" });
+    }
+  };
+  const setShiftServiceTypes = (next) => {
+    setShiftServiceTypesState(next);
+    latestTypes.current = next;
+    saveShiftServiceTypes(next);
+    saveSharedSync({ ...loadSharedSync(), dirty: true });
+    setShareStatus({ state: "pending" });
+    clearTimeout(publishTimer.current);
+    if (loadGithubToken()) publishTimer.current = setTimeout(() => publishNow(), 3000);
+  };
+  const setGithubToken = (v) => {
+    setGithubTokenState(v);
+    saveGithubToken(v);
+    if (v && loadSharedSync().dirty) publishNow(v);
+  };
+  const isAdminRef = useRef(isAdmin);
+  isAdminRef.current = isAdmin;
+  useEffect(() => {
+    let last = 0;
+    const pull = async () => {
+      if (Date.now() - last < 30000) return; // at most every 30 s
+      last = Date.now();
+      const shared = await fetchSharedFile();
+      const sync = loadSharedSync();
+      const local = loadShiftServiceTypes();
+      const decision = decideSync({ sync, shared, isAdmin: isAdminRef.current, localCount: Object.keys(local).length });
+      if (decision.apply) {
+        setShiftServiceTypesState(shared.shiftServiceTypes);
+        latestTypes.current = shared.shiftServiceTypes;
+        saveShiftServiceTypes(shared.shiftServiceTypes);
+        saveSharedSync({ syncedAt: shared.updatedAt, dirty: false });
+        setShareStatus({ state: "synced" });
+      } else if (decision.markDirty) {
+        saveSharedSync({ ...sync, dirty: true });
+        setShareStatus({ state: "pending" });
+      }
+      // Admin edits left unshared last time (app closed too soon, or offline): share them now.
+      if (isAdminRef.current && loadSharedSync().dirty && loadGithubToken()) publishNow();
+    };
+    pull();
+    const onVisible = () => { if (document.visibilityState === "visible") pull(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", pull);
+    return () => { document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("focus", pull); };
+  }, []);
   // Drivers directory — the single source for driver pickers and Employee
   // IDs. The first time this version runs it is seeded once from the old
   // per-crew names/Employee IDs (manual Admin entries, the last loaded
@@ -6581,6 +6740,7 @@ export default function ShiftPriorityRanker() {
           setCrewNames={setCrewNames}
           shiftServiceTypes={shiftServiceTypes}
           setShiftServiceTypes={setShiftServiceTypes}
+          sharing={{ status: shareStatus, token: githubToken, setToken: setGithubToken, publishNow: () => publishNow() }}
           drivers={drivers}
           setDrivers={setDrivers}
           extraShifts={extraShifts}

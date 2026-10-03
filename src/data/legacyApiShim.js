@@ -9,6 +9,8 @@ export {
   loadCrewNames, saveCrewNames,
   loadCrewEmployeeIds, saveCrewEmployeeIds,
   loadShiftServiceTypes, saveShiftServiceTypes,
+  loadSharedSync, saveSharedSync,
+  loadGithubToken, saveGithubToken,
   loadDrivers, saveDrivers,
   loadExtraShifts, saveExtraShifts,
   loadAdminRemember, saveAdminRemember,

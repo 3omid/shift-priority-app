@@ -145,6 +145,12 @@ export function saveCrewEmployeeIds(map) { return setKv("crewEmployeeIds", map);
 export function loadShiftServiceTypes() { return getKv("shiftServiceTypes") || {}; }
 export function saveShiftServiceTypes(map) { return setKv("shiftServiceTypes", map); }
 
+// ---- sharing with everyone (device-only; not in backups) ----
+export function loadSharedSync() { return getKv("sharedSync") || DEFAULTS.sharedSync; }
+export function saveSharedSync(v) { return setKv("sharedSync", v); }
+export function loadGithubToken() { return getKv("githubToken") || ""; }
+export function saveGithubToken(v) { return setKv("githubToken", String(v || "").trim()); }
+
 // ---- drivers directory + extra shifts from dispatch ----
 export function loadDrivers() { return getKv("drivers") ?? null; }
 export function saveDrivers(list) { return setKv("drivers", list); }

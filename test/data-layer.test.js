@@ -168,6 +168,10 @@ describe("data layer: drivers directory, extra shifts, admin remember flag", () 
     expect(payload.extraShifts).toHaveLength(1);
     expect(payload.shiftServiceTypes).toEqual({ "21@NMK": "MOR" });
     expect(payload).not.toHaveProperty("adminRemember");
+    await Store.saveGithubToken("  secret  ");
+    expect(Store.loadGithubToken()).toBe("secret");
+    expect(Backup.buildUserDataPayload()).not.toHaveProperty("githubToken");
+    expect(Backup.buildUserDataPayload()).not.toHaveProperty("sharedSync");
     await Store.saveAdminRemember(false);
     expect(Store.loadAdminRemember()).toBe(false);
   });
