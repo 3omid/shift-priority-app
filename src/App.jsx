@@ -22,7 +22,7 @@ import {
   FileSpreadsheet, GitCompare, X, Trophy, Medal, Award, ArrowUp, ArrowDown, ArrowLeft, Plus,
   Menu, Sun, Moon, HelpCircle, Trash2, Users, Info, Mail, LogOut,
   Star, CalendarOff, Shield, Lock, Search, ClipboardList, Pencil, Palette, History,
-  Share2, Image as ImageIcon, Eye, EyeOff, ChevronDown, ChevronRight, UserPlus, CalendarPlus,
+  Share2, Image as ImageIcon, Accessibility, Eye, EyeOff, ChevronDown, ChevronRight, UserPlus, CalendarPlus,
 } from "lucide-react";
 import {
   parseDispatchMessage, validateShiftRow, normalizeTime, applyExtraShifts, pruneExpiredShifts,
@@ -2102,8 +2102,14 @@ const SERVICE_TYPE_COLORS = {
   "OR+MOR": { bg: "#E2F5F1", fg: "#0F6B5A", border: "#9ED8CB", solid: "#138A73" },
 };
 const SERVICE_TYPE_LABEL_KEYS = { OR: "serviceTypeOR", MOR: "serviceTypeMOR", "OR+MOR": "serviceTypeMIX" };
-const SERVICE_TYPE_BADGE_TEXT = { OR: "OR", MOR: "♿ MOR", "OR+MOR": "OR+♿MOR" };
-const SERVICE_TYPE_DOT_TEXT = { OR: "O", MOR: "M", "OR+MOR": "O+M" };
+// The type as text with a real wheelchair icon (an SVG, so it shows on every
+// phone — the ♿ character didn't render everywhere).
+function ServiceTypeText({ type, size = 11 }) {
+  const icon = <Accessibility size={size} strokeWidth={2.6} style={{ flexShrink: 0 }} aria-hidden="true" />;
+  if (type === "MOR") return <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>{icon}MOR</span>;
+  if (type === "OR+MOR") return <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>OR+{icon}MOR</span>;
+  return <span>{type}</span>;
+}
 function useShiftServiceType(code, regionKey) {
   return serviceTypeForShift(useContext(ServiceTypesContext), code, regionKey);
 }
@@ -2118,7 +2124,7 @@ function ServiceTypeBadge({ code, regionKey, lang, onDark }) {
       aria-label={label}
       style={{ display: "inline-flex", alignItems: "center", fontSize: 9.5, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1, borderRadius: 999, padding: "2.5px 6px", marginInlineStart: 5, verticalAlign: "middle", whiteSpace: "nowrap", ...(onDark ? { background: "rgba(255,255,255,0.25)", color: "#fff", border: "1px solid rgba(255,255,255,0.45)" } : { background: c.bg, color: c.fg, border: `1px solid ${c.border}` }) }}
     >
-      {SERVICE_TYPE_BADGE_TEXT[type]}
+      <ServiceTypeText type={type} size={10} />
     </span>
   );
 }
@@ -2129,7 +2135,7 @@ function ServiceTypeDot({ code, regionKey, lang }) {
   const label = t(SERVICE_TYPE_LABEL_KEYS[type], lang);
   return (
     <span title={label} aria-label={label} style={{ position: "absolute", top: -3, insetInlineEnd: -3, minWidth: 14, height: 14, borderRadius: 7, background: SERVICE_TYPE_COLORS[type].solid, color: "#fff", border: "1.5px solid #fff", fontSize: 7.5, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 2px", boxSizing: "border-box", lineHeight: 1 }}>
-      {SERVICE_TYPE_DOT_TEXT[type]}
+      {type === "OR" ? "O" : type === "MOR" ? <Accessibility size={9} strokeWidth={3} aria-hidden="true" /> : <>O+<Accessibility size={8} strokeWidth={3} aria-hidden="true" /></>}
     </span>
   );
 }
@@ -4506,7 +4512,7 @@ function ShiftTypeDays({ lang, crew, shiftServiceTypes, onSet }) {
                   <span role="radiogroup" aria-label={`${t("serviceTypeLabel", lang)} — ${weekdayNames[d.dayIdx]}`} style={{ display: "flex", gap: 4, marginInlineStart: "auto" }}>
                     {[...SERVICE_TYPES, ""].map((type) => (
                       <button key={type || "none"} role="radio" aria-checked={current === type} title={t(SERVICE_TYPE_LABEL_KEYS[type] || "serviceTypeNone", lang)} onClick={() => onSet(d.code, d.regionKey, type)} style={btn(current === type)}>
-                        {type || "—"}
+                        {type ? <ServiceTypeText type={type} size={10} /> : "—"}
                       </button>
                     ))}
                   </span>
@@ -4571,7 +4577,7 @@ function ServiceTypeImport({ lang, shiftServiceTypes, setShiftServiceTypes }) {
                   const changed = before && before !== type;
                   return (
                     <span key={key} style={{ border: "1px solid var(--border)", borderRadius: 999, padding: "2px 8px", background: changed ? "#FFF4D6" : "var(--bg)", color: changed ? "#5A4600" : undefined }}>
-                      {shiftKeyLabel(key, lang)}: {changed ? <s style={{ opacity: 0.7 }}>{before}</s> : null} <b>{type}</b>
+                      {shiftKeyLabel(key, lang)}: {changed ? <s style={{ opacity: 0.7 }}>{before}</s> : null} <b style={{ display: "inline-flex" }}><ServiceTypeText type={type} size={10} /></b>
                     </span>
                   );
                 })}
@@ -4600,7 +4606,7 @@ function ServiceTypeImport({ lang, shiftServiceTypes, setShiftServiceTypes }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxHeight: 180, overflowY: "auto", fontSize: 11.5 }}>
             {saved.map(([key, type]) => (
               <span key={key} style={chipStyle(type)}>
-                {shiftKeyLabel(key, lang)}: <b>{type}</b>
+                {shiftKeyLabel(key, lang)}: <b style={{ display: "inline-flex" }}><ServiceTypeText type={type} size={10} /></b>
                 <button onClick={() => remove(key)} aria-label={t("extraRemove", lang)} title={t("extraRemove", lang)} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", padding: "0 3px", display: "flex" }}>
                   <X size={11} />
                 </button>
