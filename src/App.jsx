@@ -2128,14 +2128,15 @@ function ServiceTypeBadge({ code, regionKey, lang, onDark }) {
     </span>
   );
 }
-// Tiny corner marker for the home screen's day circles.
-function ServiceTypeDot({ code, regionKey, lang }) {
+// Small icon + text pill under each home-screen day circle (e.g. a
+// wheelchair icon and "MOR"), so the type reads at a glance.
+function ServiceTypeDayPill({ code, regionKey, lang }) {
   const type = useShiftServiceType(code, regionKey);
   if (!type) return null;
   const label = t(SERVICE_TYPE_LABEL_KEYS[type], lang);
   return (
-    <span title={label} aria-label={label} style={{ position: "absolute", top: -3, insetInlineEnd: -3, minWidth: 14, height: 14, borderRadius: 7, background: SERVICE_TYPE_COLORS[type].solid, color: "#fff", border: "1.5px solid #fff", fontSize: 7.5, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 2px", boxSizing: "border-box", lineHeight: 1 }}>
-      {type === "OR" ? "O" : type === "MOR" ? <Accessibility size={9} strokeWidth={3} aria-hidden="true" /> : <>O+<Accessibility size={8} strokeWidth={3} aria-hidden="true" /></>}
+    <span title={label} aria-label={label} style={{ display: "inline-flex", alignItems: "center", maxWidth: "100%", background: SERVICE_TYPE_COLORS[type].solid, color: "#fff", border: "1px solid rgba(255,255,255,0.7)", borderRadius: 999, padding: "1.5px 4px", fontSize: type === "OR+MOR" ? 6.5 : 7.5, fontWeight: 900, lineHeight: 1, whiteSpace: "nowrap", letterSpacing: 0, boxSizing: "border-box" }}>
+      <ServiceTypeText type={type} size={type === "OR+MOR" ? 7 : 8} />
     </span>
   );
 }
@@ -6689,11 +6690,11 @@ export default function ShiftPriorityRanker() {
                                   <span title={d?.code || undefined} style={{ ...styles.dayChip, width: "100%", fontSize: dayChipFontSize(longest), ...(lines.length > 1 ? { flexDirection: "column", lineHeight: 1.05 } : {}), background: d ? (REGION_COLORS[d.regionKey] || "#9AA0A6") : "rgba(255,255,255,0.22)", ...(d?.extra ? { outline: "2px dashed #fff", outlineOffset: 1 } : {}), ...(isToday ? styles.dayChipToday : {}) }}>
                                     {lines.map((l, k) => <span key={k}>{l}</span>)}
                                   </span>
-                                  {d ? <ServiceTypeDot code={d.code} regionKey={d.regionKey} lang={lang} /> : null}
                                 </span>
                               );
                             })()}
                             <span style={{ ...styles.dayChipLabel, ...(isToday ? styles.dayChipLabelToday : {}) }}>{weekdayNamesHome[i].charAt(0)}</span>
+                            {d ? <ServiceTypeDayPill code={d.code} regionKey={d.regionKey} lang={lang} /> : null}
                           </span>
                         );
                       })}
